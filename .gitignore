@@ -1,0 +1,14 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+# Never commit RAW files; test photos live outside the repo.
+*.DNG
+*.dng
+*.ARW
+*.CR3
+*.NEF
+*.RAF

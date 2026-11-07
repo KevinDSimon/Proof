@@ -1,0 +1,25 @@
+name: Bug
+description: Something that behaves wrongly
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the camera and file format if it involves a photo.
+  - type: input
+    id: version
+    attributes:
+      label: Proof version and macOS version
