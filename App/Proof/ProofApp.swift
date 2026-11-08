@@ -83,6 +83,8 @@ struct ContentView: View {
         // Both modes follow the system appearance. The toolbar's own background and its separator
         // line are hidden so the window is one plain surface with the glass controls on top.
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        // Proof's own interface is black, white and gray, so no color competes with the photo.
+        .tint(.primary)
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)

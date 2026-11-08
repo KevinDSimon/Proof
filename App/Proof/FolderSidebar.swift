@@ -59,13 +59,13 @@ private struct LocationRow: View {
             FolderRow(library: library, folder: FileReference(locationID: location.id, relativePath: []),
                       name: location.name)
         case .offline:
-            Label(location.name, systemImage: "folder")
+            FolderLabel(name: location.name)
                 .foregroundStyle(.secondary)
                 .help("The drive or network volume this folder is on isn't connected.")
                 .tag(FileReference(locationID: location.id, relativePath: []))
         case .missing:
             HStack {
-                Label(location.name, systemImage: "folder")
+                FolderLabel(name: location.name)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Locate…") { library.requestFolder(.locate(location)) }
@@ -106,8 +106,27 @@ private struct FolderRow: View {
     }
 
     private var label: some View {
-        Label(name, systemImage: "folder")
-            .badge(library.contents[folder]?.photos.count ?? 0)
+        FolderLabel(name: name, count: library.contents[folder]?.photos.count ?? 0)
             .tag(folder)
+    }
+}
+
+/// A folder's name with a gray folder symbol instead of the accent-colored one a sidebar gives
+/// it, so the sidebar stays neutral.
+private struct FolderLabel: View {
+    let name: String
+    /// The number of photos, shown as the row's badge. Zero shows none.
+    var count = 0
+    @Environment(\.backgroundProminence) private var prominence
+
+    var body: some View {
+        Label {
+            Text(name)
+        } icon: {
+            // In a selected row the symbol takes the row's text color.
+            Image(systemName: "folder")
+                .foregroundStyle(prominence == .increased ? AnyShapeStyle(.foreground) : AnyShapeStyle(.secondary))
+        }
+        .badge(count == 0 ? nil : Text(count, format: .number))
     }
 }
