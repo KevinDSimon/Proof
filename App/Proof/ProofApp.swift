@@ -80,9 +80,9 @@ struct ContentView: View {
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
             }
         }
-        // Both modes follow the system appearance. In Edit the toolbar's own background is hidden so
-        // the canvas shows under its glass.
-        .toolbarBackgroundVisibility(library.isEditing ? .hidden : .automatic, for: .windowToolbar)
+        // Both modes follow the system appearance. The toolbar's own background and its separator
+        // line are hidden so the window is one plain surface with the glass controls on top.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
