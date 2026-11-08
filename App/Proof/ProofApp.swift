@@ -40,7 +40,7 @@ struct ProofApp: App {
                 Button("Edit") { library.browse.edit() }
                     .keyboardShortcut(.return, modifiers: [])
                     .disabled(library.isEditing || library.browse.selectedPhoto == nil)
-                Button("Done") { library.browse.finishEditing() }
+                Button("Back to Folder") { library.browse.finishEditing() }
                     .keyboardShortcut(.escape, modifiers: [])
                     .disabled(!library.isEditing)
             }
@@ -49,9 +49,10 @@ struct ProofApp: App {
 }
 
 /// Browse shows the sidebar and a grid of the selected folder; Edit shows one photo on a dark
-/// canvas with the inspector beside it. Panels sit next to the photo and never on top of it.
+/// gray canvas with the inspector beside it. Panels sit next to the photo and never on top of it.
 struct ContentView: View {
     @Bindable var library: Library
+    @Environment(\.colorScheme) private var colorScheme
     @State private var renderer = try? RAWRenderer()
     @State private var exposure = 0.0
     @State private var columnVisibility = NavigationSplitViewVisibility.all
@@ -77,10 +78,11 @@ struct ContentView: View {
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
             }
         }
-        // Edit is dark like Photos so the surroundings don't change how the photo looks; Browse
-        // follows the system. In Edit the toolbar's own background is hidden so the gray shows under its glass.
-        .preferredColorScheme(library.isEditing ? .dark : nil)
-        .toolbarBackgroundVisibility(library.isEditing ? .hidden : .automatic, for: .windowToolbar)
+        // Both modes follow the system appearance. In dark Edit the toolbar's own background is hidden
+        // so the gray canvas shows under its glass; in light Edit the title would be dark text on the
+        // dark gray, so the toolbar keeps its background and the canvas starts below it.
+        .toolbarBackgroundVisibility(library.isEditing && colorScheme == .dark ? .hidden : .automatic,
+                                     for: .windowToolbar)
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
@@ -127,29 +129,13 @@ struct ContentView: View {
                 .pickerStyle(.segmented)
                 .help("Show all photos in the folder, only 5-star photos, or only edited photos")
             }
-            ToolbarSpacer(.fixed)
-            ToolbarItem {
-                Button("Edit") { library.browse.edit() }
-                    .disabled(library.browse.selectedPhoto == nil)
-                    .help("Edit the selected photo")
-            }
         }
     }
 
     @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            Button("Back to Browse", systemImage: "chevron.backward") { library.browse.finishEditing() }
-                .help("Return to the folder")
-        }
-        ToolbarItem {
-            Button("Inspector", systemImage: "sidebar.trailing") { library.isInspectorShown.toggle() }
-                .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")
-        }
-        ToolbarSpacer(.fixed)
-        ToolbarItem(placement: .confirmationAction) {
             // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
-            Button("Done") { library.browse.finishEditing() }
-                .buttonStyle(.borderedProminent)
+            Button("Back to Folder", systemImage: "chevron.backward") { library.browse.finishEditing() }
                 .keyboardShortcut(.cancelAction)
                 .help("Return to the folder")
         }
@@ -169,7 +155,15 @@ struct ContentView: View {
         }
         // The gray runs under the toolbar glass; the photo itself stays inside the safe area.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(PhotoCanvas.backdrop.ignoresSafeArea())
+        .background(PhotoCanvas.backdrop.ignoresSafeArea(edges: colorScheme == .dark ? .all : [.horizontal, .bottom]))
+        // Declared on the photo's column rather than the window, so the button sits over the
+        // photo and stays put when the inspector opens and closes.
+        .toolbar {
+            ToolbarItem {
+                Button("Inspector", systemImage: "sidebar.trailing") { library.isInspectorShown.toggle() }
+                    .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")
+            }
+        }
     }
 
     @ViewBuilder private var browser: some View {
