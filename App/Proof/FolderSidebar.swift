@@ -5,6 +5,7 @@ import SwiftUI
 struct FolderSidebar: View {
     @Bindable var library: Library
     @State private var removing: SavedLocation?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         List(selection: $library.selection) {
@@ -20,14 +21,22 @@ struct FolderSidebar: View {
                 }
             }
         }
+        // The same plain color as the grid and the photo's canvas, instead of the sidebar material,
+        // so the window reads as one surface.
+        .scrollContentBackground(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
         .onDeleteCommand {
             removing = library.locations.first {
                 library.selection == FileReference(locationID: $0.id, relativePath: [])
             }
         }
         .toolbar {
-            Button("Add Folder", systemImage: "folder.badge.plus") { library.requestFolder(.add) }
-                .help("Add a folder of RAW photos")
+            // The sidebar is hidden while editing, and so is its button.
+            if !library.isEditing {
+                Button("Add Folder", systemImage: "folder.badge.plus") { library.requestFolder(.add) }
+                    .help("Add a folder of RAW photos")
+            }
         }
         .confirmationDialog("Remove “\(removing?.name ?? "")” from Proof?",
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),

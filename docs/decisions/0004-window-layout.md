@@ -20,3 +20,6 @@ Issue #6 adds the first panel, the Folders sidebar, and the rest of Phase 1 and 
 - Standard behaviors come for free: hiding the sidebar with ⌃⌘S, resizing columns, keyboard navigation, VoiceOver and the system's appearance.
 - Opening the sidebar or inspector makes the photo smaller instead of covering part of it.
 - A second window for comparing photos would need its own selection; that is not planned.
+
+## Amendment, 2026-11-08
+Trying the modes in issue #38 changed three points. Both modes follow the system appearance instead of Edit switching the window to dark, because switching between light and dark when entering and leaving Edit was jarring. Edit is entered by double-click or Return, without an Edit button, and left with the back button or Esc, without a Done button, because two buttons that do the same thing were redundant. The canvas follows the appearance too: white in light and 13% gray in dark, so the whole window changes together. A white surround makes a photo look darker than on a dark one; that tradeoff was accepted so the app matches the rest of the system.
