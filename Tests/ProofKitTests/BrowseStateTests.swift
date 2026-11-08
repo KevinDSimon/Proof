@@ -65,4 +65,19 @@ struct BrowseStateTests {
         state.move(.down, in: photos, columns: 3)
         #expect(state.selectedPhoto == "IMG_7.DNG")
     }
+
+    @Test("In a single row, as in the filmstrip, left and right step through the photos and stop at the ends")
+    func moveInSingleRow() {
+        var state = BrowseState(selectedPhoto: "IMG_1.DNG")
+        state.move(.left, in: photos, columns: photos.count)
+        #expect(state.selectedPhoto == "IMG_1.DNG")
+        state.move(.right, in: photos, columns: photos.count)
+        #expect(state.selectedPhoto == "IMG_2.DNG")
+
+        state.selectedPhoto = "IMG_7.DNG"
+        state.move(.right, in: photos, columns: photos.count)
+        #expect(state.selectedPhoto == "IMG_7.DNG")
+        state.move(.left, in: photos, columns: photos.count)
+        #expect(state.selectedPhoto == "IMG_6.DNG")
+    }
 }
