@@ -80,11 +80,10 @@ struct ContentView: View {
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
             }
         }
-        // Both modes follow the system appearance. In Edit the toolbar's own background and its
-        // separator line are hidden so the window is one plain surface with the glass controls on
-        // top; the photo never goes under it. In Browse thumbnails scroll under the title, so the
-        // toolbar keeps its background and line to keep the title readable.
-        .toolbarBackgroundVisibility(library.isEditing ? .hidden : .visible, for: .windowToolbar)
+        // Both modes follow the system appearance. The toolbar keeps its background and separator
+        // line so the title stays readable over thumbnails scrolling under it in Browse. Edit
+        // keeps them too, so the toolbar doesn't change when switching modes.
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
