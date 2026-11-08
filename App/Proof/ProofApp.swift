@@ -70,6 +70,8 @@ struct ContentView: View {
                     editor
                 } else {
                     browser
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
                 }
             }
             .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
