@@ -1,4 +1,5 @@
 import MetalKit
+import OSLog
 import ProofKit
 import SwiftUI
 
@@ -6,6 +7,8 @@ import SwiftUI
 struct PhotoCanvas: NSViewRepresentable {
     let url: URL
     let renderer: RAWRenderer
+    /// In stops.
+    var exposure: Double
     var onError: (Error) -> Void
 
     func makeCoordinator() -> PhotoCanvasCoordinator {
@@ -28,41 +31,61 @@ struct PhotoCanvas: NSViewRepresentable {
 
     func updateNSView(_ view: MTKView, context: Context) {
         context.coordinator.onError = onError
-        context.coordinator.show(url)
+        context.coordinator.show(url, exposure: exposure)
     }
 }
 
-/// Keeps the main thread to drawing only: decoding and rendering at a new size happen in
-/// `RAWRenderer`, and until a render finishes the previous one is scaled to the window.
+/// Keeps the main thread to drawing only: decoding and rendering happen in `RAWRenderer`, and
+/// until a render finishes the previous one is scaled to the window.
 @MainActor
 final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     weak var view: MTKView?
     var onError: (Error) -> Void = { _ in }
 
+    private struct RenderRequest: Equatable {
+        var url: URL
+        var size: CGSize
+        var exposure: Double
+    }
+
     private let renderer: RAWRenderer
     private let commandQueue: MTLCommandQueue?
     private var url: URL?
+    private var size: CGSize = .zero
+    private var exposure: Double = 0
     private var photo: RenderedPhoto?
-    private var renderTask: Task<Void, Never>?
+    /// What `photo` was rendered from, or the request that failed, so it isn't retried.
+    private var rendered: RenderRequest?
+    private var isRendering = false
+    private var resizeTask: Task<Void, Never>?
 
     private static let background = CIColor(red: 0.13, green: 0.13, blue: 0.13, colorSpace: RAWRenderer.colorSpace)!
+    private static let log = Logger(subsystem: "Proof", category: "render")
 
     init(renderer: RAWRenderer) {
         self.renderer = renderer
         commandQueue = renderer.device.makeCommandQueue()
     }
 
-    func show(_ url: URL) {
-        guard url != self.url else { return }
-        self.url = url
-        photo = nil
-        view?.needsDisplay = true
-        requestRender(size: view?.drawableSize ?? .zero, delay: .zero)
+    func show(_ url: URL, exposure: Double) {
+        if url != self.url {
+            self.url = url
+            photo = nil
+            view?.needsDisplay = true
+        }
+        if size == .zero { size = view?.drawableSize ?? .zero }
+        self.exposure = exposure
+        renderLatest()
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         // Live resizing sends many sizes; render once it settles.
-        requestRender(size: size, delay: .milliseconds(150))
+        resizeTask?.cancel()
+        resizeTask = Task {
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            self.size = size
+            renderLatest()
+        }
     }
 
     func draw(in view: MTKView) {
@@ -77,22 +100,34 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         }
     }
 
-    private func requestRender(size: CGSize, delay: Duration) {
-        guard let url, size.width > 0, size.height > 0 else { return }
-        renderTask?.cancel()
-        renderTask = Task { [renderer] in
+    private var latest: RenderRequest? {
+        guard let url, size.width > 0, size.height > 0 else { return nil }
+        return RenderRequest(url: url, size: size, exposure: exposure)
+    }
+
+    /// Runs one render at a time. A render in flight is never discarded: while a slider is
+    /// dragged faster than renders finish, each finished render is shown and the next one
+    /// starts from the slider's latest value, skipping the values in between.
+    private func renderLatest() {
+        guard !isRendering, let request = latest, request != rendered else { return }
+        isRendering = true
+        Task { [renderer] in
+            let start = ContinuousClock.now
             do {
-                try await Task.sleep(for: delay)
-                try await renderer.open(url)
-                try Task.checkCancellation()
-                let rendered = try await renderer.render(fitting: size)
-                try Task.checkCancellation()
-                photo = rendered
-                view?.needsDisplay = true
-            } catch is CancellationError {
+                try await renderer.open(request.url)
+                let result = try await renderer.render(fitting: request.size, exposure: request.exposure)
+                let ms = (ContinuousClock.now - start) / .milliseconds(1)
+                Self.log.debug("Rendered \(result.texture.width)×\(result.texture.height) in \(ms, format: .fixed(precision: 1)) ms")
+                if request.url == url {
+                    photo = result
+                    view?.needsDisplay = true
+                }
             } catch {
                 onError(error)
             }
+            rendered = request
+            isRendering = false
+            renderLatest()
         }
     }
 }

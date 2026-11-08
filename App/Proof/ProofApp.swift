@@ -13,13 +13,14 @@ struct ProofApp: App {
 struct ContentView: View {
     @State private var renderer = try? RAWRenderer()
     @State private var photoURL: URL?
+    @State private var exposure = 0.0
     @State private var isChoosingPhoto = false
     @State private var errorMessage: String?
 
     var body: some View {
         Group {
             if let renderer, let photoURL {
-                PhotoCanvas(url: photoURL, renderer: renderer) { error in
+                PhotoCanvas(url: photoURL, renderer: renderer, exposure: exposure) { error in
                     errorMessage = "The photo couldn't be shown. (\(error))"
                 }
             } else if renderer == nil {
@@ -38,6 +39,9 @@ struct ContentView: View {
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(photoURL?.lastPathComponent ?? "Proof")
         .toolbar {
+            if photoURL != nil {
+                ExposureSlider(value: $exposure)
+            }
             Button("Open", systemImage: "folder") { isChoosingPhoto = true }
                 .keyboardShortcut("o")
                 .help("Open a RAW photo")
@@ -68,5 +72,27 @@ struct ContentView: View {
         }
         photoURL?.stopAccessingSecurityScopedResource()
         photoURL = url
+        exposure = 0
+    }
+}
+
+/// Exposure in stops, −5 to +5, the range the edit format allows. Double-click the value to reset.
+struct ExposureSlider: View {
+    @Binding var value: Double
+
+    var body: some View {
+        HStack {
+            Slider(value: $value, in: -5...5) {
+                Text("Exposure")
+            }
+            .frame(width: 180)
+            .accessibilityValue(String(format: "%+.2f stops", value))
+            Text(value, format: .number.precision(.fractionLength(2)).sign(strategy: .always(includingZero: false)))
+                .monospacedDigit()
+                .frame(width: 44, alignment: .trailing)
+                .onTapGesture(count: 2) { value = 0 }
+                .help("Double-click to reset")
+                .accessibilityHidden(true)
+        }
     }
 }
