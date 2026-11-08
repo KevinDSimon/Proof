@@ -155,7 +155,9 @@ struct ContentView: View {
         }
         // The gray runs under the toolbar glass; the photo itself stays inside the safe area.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(PhotoCanvas.backdrop.ignoresSafeArea(edges: colorScheme == .dark ? .all : [.horizontal, .bottom]))
+        // Never under the inspector on the trailing edge: its material would show the gray through.
+        .background(PhotoCanvas.backdrop.ignoresSafeArea(edges: colorScheme == .dark ? [.top, .leading, .bottom]
+                                                                                      : [.leading, .bottom]))
         // Declared on the photo's column rather than the window, so the button sits over the
         // photo and stays put when the inspector opens and closes.
         .toolbar {
