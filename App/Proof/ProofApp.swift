@@ -12,6 +12,9 @@ struct ProofApp: App {
 
 struct ContentView: View {
     @State private var renderer = try? RAWRenderer()
+    @State private var fileAccess = try? FileAccess(storeURL: URL.applicationSupportDirectory
+        .appendingPathComponent("Proof/locations.json"))
+    @AppStorage("lastPhoto") private var lastPhoto: Data?
     @State private var photoURL: URL?
     @State private var exposure = 0.0
     @State private var isChoosingPhoto = false
@@ -37,6 +40,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 800, minHeight: 500)
+        .onAppear(perform: reopenLastPhoto)
         .navigationTitle(photoURL?.lastPathComponent ?? "Proof")
         .toolbar {
             if photoURL != nil {
@@ -62,17 +66,38 @@ struct ContentView: View {
         }
     }
 
-    /// The sandbox grants access to a picked file only while it is held, and the renderer
-    /// reads the file again at each new size, so access lasts until another photo is opened.
-    /// Replaced by `FileAccess` in Phase 1.
     private func open(_ url: URL) {
-        guard url.startAccessingSecurityScopedResource() else {
-            errorMessage = "Proof wasn't given permission to read \(url.lastPathComponent)."
+        guard let fileAccess else {
+            errorMessage = "Proof couldn't load its saved locations."
             return
         }
-        photoURL?.stopAccessingSecurityScopedResource()
-        photoURL = url
-        exposure = 0
+        let previous = currentReference
+        do {
+            let location = try fileAccess.add(url)
+            guard let reference = fileAccess.reference(for: url), let resolved = fileAccess.url(for: reference) else {
+                errorMessage = "Proof wasn't given permission to read \(url.lastPathComponent)."
+                return
+            }
+            // Until the Folders panel exists, Open remembers only the last photo it opened.
+            if let previous, previous.locationID != location.id, previous.relativePath.isEmpty {
+                try fileAccess.remove(previous.locationID)
+            }
+            lastPhoto = try JSONEncoder().encode(reference)
+            photoURL = resolved
+            exposure = 0
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private var currentReference: FileReference? {
+        lastPhoto.flatMap { try? JSONDecoder().decode(FileReference.self, from: $0) }
+    }
+
+    /// A photo that moved or whose drive isn't connected is skipped quietly; Open still works.
+    private func reopenLastPhoto() {
+        guard photoURL == nil, let reference = currentReference else { return }
+        photoURL = fileAccess?.url(for: reference)
     }
 }
 
