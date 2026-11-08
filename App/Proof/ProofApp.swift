@@ -11,55 +11,84 @@ struct ProofApp: App {
             ContentView(library: library)
         }
         .commands {
+            SidebarCommands()
             CommandGroup(after: .newItem) {
                 Button("Add Folder…") { library.requestFolder(.add) }
                     .keyboardShortcut("o")
+            }
+            CommandGroup(before: .sidebar) {
+                Picker("Show", selection: $library.filter) {
+                    Text("All Photos").tag(PhotoFilter.all)
+                        .keyboardShortcut("1")
+                    Text("5-Star Photos").tag(PhotoFilter.fiveStars)
+                        .keyboardShortcut("2")
+                    Text("Edited Photos").tag(PhotoFilter.edited)
+                        .keyboardShortcut("3")
+                }
+                .pickerStyle(.inline)
+                .disabled(library.selection == nil || library.isEditing)
+                Divider()
+            }
+            CommandGroup(after: .sidebar) {
+                Button(library.isInspectorShown ? "Hide Inspector" : "Show Inspector") {
+                    library.isInspectorShown.toggle()
+                }
+                .keyboardShortcut("i", modifiers: [.command, .control])
+                .disabled(!library.isEditing)
+            }
+            CommandMenu("Photo") {
+                Button("Edit") { library.browse.edit() }
+                    .keyboardShortcut(.return, modifiers: [])
+                    .disabled(library.isEditing || library.browse.selectedPhoto == nil)
+                Button("Done") { library.browse.finishEditing() }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .disabled(!library.isEditing)
             }
         }
     }
 }
 
-/// The sidebar beside the photo on a dark canvas. Panels sit next to the photo and never on top of it.
+/// Browse shows the sidebar and a grid of the selected folder; Edit shows one photo on a dark
+/// canvas with the inspector beside it. Panels sit next to the photo and never on top of it.
 struct ContentView: View {
     @Bindable var library: Library
     @State private var renderer = try? RAWRenderer()
     @State private var exposure = 0.0
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
+    /// The sidebar's visibility in Browse, restored when Edit ends.
+    @State private var browseColumnVisibility = NavigationSplitViewVisibility.all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             FolderSidebar(library: library)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 360)
+                .toolbar(removing: library.isEditing ? .sidebarToggle : nil)
         } detail: {
-            // The gray runs under the toolbar glass; the photo itself stays inside the safe area.
-            detail
-                .padding(photoURL == nil ? 0 : 24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(PhotoCanvas.backdrop.ignoresSafeArea())
-        }
-        // Until Browse and Edit modes exist, the window is always viewing a photo, so it is dark
-        // like Photos while editing. The toolbar's own background is hidden so the gray shows under its glass.
-        .preferredColorScheme(.dark)
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .frame(minWidth: 800, minHeight: 500)
-        .navigationTitle(photoName ?? folderName ?? "")
-        .navigationSubtitle(subtitle)
-        .toolbar {
-            if library.selection != nil {
-                ToolbarItem {
-                    Picker("Filter", selection: $library.filter) {
-                        Text("All").tag(PhotoFilter.all)
-                        Text("5 Stars").tag(PhotoFilter.fiveStars)
-                        Text("Edited").tag(PhotoFilter.edited)
-                    }
-                    .pickerStyle(.segmented)
-                    .help("Show all photos in the folder, only 5-star photos, or only edited photos")
+            Group {
+                if library.isEditing {
+                    editor
+                } else {
+                    browser
                 }
             }
-            if photoURL != nil {
-                ToolbarSpacer(.fixed)
-                ToolbarItem {
-                    ExposureSlider(value: $exposure)
-                }
+            .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
+                                            set: { if library.isEditing { library.isInspectorShown = $0 } })) {
+                AdjustmentsInspector(exposure: $exposure)
+                    .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
+            }
+        }
+        // Edit is dark like Photos so the surroundings don't change how the photo looks; Browse
+        // follows the system. In Edit the toolbar's own background is hidden so the gray shows under its glass.
+        .preferredColorScheme(library.isEditing ? .dark : nil)
+        .toolbarBackgroundVisibility(library.isEditing ? .hidden : .automatic, for: .windowToolbar)
+        .frame(minWidth: 800, minHeight: 500)
+        .navigationTitle(title)
+        .navigationSubtitle(subtitle)
+        .toolbar {
+            if library.isEditing {
+                editToolbar
+            } else {
+                browseToolbar
             }
         }
         .fileImporter(isPresented: $library.isChoosingFolder, allowedContentTypes: [.folder]) { result in
@@ -76,18 +105,75 @@ struct ContentView: View {
         } message: {
             Text(library.errorMessage ?? "")
         }
-        .onChange(of: photoURL) { exposure = 0 }
+        .onChange(of: library.browse.selectedPhoto) { exposure = 0 }
+        .onChange(of: library.isEditing) { _, isEditing in
+            if isEditing {
+                browseColumnVisibility = columnVisibility
+                columnVisibility = .detailOnly
+            } else {
+                columnVisibility = browseColumnVisibility
+            }
+        }
     }
 
-    @ViewBuilder private var detail: some View {
-        if let renderer, let photoURL {
-            PhotoCanvas(url: photoURL, renderer: renderer, exposure: exposure) { error in
-                library.errorMessage = "The photo couldn't be shown. (\(error))"
+    @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
+        if library.selection != nil {
+            ToolbarItem {
+                Picker("Filter", selection: $library.filter) {
+                    Text("All").tag(PhotoFilter.all)
+                    Text("5 Stars").tag(PhotoFilter.fiveStars)
+                    Text("Edited").tag(PhotoFilter.edited)
+                }
+                .pickerStyle(.segmented)
+                .help("Show all photos in the folder, only 5-star photos, or only edited photos")
             }
-        } else if renderer == nil {
-            ContentUnavailableView("Metal Isn't Available", systemImage: "exclamationmark.triangle",
-                                   description: Text("Proof needs a Mac with a Metal GPU to show photos."))
-        } else if library.locations.isEmpty {
+            ToolbarSpacer(.fixed)
+            ToolbarItem {
+                Button("Edit") { library.browse.edit() }
+                    .disabled(library.browse.selectedPhoto == nil)
+                    .help("Edit the selected photo")
+            }
+        }
+    }
+
+    @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button("Back to Browse", systemImage: "chevron.backward") { library.browse.finishEditing() }
+                .help("Return to the folder")
+        }
+        ToolbarItem {
+            Button("Inspector", systemImage: "sidebar.trailing") { library.isInspectorShown.toggle() }
+                .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")
+        }
+        ToolbarSpacer(.fixed)
+        ToolbarItem(placement: .confirmationAction) {
+            // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
+            Button("Done") { library.browse.finishEditing() }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.cancelAction)
+                .help("Return to the folder")
+        }
+    }
+
+    @ViewBuilder private var editor: some View {
+        Group {
+            if let renderer, let url = library.selectedPhotoURL {
+                PhotoCanvas(url: url, renderer: renderer, exposure: exposure) { error in
+                    library.errorMessage = "The photo couldn't be shown. (\(error))"
+                }
+                .padding(24)
+            } else {
+                ContentUnavailableView("Metal Isn't Available", systemImage: "exclamationmark.triangle",
+                                       description: Text("Proof needs a Mac with a Metal GPU to show photos."))
+            }
+        }
+        // The gray runs under the toolbar glass; the photo itself stays inside the safe area.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(PhotoCanvas.backdrop.ignoresSafeArea())
+    }
+
+    @ViewBuilder private var browser: some View {
+        if library.locations.isEmpty {
             ContentUnavailableView {
                 Label("No Folders", systemImage: "folder")
             } description: {
@@ -109,11 +195,16 @@ struct ContentView: View {
                 ContentUnavailableView("Drive Not Connected", systemImage: "externaldrive.badge.xmark",
                                        description: Text("Connect the drive or network volume that holds “\(location.name)”."))
             case .available:
-                if library.contents[selection] == nil {
-                    ProgressView()
+                if let contents = library.contents[selection] {
+                    if library.visiblePhotos.isEmpty {
+                        ContentUnavailableView(emptyTitle, systemImage: "photo",
+                                               description: Text("There are no RAW photos to show in this folder."))
+                    } else {
+                        ThumbnailGrid(library: library, folder: selection,
+                                      photos: library.visiblePhotos, allPhotos: contents.photos)
+                    }
                 } else {
-                    ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                           description: Text("There are no RAW photos to show in this folder."))
+                    ProgressView()
                 }
             }
         } else {
@@ -126,28 +217,28 @@ struct ContentView: View {
         library.locations.first { $0.id == library.selection?.locationID }
     }
 
-    /// Until the filmstrip arrives, the folder's first photo that passes the filter.
-    private var photoURL: URL? {
-        guard let selection = library.selection, let first = library.visiblePhotos.first else { return nil }
-        return library.url(ofPhoto: first.name, in: selection)
-    }
-
-    private var photoName: String? {
-        photoURL == nil ? nil : library.visiblePhotos.first?.name
-    }
-
     private var folderName: String? {
         guard let selection = library.selection else { return nil }
         return selection.relativePath.last ?? selectedLocation?.name
     }
 
+    private var title: String {
+        library.isEditing ? library.browse.selectedPhoto ?? "" : folderName ?? ""
+    }
+
+    /// In Browse, how many photos the folder has; in Edit, the folder and the photo's position.
     private var subtitle: String {
         guard let selection = library.selection, let contents = library.contents[selection] else { return "" }
+        let visible = library.visiblePhotos
+        if library.isEditing {
+            let position = library.browse.position(in: visible).map { "\($0) of \(visible.count)" }
+            // A saved location that is a single photo has no folder name to show.
+            let folder = folderName == library.browse.selectedPhoto ? nil : folderName
+            return [folder, position].compactMap { $0 }.joined(separator: " · ")
+        }
         let total = contents.photos.count
-        let shown = library.visiblePhotos.count
         let noun = total == 1 ? "photo" : "photos"
-        let count = library.filter == .all ? "\(total) \(noun)" : "\(shown) of \(total) \(noun)"
-        return [photoName == nil ? nil : folderName, count].compactMap { $0 }.joined(separator: " · ")
+        return library.filter == .all ? "\(total) \(noun)" : "\(visible.count) of \(total) \(noun)"
     }
 
     private var emptyTitle: String {
@@ -156,6 +247,20 @@ struct ContentView: View {
         case .fiveStars: "No 5-Star Photos"
         case .edited: "No Edited Photos"
         }
+    }
+}
+
+/// The adjustments for the photo being edited, in the trailing inspector.
+struct AdjustmentsInspector: View {
+    @Binding var exposure: Double
+
+    var body: some View {
+        Form {
+            Section("Light") {
+                ExposureSlider(value: $exposure)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 
@@ -168,7 +273,6 @@ struct ExposureSlider: View {
             Slider(value: $value, in: -5...5) {
                 Text("Exposure")
             }
-            .frame(width: 180)
             .accessibilityValue(String(format: "%+.2f stops", value))
             Text(value, format: .number.precision(.fractionLength(2)).sign(strategy: .always(includingZero: false)))
                 .monospacedDigit()

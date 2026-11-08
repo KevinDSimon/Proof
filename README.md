@@ -47,7 +47,7 @@ To run the Mac app:
 
 1. Open `App/Proof.xcodeproj` in Xcode. Xcode resolves the `ProofKit` package from the repository root.
 2. Choose the **Proof** scheme and **My Mac** as the destination.
-3. Choose Product > Run (⌘R). Press ⌘O and choose a RAW file to view it.
+3. Choose Product > Run (⌘R). Press ⌘O and choose a folder of RAW photos, select a photo and press Return to edit it.
 
 The app is signed to run locally, so no Apple developer team is needed. To build it without Xcode's interface:
 

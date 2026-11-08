@@ -2,8 +2,8 @@ import Foundation
 import Observation
 import ProofKit
 
-/// The saved folders, what has been read of them, and which folder and filter are chosen.
-/// Shared by the sidebar, the toolbar and the File menu.
+/// The saved folders, what has been read of them, which folder, filter and photo are chosen, and
+/// whether that photo is being edited. Shared by the sidebar, the grid, the toolbar and the menus.
 @Observable @MainActor
 final class Library {
     /// Why the folder picker is open.
@@ -17,9 +17,16 @@ final class Library {
     /// Folders read so far. A folder that couldn't be read is stored empty.
     private(set) var contents: [FileReference: FolderContents] = [:]
     var selection: FileReference? {
-        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(selection), forKey: Self.selectionKey) }
+        didSet {
+            UserDefaults.standard.set(try? JSONEncoder().encode(selection), forKey: Self.selectionKey)
+            if selection != oldValue { browse = BrowseState() }
+        }
     }
-    var filter: PhotoFilter = .all
+    var filter: PhotoFilter = .all {
+        didSet { browse.keep(only: visiblePhotos) }
+    }
+    var browse = BrowseState()
+    var isInspectorShown = true
     var isChoosingFolder = false
     /// Kept apart from `isChoosingFolder`, which SwiftUI clears before the picker's result arrives.
     private(set) var folderRequest: FolderRequest = .add
@@ -53,6 +60,15 @@ final class Library {
         guard let url = fileAccess?.url(for: folder) else { return }
         let read = await Task.detached { try? FolderContents.read(at: url) }.value
         contents[folder] = read ?? FolderContents(subfolders: [], photos: [])
+        if folder == selection { browse.keep(only: visiblePhotos) }
+    }
+
+    var isEditing: Bool { browse.mode == .editing }
+
+    /// The file of the selected photo.
+    var selectedPhotoURL: URL? {
+        guard let selection, let name = browse.selectedPhoto else { return nil }
+        return url(ofPhoto: name, in: selection)
     }
 
     /// The file for a photo listed in `folder`. A saved location that is a single photo is its own folder.
