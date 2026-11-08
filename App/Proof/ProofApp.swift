@@ -245,9 +245,11 @@ struct ContentView: View {
     }
 }
 
-/// The adjustments for the photo being edited, in the trailing inspector.
+/// The adjustments for the photo being edited, in the trailing inspector. It sits on the same
+/// plain color as the photo's canvas, so the panel and the photo read as one surface.
 struct AdjustmentsInspector: View {
     @Binding var exposure: Double
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Form {
@@ -256,6 +258,9 @@ struct AdjustmentsInspector: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 }
 

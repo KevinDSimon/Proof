@@ -41,6 +41,8 @@ struct ThumbnailGrid: View {
                 }
                 .padding(Self.margin)
             }
+            // A soft fade under the toolbar instead of a separator line.
+            .scrollEdgeEffectStyle(.soft, for: .top)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 let usable = width - 2 * Self.margin + Self.spacing
                 columnCount = max(1, Int(usable / (Self.cellSize + Self.spacing)))
