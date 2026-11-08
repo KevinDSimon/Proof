@@ -23,6 +23,8 @@ Every render starts from the original RAW file and applies the edit recipe in th
 5. Layers (v1.2): each layer's mask and adjustments, blended in order with `CIBlendWithMask`
 6. Crop, straighten, and the output transform to the display or export color space
 
+`RAWRenderer` in `ProofKit` performs step 1 today. It is an actor, so decoding and GPU work run off the main thread. It opens a file once and renders it into a Metal texture scaled to fit a requested pixel size. The Mac app's canvas is an `MTKView` that draws the latest texture scaled to the window; on resize it keeps drawing the old texture until a render at the new size finishes. Until `FileAccess` arrives in Phase 1, the app opens one file at a time from an Open dialog.
+
 A render request always carries a target size. Interactive renders use a reduced `scaleFactor` while a control is being dragged and full screen resolution on release. Only export renders at full sensor resolution.
 
 ## Files and data
