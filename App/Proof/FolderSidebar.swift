@@ -24,7 +24,6 @@ struct FolderSidebar: View {
         // The same plain color as the grid and the photo's canvas, instead of the sidebar material,
         // so the window reads as one surface.
         .scrollContentBackground(.hidden)
-        .scrollEdgeEffectStyle(.soft, for: .top)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
         .onDeleteCommand {
             removing = library.locations.first {

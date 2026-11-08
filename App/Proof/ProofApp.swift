@@ -80,9 +80,8 @@ struct ContentView: View {
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
             }
         }
-        // Both modes follow the system appearance. The toolbar's own background and its separator
-        // line are hidden so the window is one plain surface with the glass controls on top.
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        // Both modes follow the system appearance. The toolbar keeps the system's default
+        // background and scroll edge effect, which keep the title readable over scrolled content.
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
@@ -267,7 +266,6 @@ struct AdjustmentsInspector: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .scrollEdgeEffectStyle(.soft, for: .top)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 }
