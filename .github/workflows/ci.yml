@@ -22,3 +22,5 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+      - name: Build Mac app
+        run: xcodebuild -project App/Proof.xcodeproj -scheme Proof -configuration Debug build

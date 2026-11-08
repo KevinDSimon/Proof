@@ -7,8 +7,10 @@ Proof is split into a platform-neutral engine package, `ProofKit`, and thin app 
 | Layer | Owns | Never imports |
 | --- | --- | --- |
 | `ProofKit` | Edit recipe, render pipeline, sidecar and XMP reading, `.cube` parsing, thumbnails | AppKit, UIKit, SwiftUI |
-| Mac app | Folders panel, filmstrip, inspector, canvas, export UI | — |
+| Mac app (`App/Proof.xcodeproj`) | Folders panel, filmstrip, inspector, canvas, export UI | — |
 | iOS app (later) | The same panels for touch, Files-app folder picking | — |
+
+The Mac app runs in the App Sandbox. Its project links `ProofKit` as a local Swift package, so a change to `ProofKit` is picked up by the next app build without a version bump. Until signing is set up in Phase 4, the app is signed to run locally only.
 
 ## Render pipeline
 
