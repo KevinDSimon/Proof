@@ -19,20 +19,34 @@ After v1: Texture, Clarity and Dehaze (v1.1), then masks as layers (v1.2). An iP
 
 | Path | What it is |
 | --- | --- |
+| `App/Proof.xcodeproj` | The Mac app (SwiftUI, App Sandbox on). Depends on the local `ProofKit` package. |
+| `App/Proof` | The Mac app's source files and entitlements |
 | `Sources/ProofKit` | Platform-neutral engine: edit recipe, render pipeline, sidecars, XMP, LUT parsing. No AppKit, UIKit or SwiftUI. |
 | `Tests/ProofKitTests` | Tests for ProofKit (Swift Testing) |
 | `docs/` | Architecture, edit file format, roadmap and decision records |
 | `CLAUDE.md` | Rules for AI agents working in this repo |
 
-The Mac app target is added in Xcode in Phase 0 and depends on `ProofKit`.
-
 ## Building
 
 Requires macOS 27 and Xcode 27 or later on Apple Silicon. The app targets macOS 27 and, later, iOS 27.
 
+To build and test the engine from the command line:
+
 ```bash
 swift build
 swift test
+```
+
+To run the Mac app:
+
+1. Open `App/Proof.xcodeproj` in Xcode. Xcode resolves the `ProofKit` package from the repository root.
+2. Choose the **Proof** scheme and **My Mac** as the destination.
+3. Choose Product > Run (⌘R). An empty window opens.
+
+The app is signed to run locally, so no Apple developer team is needed. To build it without Xcode's interface:
+
+```bash
+xcodebuild -project App/Proof.xcodeproj -scheme Proof build
 ```
 
 ## Contributing
