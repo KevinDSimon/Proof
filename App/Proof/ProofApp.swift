@@ -19,7 +19,7 @@ struct ProofApp: App {
     }
 }
 
-/// The sidebar beside the photo. Panels sit next to the photo and never on top of it.
+/// The sidebar beside the photo on a dark canvas. Panels sit next to the photo and never on top of it.
 struct ContentView: View {
     @Bindable var library: Library
     @State private var renderer = try? RAWRenderer()
@@ -30,10 +30,18 @@ struct ContentView: View {
             FolderSidebar(library: library)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 360)
         } detail: {
+            // The gray runs under the toolbar glass; the photo itself stays inside the safe area.
             detail
+                .padding(photoURL == nil ? 0 : 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(PhotoCanvas.backdrop.ignoresSafeArea())
         }
+        // Until Browse and Edit modes exist, the window is always viewing a photo, so it is dark
+        // like Photos while editing. The toolbar's own background is hidden so the gray shows under its glass.
+        .preferredColorScheme(.dark)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .frame(minWidth: 800, minHeight: 500)
-        .navigationTitle(photoName ?? folderName ?? "Proof")
+        .navigationTitle(photoName ?? folderName ?? "")
         .navigationSubtitle(subtitle)
         .toolbar {
             if library.selection != nil {
@@ -137,7 +145,8 @@ struct ContentView: View {
         guard let selection = library.selection, let contents = library.contents[selection] else { return "" }
         let total = contents.photos.count
         let shown = library.visiblePhotos.count
-        let count = library.filter == .all ? "\(total) photos" : "\(shown) of \(total) photos"
+        let noun = total == 1 ? "photo" : "photos"
+        let count = library.filter == .all ? "\(total) \(noun)" : "\(shown) of \(total) \(noun)"
         return [photoName == nil ? nil : folderName, count].compactMap { $0 }.joined(separator: " · ")
     }
 

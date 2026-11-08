@@ -45,6 +45,7 @@ The Mac app has one window. Panels sit beside the photo and never cover it; see 
 - The sidebar is a `NavigationSplitView` sidebar listing the saved folders. Each one expands into its subfolders exactly as they are on disk; Proof doesn't group or reorganize them. Each row shows how many RAW photos sit directly in that folder. A folder is read with `FolderContents.read` off the main thread when its row first appears, so a tree on a NAS costs one directory listing per visible folder.
 - A saved folder that is `missing` is dimmed and has a Locate… button that relinks it through `FileAccess`. One that is `offline` is dimmed without the button. Removing a folder asks first and says that photos and edits are not deleted.
 - The toolbar holds the photo name and folder as the window title and subtitle, the All, 5 Stars and Edited filter (`PhotoFilter`), and the exposure slider. A photo counts as edited when its `.proof` sidecar exists. Star ratings are read from XMP in a later issue; until then the 5 Stars filter shows nothing.
+- The canvas is a neutral dark gray that runs under the toolbar glass. The photo is centered on it with a margin and stays inside the safe area. Until Browse and Edit modes exist, the window always uses the dark appearance.
 - Until the filmstrip arrives, the canvas shows the selected folder's first photo that passes the filter. The selected folder is remembered between launches as a `FileReference`.
 
 ## Folder access
