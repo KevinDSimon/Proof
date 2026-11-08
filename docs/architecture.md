@@ -38,6 +38,14 @@ A render request always carries a target size. Interactive renders use a reduced
 
 See [edit-format.md](edit-format.md) for the recipe format.
 
+### Thumbnails
+
+`ThumbnailCache` in `ProofKit` makes and stores thumbnails, 512 pixels on the long edge, as JPEG files in `Application Support/Proof/Thumbnails`. A thumbnail comes from the JPEG preview that the camera or DNG converter embedded in the RAW file, so the RAW data isn't decoded. Only a file without an embedded preview is decoded in full.
+
+Each photo has a folder in the cache named from a hash of its path, and the thumbnail inside is named from a hash of the file's size and modification date. A file whose size or date changed misses the cache, and storing its new thumbnail removes the old one. The size and date are read from the file system on every lookup, because a `URL` keeps resource values it has already read. Thumbnails of photos that were deleted or moved stay in the cache until it is cleared; the cache can be deleted at any time.
+
+For a folder, cached thumbnails arrive first, then the missing ones are made four at a time so a NAS isn't asked for the whole folder at once. A file that can't be read arrives without an image and doesn't stop the rest.
+
 ## Window layout
 
 The Mac app has one window. Panels sit beside the photo and never cover it; see [decision 0004](decisions/0004-window-layout.md).
