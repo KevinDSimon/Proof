@@ -37,11 +37,17 @@ swift build
 swift test
 ```
 
+RAW files are never committed, so the test that renders a real photo runs only when `PROOF_SAMPLE_DNG` names one:
+
+```bash
+PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG swift test
+```
+
 To run the Mac app:
 
 1. Open `App/Proof.xcodeproj` in Xcode. Xcode resolves the `ProofKit` package from the repository root.
 2. Choose the **Proof** scheme and **My Mac** as the destination.
-3. Choose Product > Run (⌘R). An empty window opens.
+3. Choose Product > Run (⌘R). Press ⌘O and choose a RAW file to view it.
 
 The app is signed to run locally, so no Apple developer team is needed. To build it without Xcode's interface:
 
