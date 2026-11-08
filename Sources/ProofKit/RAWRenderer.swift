@@ -30,10 +30,12 @@ public actor RAWRenderer {
         self.device = device
         self.commandQueue = commandQueue
         // Intermediates stay in linear extended sRGB so later tone and color stages don't clip.
+        // They are cached so that a slider change reuses the RAW decode instead of repeating it:
+        // about 150 ms at scaleFactor 0.25 without the cache. `open` clears the cache.
         context = CIContext(mtlCommandQueue: commandQueue, options: [
             .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
             .workingFormat: CIFormat.RGBAh,
-            .cacheIntermediates: false,
+            .cacheIntermediates: true,
         ])
     }
 
@@ -45,6 +47,8 @@ public actor RAWRenderer {
         guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero, filter.outputImage != nil else {
             throw RAWRendererError.unsupportedFile(url)
         }
+        // Only one photo's decode stays in GPU memory.
+        context.clearCaches()
         self.filter = filter
         openURL = url
     }
