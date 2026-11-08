@@ -144,11 +144,17 @@ struct ContentView: View {
     @ViewBuilder private var editor: some View {
         Group {
             if let renderer, let url = library.selectedPhotoURL {
-                PhotoCanvas(url: url, renderer: renderer, exposure: exposure,
-                            backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
-                    library.errorMessage = "The photo couldn't be shown. (\(error))"
+                VStack(spacing: 0) {
+                    PhotoCanvas(url: url, renderer: renderer, exposure: exposure,
+                                backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
+                        library.errorMessage = "The photo couldn't be shown. (\(error))"
+                    }
+                    .padding(24)
+                    if let folder = library.selection {
+                        Filmstrip(library: library, folder: folder, photos: library.visiblePhotos)
+                            .padding(.bottom, 8)
+                    }
                 }
-                .padding(24)
             } else {
                 ContentUnavailableView("Metal Isn't Available", systemImage: "exclamationmark.triangle",
                                        description: Text("Proof needs a Mac with a Metal GPU to show photos."))

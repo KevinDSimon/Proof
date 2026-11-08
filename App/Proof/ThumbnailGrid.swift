@@ -24,7 +24,7 @@ struct ThumbnailGrid: View {
         var names: [String]
     }
 
-    private static let cache = ThumbnailCache()
+    static let cache = ThumbnailCache()
     private static let cellSize: CGFloat = 160
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
@@ -115,14 +115,23 @@ struct ThumbnailGrid: View {
     private func loadThumbnails() async {
         images = [:]
         finished = []
-        let urls = allPhotos.compactMap { photo in
+        await Self.loadThumbnails(of: allPhotos, in: folder, library: library) { name, image in
+            finished.insert(name)
+            if let image { images[name] = image }
+        }
+    }
+
+    /// Delivers the thumbnail of each of `photos` by name as it arrives from the shared cache; the
+    /// image is `nil` if the photo couldn't be read. Used by the grid and the filmstrip.
+    static func loadThumbnails(of photos: [FolderContents.Photo], in folder: FileReference, library: Library,
+                               deliver: (String, NSImage?) -> Void) async {
+        let urls = photos.compactMap { photo in
             library.url(ofPhoto: photo.name, in: folder).map { (photo.name, $0) }
         }
         let names = Dictionary(urls.map { ($0.1, $0.0) }, uniquingKeysWith: { first, _ in first })
-        for await (url, image) in Self.cache.thumbnails(for: urls.map(\.1)) {
+        for await (url, image) in cache.thumbnails(for: urls.map(\.1)) {
             guard let name = names[url] else { continue }
-            finished.insert(name)
-            if let image { images[name] = NSImage(cgImage: image, size: .zero) }
+            deliver(name, image.map { NSImage(cgImage: $0, size: .zero) })
         }
     }
 }
