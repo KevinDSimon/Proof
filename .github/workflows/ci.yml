@@ -12,12 +12,10 @@ concurrency:
 jobs:
   test:
     name: Build and test
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app || true
       - name: Swift version
         run: swift --version
       - name: Build
