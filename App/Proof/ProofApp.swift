@@ -48,8 +48,8 @@ struct ProofApp: App {
     }
 }
 
-/// Browse shows the sidebar and a grid of the selected folder; Edit shows one photo on a dark
-/// gray canvas with the inspector beside it. Panels sit next to the photo and never on top of it.
+/// Browse shows the sidebar and a grid of the selected folder; Edit shows one photo on a plain
+/// canvas with the inspector beside it. Panels sit next to the photo and never on top of it.
 struct ContentView: View {
     @Bindable var library: Library
     @Environment(\.colorScheme) private var colorScheme
@@ -78,11 +78,9 @@ struct ContentView: View {
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
             }
         }
-        // Both modes follow the system appearance. In dark Edit the toolbar's own background is hidden
-        // so the gray canvas shows under its glass; in light Edit the title would be dark text on the
-        // dark gray, so the toolbar keeps its background and the canvas starts below it.
-        .toolbarBackgroundVisibility(library.isEditing && colorScheme == .dark ? .hidden : .automatic,
-                                     for: .windowToolbar)
+        // Both modes follow the system appearance. In Edit the toolbar's own background is hidden so
+        // the canvas shows under its glass.
+        .toolbarBackgroundVisibility(library.isEditing ? .hidden : .automatic, for: .windowToolbar)
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
@@ -144,7 +142,8 @@ struct ContentView: View {
     @ViewBuilder private var editor: some View {
         Group {
             if let renderer, let url = library.selectedPhotoURL {
-                PhotoCanvas(url: url, renderer: renderer, exposure: exposure) { error in
+                PhotoCanvas(url: url, renderer: renderer, exposure: exposure,
+                            backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
                     library.errorMessage = "The photo couldn't be shown. (\(error))"
                 }
                 .padding(24)
@@ -153,11 +152,11 @@ struct ContentView: View {
                                        description: Text("Proof needs a Mac with a Metal GPU to show photos."))
             }
         }
-        // The gray runs under the toolbar glass; the photo itself stays inside the safe area.
+        // The canvas runs under the toolbar glass and stops at the inspector; the photo stays inside the safe area.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Never under the inspector on the trailing edge: its material would show the gray through.
-        .background(PhotoCanvas.backdrop.ignoresSafeArea(edges: colorScheme == .dark ? [.top, .leading, .bottom]
-                                                                                      : [.leading, .bottom]))
+        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme))
+            .ignoresSafeArea(edges: [.top, .leading, .bottom]))
         // Declared on the photo's column rather than the window, so the button sits over the
         // photo and stays put when the inspector opens and closes.
         .toolbar {

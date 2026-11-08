@@ -5,15 +5,19 @@ import SwiftUI
 
 /// Shows one RAW photo, fitted to the view, in a Metal-backed view.
 struct PhotoCanvas: NSViewRepresentable {
-    /// The neutral gray around the photo. Neutral grays match in Display P3 and sRGB, so the
-    /// canvas and the SwiftUI backdrop around it meet without a seam.
-    static let backdropGray = 0.13
-    static let backdrop = Color(white: backdropGray)
+    /// The neutral gray around the photo: white in the light appearance, 13% gray in the dark.
+    /// Neutral grays match in Display P3 and sRGB, so the canvas and the SwiftUI backdrop around
+    /// it meet without a seam.
+    static func backdropGray(for colorScheme: ColorScheme) -> Double {
+        colorScheme == .dark ? 0.13 : 1
+    }
 
     let url: URL
     let renderer: RAWRenderer
     /// In stops.
     var exposure: Double
+    /// The gray of the canvas around the photo, from 0 to 1.
+    var backdropGray: Double
     var onError: (Error) -> Void
 
     func makeCoordinator() -> PhotoCanvasCoordinator {
@@ -36,6 +40,7 @@ struct PhotoCanvas: NSViewRepresentable {
 
     func updateNSView(_ view: MTKView, context: Context) {
         context.coordinator.onError = onError
+        context.coordinator.setBackdrop(backdropGray)
         context.coordinator.show(url, exposure: exposure)
     }
 }
@@ -64,13 +69,20 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     private var isRendering = false
     private var resizeTask: Task<Void, Never>?
 
-    private static let background = CIColor(red: PhotoCanvas.backdropGray, green: PhotoCanvas.backdropGray,
-                                            blue: PhotoCanvas.backdropGray, colorSpace: RAWRenderer.colorSpace)!
+    private var background = CIColor(red: 0, green: 0, blue: 0, colorSpace: RAWRenderer.colorSpace)!
+    private var backdropGray: Double?
     private static let log = Logger(subsystem: "Proof", category: "render")
 
     init(renderer: RAWRenderer) {
         self.renderer = renderer
         commandQueue = renderer.device.makeCommandQueue()
+    }
+
+    func setBackdrop(_ gray: Double) {
+        guard gray != backdropGray else { return }
+        backdropGray = gray
+        background = CIColor(red: gray, green: gray, blue: gray, colorSpace: RAWRenderer.colorSpace)!
+        view?.needsDisplay = true
     }
 
     func show(_ url: URL, exposure: Double) {
@@ -98,7 +110,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         guard let drawable = view.currentDrawable,
               let commandBuffer = commandQueue?.makeCommandBuffer() else { return }
         do {
-            try renderer.draw(photo, into: drawable.texture, commandBuffer: commandBuffer, background: Self.background)
+            try renderer.draw(photo, into: drawable.texture, commandBuffer: commandBuffer, background: background)
             commandBuffer.present(drawable)
             commandBuffer.commit()
         } catch {
