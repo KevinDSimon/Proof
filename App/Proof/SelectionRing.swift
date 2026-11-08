@@ -8,7 +8,8 @@ extension View {
         padding(gap + lineWidth)
             .overlay {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: gap + lineWidth)
+                    // Square corners, like the photo's own edges.
+                    Rectangle()
                         .strokeBorder(.primary, lineWidth: lineWidth)
                 }
             }
