@@ -23,7 +23,7 @@ Every render starts from the original RAW file and applies the edit recipe in th
 5. Layers (v1.2): each layer's mask and adjustments, blended in order with `CIBlendWithMask`
 6. Crop, straighten, and the output transform to the display or export color space
 
-`RAWRenderer` in `ProofKit` performs step 1 today. It is an actor, so decoding and GPU work run off the main thread. It opens a file once and renders it into a Metal texture scaled to fit a requested pixel size. It applies exposure, in stops, through `CIRAWFilter.exposure`. Its `CIContext` caches intermediate results, so after the first render at a given size, a change to a later stage such as exposure reuses the decoded RAW data instead of decoding it again. Opening another photo clears the cache, so GPU memory holds the intermediates of one photo at a time. Cached and uncached renders of the same settings produce the same pixels. The Mac app's canvas is an `MTKView` that draws the latest texture scaled to the window; on resize it keeps drawing the old texture until a render at the new size finishes. The canvas runs one render at a time and never discards one in flight: while the exposure slider is dragged faster than renders finish, each finished render is shown and the next starts from the slider's latest value. Until the Folders panel arrives, the app opens one file at a time from an Open dialog, saves it as a location through `FileAccess`, and reopens it at the next launch.
+`RAWRenderer` in `ProofKit` performs step 1 today. It is an actor, so decoding and GPU work run off the main thread. It opens a file once and renders it into a Metal texture scaled to fit a requested pixel size. It applies exposure, in stops, through `CIRAWFilter.exposure`. Its `CIContext` caches intermediate results, so after the first render at a given size, a change to a later stage such as exposure reuses the decoded RAW data instead of decoding it again. Opening another photo clears the cache, so GPU memory holds the intermediates of one photo at a time. Cached and uncached renders of the same settings produce the same pixels. The Mac app's canvas is an `MTKView` that draws the latest texture scaled to the window; on resize it keeps drawing the old texture until a render at the new size finishes. The canvas runs one render at a time and never discards one in flight: while the exposure slider is dragged faster than renders finish, each finished render is shown and the next starts from the slider's latest value.
 
 A render request always carries a target size. Interactive renders use a reduced `scaleFactor` while a control is being dragged and full screen resolution on release. Only export renders at full sensor resolution.
 
@@ -37,6 +37,16 @@ A render request always carries a target size. Interactive renders use a reduced
 | Thumbnails, folder index | Application Support | Proof; disposable |
 
 See [edit-format.md](edit-format.md) for the recipe format.
+
+## Window layout
+
+The Mac app has one window. Panels sit beside the photo and never cover it; see [decision 0004](decisions/0004-window-layout.md).
+
+- The sidebar is a `NavigationSplitView` sidebar listing the saved folders. Each one expands into its subfolders exactly as they are on disk; Proof doesn't group or reorganize them. Each row shows how many RAW photos sit directly in that folder. A folder is read with `FolderContents.read` off the main thread when its row first appears, so a tree on a NAS costs one directory listing per visible folder.
+- A saved folder that is `missing` is dimmed and has a Locate… button that relinks it through `FileAccess`. One that is `offline` is dimmed without the button. Removing a folder asks first and says that photos and edits are not deleted.
+- The toolbar holds the photo name and folder as the window title and subtitle, the All, 5 Stars and Edited filter (`PhotoFilter`), and the exposure slider. A photo counts as edited when its `.proof` sidecar exists. Star ratings are read from XMP in a later issue; until then the 5 Stars filter shows nothing.
+- The canvas is a neutral dark gray that runs under the toolbar glass. The photo is centered on it with a margin and stays inside the safe area. Until Browse and Edit modes exist, the window always uses the dark appearance.
+- Until the filmstrip arrives, the canvas shows the selected folder's first photo that passes the filter. The selected folder is remembered between launches as a `FileReference`.
 
 ## Folder access
 

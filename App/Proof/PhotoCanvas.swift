@@ -5,6 +5,11 @@ import SwiftUI
 
 /// Shows one RAW photo, fitted to the view, in a Metal-backed view.
 struct PhotoCanvas: NSViewRepresentable {
+    /// The neutral gray around the photo. Neutral grays match in Display P3 and sRGB, so the
+    /// canvas and the SwiftUI backdrop around it meet without a seam.
+    static let backdropGray = 0.13
+    static let backdrop = Color(white: backdropGray)
+
     let url: URL
     let renderer: RAWRenderer
     /// In stops.
@@ -59,7 +64,8 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     private var isRendering = false
     private var resizeTask: Task<Void, Never>?
 
-    private static let background = CIColor(red: 0.13, green: 0.13, blue: 0.13, colorSpace: RAWRenderer.colorSpace)!
+    private static let background = CIColor(red: PhotoCanvas.backdropGray, green: PhotoCanvas.backdropGray,
+                                            blue: PhotoCanvas.backdropGray, colorSpace: RAWRenderer.colorSpace)!
     private static let log = Logger(subsystem: "Proof", category: "render")
 
     init(renderer: RAWRenderer) {
