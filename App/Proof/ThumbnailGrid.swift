@@ -88,11 +88,9 @@ struct ThumbnailGrid: View {
                     .fill(.quaternary)
             }
         }
-        .padding(6)
-        .frame(maxWidth: .infinity)
+        .selectionRing(isSelected)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .aspectRatio(1, contentMode: .fit)
-        .background(isSelected ? AnyShapeStyle(.selection) : AnyShapeStyle(.clear),
-                    in: RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
         .onTapGesture {
             library.browse.selectedPhoto = photo.name

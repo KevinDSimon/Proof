@@ -2,7 +2,7 @@ import ProofKit
 import SwiftUI
 
 /// One row of thumbnails under the photo in Edit, showing the photos that pass the filter. The
-/// current photo is marked with the selection color. Click or the left and right arrow keys
+/// current photo is marked with a ring. Click or the left and right arrow keys
 /// switch to another photo without leaving Edit.
 struct Filmstrip: View {
     @Bindable var library: Library
@@ -83,10 +83,8 @@ struct Filmstrip: View {
                     .fill(.quaternary)
             }
         }
-        .padding(4)
+        .selectionRing(isCurrent, lineWidth: 2, gap: 2)
         .frame(width: Self.height - 12, height: Self.height - 12)
-        .background(isCurrent ? AnyShapeStyle(.selection) : AnyShapeStyle(.clear),
-                    in: RoundedRectangle(cornerRadius: 6))
         .contentShape(Rectangle())
         .onTapGesture {
             library.browse.selectedPhoto = photo.name
