@@ -28,7 +28,7 @@ The Mac app target is added in Xcode in Phase 0 and depends on `ProofKit`.
 
 ## Building
 
-Requires Xcode 16 or later on Apple Silicon.
+Requires macOS 26 and Xcode 26 or later on Apple Silicon. The app targets macOS 26 and, later, iOS 26.
 
 ```bash
 swift build
