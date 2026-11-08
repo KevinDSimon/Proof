@@ -78,6 +78,26 @@ struct RAWRendererTests {
         #expect(darker < base)
     }
 
+    /// Renders served from the cached RAW decode must match an uncached first render exactly,
+    /// or caching would change how saved edits look.
+    @Test("Returning to an exposure renders the same pixels as a fresh renderer", .enabled(if: sampleDNG != nil))
+    func cachedRenderMatchesFresh() async throws {
+        let url = try #require(sampleDNG)
+        let target = CGSize(width: 400, height: 400)
+
+        let fresh = try RAWRenderer()
+        try await fresh.open(url)
+        let expected = try pixels(await fresh.render(fitting: target, exposure: 1))
+
+        let reused = try RAWRenderer()
+        try await reused.open(url)
+        for exposure in [0.0, 1, -1] {
+            _ = try await reused.render(fitting: target, exposure: exposure)
+        }
+        let actual = try pixels(await reused.render(fitting: target, exposure: 1))
+        #expect(actual == expected)
+    }
+
     /// Records how long an exposure change takes to render, for issue #3. Each size is warmed up
     /// once, then timed over several exposure values; the median is printed.
     @Test("Exposure render timings at full resolution and a quarter", .enabled(if: sampleDNG != nil))
@@ -99,6 +119,15 @@ struct RAWRendererTests {
             print("Exposure render at scaleFactor \(scale) (\(size)): median \(String(format: "%.1f", median)) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
         }
+    }
+
+    private func pixels(_ photo: RenderedPhoto) throws -> [UInt8] {
+        let image = try #require(CIImage(mtlTexture: photo.texture, options: [.colorSpace: RAWRenderer.colorSpace]))
+        let rowBytes = photo.texture.width * 4
+        var bytes = [UInt8](repeating: 0, count: rowBytes * photo.texture.height)
+        CIContext().render(image, toBitmap: &bytes, rowBytes: rowBytes, bounds: image.extent,
+                           format: .RGBA8, colorSpace: RAWRenderer.colorSpace)
+        return bytes
     }
 
     private func averageLuminance(_ photo: RenderedPhoto) throws -> Double {
