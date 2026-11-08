@@ -74,24 +74,18 @@ struct ContentView: View {
                         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
                 }
             }
+            .toolbarBand(gray: PhotoCanvas.backdropGray(for: colorScheme))
             .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
                                             set: { if library.isEditing { library.isInspectorShown = $0 } })) {
                 AdjustmentsInspector(exposure: $exposure)
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
-            }
-            // macOS drops the toolbar's separator once the toolbar has its own color, so the same
-            // system separator the side panels use is drawn along the toolbar's bottom edge.
-            .overlay(alignment: .top) {
-                VStack { Divider() }
-                    .allowsHitTesting(false)
+                    .toolbarBand(gray: PhotoCanvas.backdropGray(for: colorScheme))
             }
         }
-        // Both modes follow the system appearance. The toolbar keeps its background and separator
-        // line so the title stays readable over thumbnails scrolling under it in Browse. Edit
-        // keeps them too, so the toolbar doesn't change when switching modes. The background is
-        // the canvas color rather than the system material, which is lighter than the dark canvas.
-        .toolbarBackground(Color(white: PhotoCanvas.backdropGray(for: colorScheme)), for: .windowToolbar)
-        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        // Both modes follow the system appearance. The toolbar's own background and its separator
+        // line are hidden: they would cut the sidebar and inspector dividers off at the toolbar
+        // instead of letting them run to the top of the window. Each column draws its own band.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
