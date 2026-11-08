@@ -18,7 +18,6 @@ struct ThumbnailGrid: View {
     @State private var finished: Set<String> = []
     @State private var columnCount = 1
     @FocusState private var isFocused: Bool
-    @Environment(\.colorScheme) private var colorScheme
 
     private struct LoadKey: Equatable {
         var folder: FileReference
@@ -42,9 +41,8 @@ struct ThumbnailGrid: View {
                 }
                 .padding(Self.margin)
             }
-            // A soft fade under the toolbar instead of a separator line.
-            .scrollEdgeEffectStyle(.soft, for: .top)
-            .toolbarFade(gray: PhotoCanvas.backdropGray(for: colorScheme))
+            // Pairs with the toolbar background shown in Browse: content stops cleanly at its line.
+            .scrollEdgeEffectStyle(.hard, for: .top)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 let usable = width - 2 * Self.margin + Self.spacing
                 columnCount = max(1, Int(usable / (Self.cellSize + Self.spacing)))
