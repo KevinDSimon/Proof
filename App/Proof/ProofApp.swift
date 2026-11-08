@@ -74,18 +74,14 @@ struct ContentView: View {
                         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
                 }
             }
-            .toolbarBand(gray: PhotoCanvas.backdropGray(for: colorScheme))
             .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
                                             set: { if library.isEditing { library.isInspectorShown = $0 } })) {
                 AdjustmentsInspector(exposure: $exposure)
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
-                    .toolbarBand(gray: PhotoCanvas.backdropGray(for: colorScheme))
             }
         }
-        // Both modes follow the system appearance. The toolbar's own background and its separator
-        // line are hidden: they would cut the sidebar and inspector dividers off at the toolbar
-        // instead of letting them run to the top of the window. Each column draws its own band.
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        // Both modes follow the system appearance. The toolbar keeps the system's default
+        // background and scroll edge effect, which keep the title readable over scrolled content.
         .frame(minWidth: 800, minHeight: 500)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
@@ -270,7 +266,6 @@ struct AdjustmentsInspector: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .scrollEdgeEffectStyle(.soft, for: .top)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 }
