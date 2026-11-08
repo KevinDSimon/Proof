@@ -65,6 +65,50 @@ struct RAWRendererTests {
                                                    format: .RGBA8, colorSpace: RAWRenderer.colorSpace)
         }
     }
+
+    @Test("Raising exposure brightens a real RAW photo", .enabled(if: sampleDNG != nil))
+    func exposureBrightens() async throws {
+        let renderer = try RAWRenderer()
+        try await renderer.open(try #require(sampleDNG))
+        let target = CGSize(width: 400, height: 400)
+        let base = try averageLuminance(await renderer.render(fitting: target))
+        let brighter = try averageLuminance(await renderer.render(fitting: target, exposure: 1))
+        let darker = try averageLuminance(await renderer.render(fitting: target, exposure: -1))
+        #expect(brighter > base)
+        #expect(darker < base)
+    }
+
+    /// Records how long an exposure change takes to render, for issue #3. Each size is warmed up
+    /// once, then timed over several exposure values; the median is printed.
+    @Test("Exposure render timings at full resolution and a quarter", .enabled(if: sampleDNG != nil))
+    func exposureTimings() async throws {
+        let renderer = try RAWRenderer()
+        try await renderer.open(try #require(sampleDNG))
+        for scale in [1.0, 0.25] {
+            _ = try await renderer.render(scaleFactor: scale, exposure: 0)
+            var times: [Double] = []
+            var size = ""
+            for exposure in [0.5, -0.5, 1, -1, 1.5, -1.5, 2] {
+                let start = ContinuousClock.now
+                let photo = try await renderer.render(scaleFactor: scale, exposure: exposure)
+                times.append((ContinuousClock.now - start) / .milliseconds(1))
+                size = "\(photo.texture.width)×\(photo.texture.height)"
+            }
+            times.sort()
+            let median = times[times.count / 2]
+            print("Exposure render at scaleFactor \(scale) (\(size)): median \(String(format: "%.1f", median)) ms, "
+                + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
+        }
+    }
+
+    private func averageLuminance(_ photo: RenderedPhoto) throws -> Double {
+        let image = try #require(CIImage(mtlTexture: photo.texture, options: [.colorSpace: RAWRenderer.colorSpace]))
+        let average = image.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: image.extent)])
+        var pixel = [Float](repeating: 0, count: 4)
+        CIContext().render(average, toBitmap: &pixel, rowBytes: 16, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                           format: .RGBAf, colorSpace: RAWRenderer.colorSpace)
+        return Double(0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2])
+    }
 }
 
 private let sampleDNG = ProcessInfo.processInfo.environment["PROOF_SAMPLE_DNG"].map(URL.init(fileURLWithPath:))

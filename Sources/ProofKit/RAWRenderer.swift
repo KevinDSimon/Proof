@@ -50,15 +50,24 @@ public actor RAWRenderer {
     }
 
     /// Renders the open photo scaled to fit `targetSize` (in pixels), never larger than the
-    /// sensor. The texture has the photo's aspect ratio, not the target's.
-    public func render(fitting targetSize: CGSize) throws -> RenderedPhoto {
+    /// sensor. The texture has the photo's aspect ratio, not the target's. `exposure` is in
+    /// stops and is applied by the RAW decoder in linear light.
+    public func render(fitting targetSize: CGSize, exposure: Double = 0) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         let scale = Self.scaleFactor(
             nativeSize: filter.nativeSize,
             orientation: filter.orientation,
             fitting: targetSize
         )
+        return try render(scaleFactor: scale, exposure: exposure)
+    }
+
+    /// Renders at an exact `CIRAWFilter.scaleFactor`. Internal so that only export and timing
+    /// tests can ask for full sensor resolution; the app goes through `render(fitting:)`.
+    func render(scaleFactor scale: CGFloat, exposure: Double) throws -> RenderedPhoto {
+        guard let filter else { throw RAWRendererError.noPhotoOpen }
         filter.scaleFactor = Float(scale)
+        filter.exposure = Float(exposure)
         guard let image = filter.outputImage else { throw RAWRendererError.renderFailed }
 
         let extent = image.extent.integral
