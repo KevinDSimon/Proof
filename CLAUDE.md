@@ -31,7 +31,7 @@ Proof is a Mac RAW photo editor in Swift, built on Core Image and Metal. These r
 - Panels and controls sit beside the photo, never on top of it. The photo sits centered on a neutral canvas, with a margin, inside the safe area. The canvas follows the system appearance: white in light, 13% gray in dark. It runs under the toolbar glass; the photo never does (no `backgroundExtensionEffect`). Overlays are only for temporary or on-image tools, such as crop handles or a before/after split, and for the small rating and flag badges on thumbnails.
 - The interface itself is black, white and gray: no blue or other accent color. Selection is marked with a ring or an inverted row, not a colored fill.
 - Browsing and editing are separate modes, as in Photos. Browsing controls such as the filter appear only while browsing; editing controls only while editing.
-- Show folders as they are on disk. Proof doesn't group or reorganize the person's files.
+- Show folders as they are on disk. Proof doesn't group or reorganize the person's files. All Photos is the one view across folders; it reads them but changes nothing on disk (see `docs/decisions/0006-all-photos.md`).
 
 ## Conventions
 
