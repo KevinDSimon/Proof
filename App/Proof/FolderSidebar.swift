@@ -1,7 +1,7 @@
 import ProofKit
 import SwiftUI
 
-/// Saved folders and their subfolders, exactly as they are on disk.
+/// All Photos, then the saved folders and their subfolders, exactly as they are on disk.
 struct FolderSidebar: View {
     @Bindable var library: Library
     @State private var removing: SavedLocation?
@@ -9,6 +9,11 @@ struct FolderSidebar: View {
 
     var body: some View {
         List(selection: $library.selection) {
+            if !library.locations.isEmpty {
+                SidebarLabel(name: "All Photos", systemImage: "photo.on.rectangle")
+                    .help("Photos from every saved folder and its subfolders")
+                    .tag(SidebarItem.allPhotos)
+            }
             Section("Folders") {
                 ForEach(library.locations) { location in
                     LocationRow(library: library, location: location)
@@ -27,7 +32,7 @@ struct FolderSidebar: View {
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
         .onDeleteCommand {
             removing = library.locations.first {
-                library.selection == FileReference(locationID: $0.id, relativePath: [])
+                library.selection == .folder(FileReference(locationID: $0.id, relativePath: []))
             }
         }
         .toolbar {
@@ -58,20 +63,20 @@ private struct LocationRow: View {
             FolderRow(library: library, folder: FileReference(locationID: location.id, relativePath: []),
                       name: location.name)
         case .offline:
-            FolderLabel(name: location.name)
+            SidebarLabel(name: location.name)
                 .foregroundStyle(.secondary)
                 .help("The drive or network volume this folder is on isn't connected.")
-                .tag(FileReference(locationID: location.id, relativePath: []))
+                .tag(SidebarItem.folder(FileReference(locationID: location.id, relativePath: [])))
         case .missing:
             HStack {
-                FolderLabel(name: location.name)
+                SidebarLabel(name: location.name)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Locate…") { library.requestFolder(.locate(location)) }
                     .controlSize(.small)
             }
             .help("Proof can't find this folder. It was last at \(location.lastKnownURL.path).")
-            .tag(FileReference(locationID: location.id, relativePath: []))
+            .tag(SidebarItem.folder(FileReference(locationID: location.id, relativePath: [])))
         }
     }
 }
@@ -105,15 +110,16 @@ private struct FolderRow: View {
     }
 
     private var label: some View {
-        FolderLabel(name: name, count: library.contents[folder]?.photos.count ?? 0)
-            .tag(folder)
+        SidebarLabel(name: name, count: library.contents[folder]?.photos.count ?? 0)
+            .tag(SidebarItem.folder(folder))
     }
 }
 
-/// A folder's name with a gray folder symbol instead of the accent-colored one a sidebar gives
-/// it, so the sidebar stays neutral.
-private struct FolderLabel: View {
+/// A row's name with a gray symbol instead of the accent-colored one a sidebar gives it, so the
+/// sidebar stays neutral.
+private struct SidebarLabel: View {
     let name: String
+    var systemImage = "folder"
     /// The number of photos, shown as the row's badge. Zero shows none.
     var count = 0
     @Environment(\.backgroundProminence) private var prominence
@@ -123,7 +129,7 @@ private struct FolderLabel: View {
             Text(name)
         } icon: {
             // In a selected row the symbol takes the row's text color.
-            Image(systemName: "folder")
+            Image(systemName: systemImage)
                 .foregroundStyle(prominence == .increased ? AnyShapeStyle(.foreground) : AnyShapeStyle(.secondary))
         }
         .badge(count == 0 ? nil : Text(count, format: .number))

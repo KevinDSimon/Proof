@@ -6,7 +6,7 @@ Status: pre-alpha. Nothing to download yet.
 
 ## v1 scope
 
-- Folders panel and filmstrip, with a star filter that reads ratings from XMP sidecars (written by Photomator, Lightroom, Capture One and others)
+- Folders panel with an All Photos view across every saved folder and its subfolders, and a filmstrip, with a star filter that reads ratings from XMP sidecars (written by Photomator, Lightroom, Capture One and others)
 - Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation
 - Tone curve (RGB and per channel) and a histogram
 - `.cube` LUTs with a strength slider

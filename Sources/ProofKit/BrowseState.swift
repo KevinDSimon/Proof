@@ -1,7 +1,7 @@
 import Foundation
 
-/// Whether the window is browsing a folder or editing one of its photos, and which photo is
-/// selected. Photos are identified by file name within the selected folder.
+/// Whether the window is browsing photos or editing one of them, and which photo is selected.
+/// Photos are identified by folder and file name, since All Photos shows several folders at once.
 public struct BrowseState: Equatable, Sendable {
     public enum Mode: Equatable, Sendable {
         case browsing
@@ -14,11 +14,11 @@ public struct BrowseState: Equatable, Sendable {
 
     public private(set) var mode: Mode = .browsing
     /// Clearing the selection also leaves Edit, since there is no photo left to edit.
-    public var selectedPhoto: String? {
+    public var selectedPhoto: PhotoReference? {
         didSet { if selectedPhoto == nil { mode = .browsing } }
     }
 
-    public init(selectedPhoto: String? = nil) {
+    public init(selectedPhoto: PhotoReference? = nil) {
         self.selectedPhoto = selectedPhoto
     }
 
@@ -32,25 +32,25 @@ public struct BrowseState: Equatable, Sendable {
         mode = .browsing
     }
 
-    /// Keeps the selection valid after the folder's photos or the filter change. A photo that is
+    /// Keeps the selection valid after the shown photos or the filter change. A photo that is
     /// no longer shown is deselected.
-    public mutating func keep(only photos: [FolderContents.Photo]) {
-        if let selectedPhoto, !photos.contains(where: { $0.name == selectedPhoto }) {
+    public mutating func keep(only photos: [ListedPhoto]) {
+        if let selectedPhoto, !photos.contains(where: { $0.id == selectedPhoto }) {
             self.selectedPhoto = nil
         }
     }
 
     /// The selected photo's position among `photos`, counting from 1, as in "3 of 120".
-    public func position(in photos: [FolderContents.Photo]) -> Int? {
-        photos.firstIndex { $0.name == selectedPhoto }.map { $0 + 1 }
+    public func position(in photos: [ListedPhoto]) -> Int? {
+        photos.firstIndex { $0.id == selectedPhoto }.map { $0 + 1 }
     }
 
     /// Moves the selection in a grid of `photos` laid out in rows of `columns`. With nothing
     /// selected, any move selects the first photo. A move past the edge of the grid does nothing.
-    public mutating func move(_ move: Move, in photos: [FolderContents.Photo], columns: Int) {
+    public mutating func move(_ move: Move, in photos: [ListedPhoto], columns: Int) {
         guard !photos.isEmpty else { return }
-        guard let current = photos.firstIndex(where: { $0.name == selectedPhoto }) else {
-            selectedPhoto = photos[0].name
+        guard let current = photos.firstIndex(where: { $0.id == selectedPhoto }) else {
+            selectedPhoto = photos[0].id
             return
         }
         let columns = max(columns, 1)
@@ -60,6 +60,6 @@ public struct BrowseState: Equatable, Sendable {
         case .up: current - columns
         case .down: current + columns
         }
-        if photos.indices.contains(target) { selectedPhoto = photos[target].name }
+        if photos.indices.contains(target) { selectedPhoto = photos[target].id }
     }
 }

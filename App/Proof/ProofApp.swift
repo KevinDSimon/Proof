@@ -18,7 +18,7 @@ struct ProofApp: App {
             }
             CommandGroup(before: .sidebar) {
                 Picker("Show", selection: $library.filter) {
-                    Text("All Photos").tag(PhotoFilter.all)
+                    Text("All").tag(PhotoFilter.all)
                         .keyboardShortcut("1")
                     Text("5-Star Photos").tag(PhotoFilter.fiveStars)
                         .keyboardShortcut("2")
@@ -177,10 +177,8 @@ struct ContentView: View {
                         library.errorMessage = "The photo couldn't be shown. (\(error))"
                     }
                     .padding(24)
-                    if let folder = library.selection {
-                        Filmstrip(library: library, folder: folder, photos: library.visiblePhotos)
-                            .padding(.bottom, 8)
-                    }
+                    Filmstrip(library: library, photos: library.visiblePhotos)
+                        .padding(.bottom, 8)
                 }
             } else {
                 ContentUnavailableView("Metal Isn't Available", systemImage: "exclamationmark.triangle",
@@ -211,7 +209,9 @@ struct ContentView: View {
             } actions: {
                 Button("Add Folder…") { library.requestFolder(.add) }
             }
-        } else if let selection = library.selection, let location = selectedLocation {
+        } else if library.selection == .allPhotos {
+            allPhotos
+        } else if let selection = library.selection?.folder, let location = selectedLocation {
             switch library.status(of: selection.locationID) {
             case .missing:
                 ContentUnavailableView {
@@ -225,13 +225,12 @@ struct ContentView: View {
                 ContentUnavailableView("Drive Not Connected", systemImage: "externaldrive.badge.xmark",
                                        description: Text("Connect the drive or network volume that holds “\(location.name)”."))
             case .available:
-                if let contents = library.contents[selection] {
+                if library.contents[selection] != nil {
                     if library.visiblePhotos.isEmpty {
                         ContentUnavailableView(emptyTitle, systemImage: "photo",
                                                description: Text("There are no RAW photos to show in this folder."))
                     } else {
-                        ThumbnailGrid(library: library, folder: selection,
-                                      photos: library.visiblePhotos, allPhotos: contents.photos)
+                        ThumbnailGrid(library: library, photos: library.visiblePhotos, allPhotos: library.listedPhotos)
                     }
                 } else {
                     ProgressView()
@@ -243,32 +242,56 @@ struct ContentView: View {
         }
     }
 
-    private var selectedLocation: SavedLocation? {
-        library.locations.first { $0.id == library.selection?.locationID }
+    /// Photos from every available location. Locations that can't be reached are left out, and
+    /// the subtitle names them.
+    @ViewBuilder private var allPhotos: some View {
+        if library.unavailableLocations.count == library.locations.count {
+            ContentUnavailableView("No Folders Available", systemImage: "externaldrive.badge.xmark",
+                                   description: Text("Connect the drives or network volumes that hold your folders."))
+        } else if !library.visiblePhotos.isEmpty {
+            ThumbnailGrid(library: library, photos: library.visiblePhotos, allPhotos: library.listedPhotos)
+        } else if library.isReadingAllPhotos {
+            ProgressView()
+        } else {
+            ContentUnavailableView(emptyTitle, systemImage: "photo",
+                                   description: Text("There are no RAW photos to show in your folders."))
+        }
     }
 
-    private var folderName: String? {
-        guard let selection = library.selection else { return nil }
-        return selection.relativePath.last ?? selectedLocation?.name
+    private var selectedLocation: SavedLocation? {
+        library.locations.first { $0.id == library.selection?.folder?.locationID }
     }
 
     private var title: String {
-        library.isEditing ? library.browse.selectedPhoto ?? "" : folderName ?? ""
+        if library.isEditing { return library.browse.selectedPhoto?.name ?? "" }
+        switch library.selection {
+        case .allPhotos: return "All Photos"
+        case .folder(let folder): return library.name(of: folder)
+        case nil: return ""
+        }
     }
 
-    /// In Browse, how many photos the folder has; in Edit, the folder and the photo's position.
+    /// In Browse, how many photos are shown, and for All Photos which locations are left out; in
+    /// Edit, the photo's folder and its position.
     private var subtitle: String {
-        guard let selection = library.selection, let contents = library.contents[selection] else { return "" }
         let visible = library.visiblePhotos
         if library.isEditing {
             let position = library.browse.position(in: visible).map { "\($0) of \(visible.count)" }
             // A saved location that is a single photo has no folder name to show.
-            let folder = folderName == library.browse.selectedPhoto ? nil : folderName
-            return [folder, position].compactMap { $0 }.joined(separator: " · ")
+            let folder = library.browse.selectedPhoto.map { library.name(of: $0.folder) }
+            let shownFolder = folder == library.browse.selectedPhoto?.name ? nil : folder
+            return [shownFolder, position].compactMap { $0 }.joined(separator: " · ")
         }
-        let total = contents.photos.count
+        if let folder = library.selection?.folder, library.contents[folder] == nil { return "" }
+        if library.selection == nil { return "" }
+        let total = library.listedPhotos.count
         let noun = total == 1 ? "photo" : "photos"
-        return library.filter == .all ? "\(total) \(noun)" : "\(visible.count) of \(total) \(noun)"
+        let count = library.filter == .all ? "\(total) \(noun)" : "\(visible.count) of \(total) \(noun)"
+        let unavailable = library.unavailableLocations
+        guard library.selection == .allPhotos, !unavailable.isEmpty else { return count }
+        let missing = unavailable.count == 1 ? "“\(unavailable[0].name)” isn't available"
+                                             : "\(unavailable.count) folders aren't available"
+        return "\(count) · \(missing)"
     }
 
     private var emptyTitle: String {

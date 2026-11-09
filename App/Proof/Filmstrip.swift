@@ -6,17 +6,11 @@ import SwiftUI
 /// switch to another photo without leaving Edit.
 struct Filmstrip: View {
     @Bindable var library: Library
-    let folder: FileReference
-    let photos: [FolderContents.Photo]
+    let photos: [ListedPhoto]
 
-    @State private var images: [String: NSImage] = [:]
-    @State private var finished: Set<String> = []
+    @State private var images: [PhotoReference: NSImage] = [:]
+    @State private var finished: Set<PhotoReference> = []
     @FocusState private var isFocused: Bool
-
-    private struct LoadKey: Equatable {
-        var folder: FileReference
-        var names: [String]
-    }
 
     static let height: CGFloat = 84
     private static let spacing: CGFloat = 4
@@ -25,20 +19,20 @@ struct Filmstrip: View {
         ScrollViewReader { scroller in
             ScrollView(.horizontal) {
                 LazyHStack(spacing: Self.spacing) {
-                    ForEach(photos, id: \.name) { photo in
+                    ForEach(photos) { photo in
                         cell(for: photo)
-                            .id(photo.name)
+                            .id(photo.id)
                     }
                 }
                 .padding(.horizontal, 12)
             }
             .scrollIndicators(.never)
-            .onChange(of: library.browse.selectedPhoto) { _, name in
-                guard let name else { return }
-                withAnimation { scroller.scrollTo(name, anchor: .center) }
+            .onChange(of: library.browse.selectedPhoto) { _, photo in
+                guard let photo else { return }
+                withAnimation { scroller.scrollTo(photo, anchor: .center) }
             }
             .onAppear {
-                if let name = library.browse.selectedPhoto { scroller.scrollTo(name, anchor: .center) }
+                if let photo = library.browse.selectedPhoto { scroller.scrollTo(photo, anchor: .center) }
             }
         }
         .frame(height: Self.height)
@@ -55,27 +49,22 @@ struct Filmstrip: View {
             if let move { library.browse.move(move, in: photos, columns: photos.count) }
         }
         .onAppear { isFocused = true }
-        .task(id: LoadKey(folder: folder, names: photos.map(\.name))) {
-            images = [:]
-            finished = []
-            await ThumbnailGrid.loadThumbnails(of: photos, in: folder, library: library) { name, image in
-                finished.insert(name)
-                if let image { images[name] = image }
-            }
+        .task(id: photos.map(\.id)) {
+            await ThumbnailGrid.loadThumbnails(of: photos, images: $images, finished: $finished, library: library)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Filmstrip")
     }
 
-    private func cell(for photo: FolderContents.Photo) -> some View {
-        let isCurrent = library.browse.selectedPhoto == photo.name
+    private func cell(for photo: ListedPhoto) -> some View {
+        let isCurrent = library.browse.selectedPhoto == photo.id
         return ZStack {
-            if let image = images[photo.name] {
+            if let image = images[photo.id] {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .ratingBadges(photo.metadata, size: 8)
-            } else if finished.contains(photo.name) {
+                    .ratingBadges(photo.photo.metadata, size: 8)
+            } else if finished.contains(photo.id) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
                     .help("This photo couldn't be read.")
@@ -88,12 +77,12 @@ struct Filmstrip: View {
         .frame(width: Self.height - 12, height: Self.height - 12)
         .contentShape(Rectangle())
         .onTapGesture {
-            library.browse.selectedPhoto = photo.name
+            library.browse.selectedPhoto = photo.id
             isFocused = true
         }
         .help(photo.name)
         .accessibilityElement()
-        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.metadata))
+        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata))
         .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
     }
 }
