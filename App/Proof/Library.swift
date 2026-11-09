@@ -30,6 +30,9 @@ struct PhotoEdit {
     var history: EditHistory
     /// The sidecar as last read or written; `nil` when there is none.
     var sidecar: Sidecar?
+    /// ISO, focal length, aperture and shutter speed, shown under the histogram. Read once the
+    /// photo is opened.
+    var captureSettings: CaptureSettings?
     var unsaved: Unsaved?
     /// The camera's white balance, which the white balance controls show for As Shot. `nil`
     /// until it has been read from the photo.
@@ -95,6 +98,19 @@ final class Library {
     /// Kept apart from `isChoosingFolder`, which SwiftUI clears before the picker's result arrives.
     private(set) var folderRequest: FolderRequest = .add
     var errorMessage: String?
+    /// The histogram of the latest render shown on the canvas, and the photo it was measured from.
+    private var histogram: (url: URL, value: Histogram)?
+
+    /// The histogram of the selected photo. Nil until its first render has been measured, so
+    /// another photo's histogram is never shown in its place.
+    var selectedHistogram: Histogram? {
+        guard let histogram, histogram.url == selectedPhotoURL else { return nil }
+        return histogram.value
+    }
+
+    func showHistogram(_ histogram: Histogram, of url: URL) {
+        self.histogram = (url, histogram)
+    }
 
     private let fileAccess: FileAccess?
     private var metadataTask: Task<Void, Never>?
@@ -344,8 +360,11 @@ final class Library {
         }
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.
         Task {
-            let asShot = await Task.detached { WhiteBalance.asShot(of: url) }.value
+            let (asShot, settings) = await Task.detached {
+                (WhiteBalance.asShot(of: url), CaptureSettings.read(from: url))
+            }.value
             edits[photo]?.asShot = asShot
+            edits[photo]?.captureSettings = settings
         }
     }
 

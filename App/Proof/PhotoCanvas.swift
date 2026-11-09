@@ -18,6 +18,8 @@ struct PhotoCanvas: NSViewRepresentable {
     /// The gray of the canvas around the photo, from 0 to 1.
     var backdropGray: Double
     var onError: (Error) -> Void
+    /// Receives the histogram of each render shown, with the photo it belongs to.
+    var onHistogram: (Histogram, URL) -> Void = { _, _ in }
 
     func makeCoordinator() -> PhotoCanvasCoordinator {
         PhotoCanvasCoordinator(renderer: renderer)
@@ -39,6 +41,7 @@ struct PhotoCanvas: NSViewRepresentable {
 
     func updateNSView(_ view: MTKView, context: Context) {
         context.coordinator.onError = onError
+        context.coordinator.onHistogram = onHistogram
         context.coordinator.setBackdrop(backdropGray)
         context.coordinator.show(url, recipe: recipe)
     }
@@ -50,6 +53,7 @@ struct PhotoCanvas: NSViewRepresentable {
 final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     weak var view: MTKView?
     var onError: (Error) -> Void = { _ in }
+    var onHistogram: (Histogram, URL) -> Void = { _, _ in }
 
     private struct RenderRequest: Equatable {
         var url: URL
@@ -66,6 +70,9 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     /// What `photo` was rendered from, or the request that failed, so it isn't retried.
     private var rendered: RenderRequest?
     private var isRendering = false
+    /// The shown photo still to be measured for the histogram, and whether a measurement is running.
+    private var unmeasured: (photo: RenderedPhoto, url: URL)?
+    private var isMeasuring = false
     private var resizeTask: Task<Void, Never>?
 
     private var background = CIColor(red: 0, green: 0, blue: 0, colorSpace: RAWRenderer.colorSpace)!
@@ -138,6 +145,8 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
                 if request.url == url {
                     photo = result
                     view?.needsDisplay = true
+                    unmeasured = (result, request.url)
+                    measureLatest()
                 }
             } catch {
                 onError(error)
@@ -145,6 +154,22 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
             rendered = request
             isRendering = false
             renderLatest()
+        }
+    }
+
+    /// Measures the histogram beside the render loop rather than in it, so a slider drag never
+    /// waits for it. Like renders, one runs at a time and the next takes the latest photo shown.
+    private func measureLatest() {
+        guard !isMeasuring, let (photo, url) = unmeasured else { return }
+        unmeasured = nil
+        isMeasuring = true
+        Task.detached { [renderer] in
+            let histogram = try? renderer.histogram(of: photo)
+            await MainActor.run {
+                if let histogram, url == self.url { self.onHistogram(histogram, url) }
+                self.isMeasuring = false
+                self.measureLatest()
+            }
         }
     }
 }

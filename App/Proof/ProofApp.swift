@@ -328,7 +328,19 @@ struct EditCanvas: View {
         PhotoCanvas(url: url, renderer: renderer, recipe: library.selectedEdit?.recipe ?? EditRecipe(),
                     backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
+        } onHistogram: { histogram, url in
+            library.showHistogram(histogram, of: url)
         }
+    }
+}
+
+/// Reads the histogram in its own body, so a new one redraws only the graph, not the inspector.
+private struct SelectedHistogram: View {
+    let library: Library
+
+    var body: some View {
+        HistogramView(histogram: library.selectedHistogram)
+            .equatable()
     }
 }
 
@@ -340,6 +352,13 @@ struct AdjustmentsInspector: View {
 
     var body: some View {
         Form {
+            Section {
+                SelectedHistogram(library: library)
+            } header: {
+                SectionTitle("Histogram")
+            } footer: {
+                CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
+            }
             Section {
                 Picker("Preset", selection: Binding(get: { basic.whiteBalance },
                                                     set: { preset in library.changeEdit { $0.basic.choose(preset) } })) {
@@ -473,6 +492,12 @@ struct AdjustmentsInspector: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        // More room than the grouped form's default, which reads as tight beside the photo.
+        // Sections are spaced apart by their headers' top padding: macOS has no
+        // `listSectionSpacing`.
+        // Added to the grouped form's own 10 pt inset, so the cards sit 16 pt from the panel's edges.
+        .contentMargins(.horizontal, 6, for: .scrollContent)
+        .contentMargins(.vertical, 8, for: .scrollContent)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 
@@ -551,5 +576,22 @@ struct SectionHeader: View {
                 .disabled(!canReset)
                 .accessibilityLabel("Reset \(title)")
         }
+        .padding(.top, SectionTitle.spacing)
+    }
+}
+
+/// A section header with no Reset button, spaced like `SectionHeader`.
+struct SectionTitle: View {
+    /// Extra space above each header, which is what separates the inspector's sections.
+    static let spacing: CGFloat = 14
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .padding(.top, Self.spacing)
     }
 }
