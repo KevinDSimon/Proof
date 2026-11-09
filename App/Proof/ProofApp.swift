@@ -12,6 +12,15 @@ struct ProofApp: App {
         }
         .commands {
             SidebarCommands()
+            // Undo steps through the edit of the photo open in Edit; Browse has nothing to undo.
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") { library.undoEdit() }
+                    .keyboardShortcut("z")
+                    .disabled(!library.isEditing || !library.canUndoEdit)
+                Button("Redo") { library.redoEdit() }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+                    .disabled(!library.isEditing || !library.canRedoEdit)
+            }
             CommandGroup(after: .newItem) {
                 Button("Add Folder…") { library.requestFolder(.add) }
                     .keyboardShortcut("o")
@@ -78,7 +87,6 @@ struct ContentView: View {
     @Bindable var library: Library
     @Environment(\.colorScheme) private var colorScheme
     @State private var renderer = try? RAWRenderer()
-    @State private var exposure = 0.0
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// The sidebar's visibility in Browse, restored when Edit ends.
     @State private var browseColumnVisibility = NavigationSplitViewVisibility.all
@@ -100,7 +108,7 @@ struct ContentView: View {
             }
             .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
                                             set: { if library.isEditing { library.isInspectorShown = $0 } })) {
-                AdjustmentsInspector(exposure: $exposure)
+                AdjustmentsInspector(library: library)
                     .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
             }
         }
@@ -133,7 +141,6 @@ struct ContentView: View {
         } message: {
             Text(library.errorMessage ?? "")
         }
-        .onChange(of: library.browse.selectedPhoto) { exposure = 0 }
         .onChange(of: library.isEditing) { _, isEditing in
             if isEditing {
                 browseColumnVisibility = columnVisibility
@@ -179,11 +186,8 @@ struct ContentView: View {
         Group {
             if let renderer, let url = library.selectedPhotoURL {
                 VStack(spacing: 0) {
-                    PhotoCanvas(url: url, renderer: renderer, exposure: exposure,
-                                backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
-                        library.errorMessage = "The photo couldn't be shown. (\(error))"
-                    }
-                    .padding(24)
+                    EditCanvas(library: library, url: url, renderer: renderer)
+                        .padding(24)
                     Filmstrip(library: library, photos: library.visiblePhotos)
                         .padding(.bottom, 8)
                 }
@@ -310,33 +314,71 @@ struct ContentView: View {
     }
 }
 
+/// The photo being edited, rendered with its current edit. A view of its own so it reads the
+/// edit in its own body, and redraws on every change to it, including during a drag.
+struct EditCanvas: View {
+    let library: Library
+    let url: URL
+    let renderer: RAWRenderer
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        PhotoCanvas(url: url, renderer: renderer, exposure: library.selectedEdit?.recipe.basic.exposure ?? 0,
+                    backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
+            library.errorMessage = "The photo couldn't be shown. (\(error))"
+        }
+    }
+}
+
 /// The adjustments for the photo being edited, in the trailing inspector. It sits on the same
 /// plain color as the photo's canvas, so the panel and the photo read as one surface.
 struct AdjustmentsInspector: View {
-    @Binding var exposure: Double
+    let library: Library
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Form {
             Section("Light") {
-                ExposureSlider(value: $exposure)
+                ExposureSlider(value: Binding(get: { library.selectedEdit?.recipe.basic.exposure ?? 0 },
+                                              set: { value in library.changeEdit { $0.basic.exposure = value } }),
+                               isAdjusting: { library.isAdjusting = $0 })
+                    .disabled(library.selectedEdit == nil)
+            }
+            if let unsaved = library.selectedEdit?.unsaved {
+                Section {
+                    Text(Self.message(for: unsaved))
+                        .foregroundStyle(.secondary)
+                    if unsaved == .noAccess {
+                        Button("Grant Access…") { library.grantWriteAccessForSelectedPhoto() }
+                    }
+                }
             }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
+
+    private static func message(for unsaved: PhotoEdit.Unsaved) -> String {
+        switch unsaved {
+        case .noAccess: "Not saved. Proof needs permission to save edits in this photo's folder."
+        case .unreadable: "This photo's edit file couldn't be read, so changes aren't saved."
+        case .failed: "The last change couldn't be saved."
+        }
+    }
 }
 
 /// Exposure in stops, −5 to +5, the range the edit format allows. Double-click the value to reset.
 struct ExposureSlider: View {
     @Binding var value: Double
+    /// Called with `true` when a drag starts and `false` when it ends.
+    var isAdjusting: (Bool) -> Void = { _ in }
 
     var body: some View {
         HStack {
             Slider(value: $value, in: -5...5) {
                 Text("Exposure")
-            }
+            } onEditingChanged: { isAdjusting($0) }
             .accessibilityValue(String(format: "%+.2f stops", value))
             Text(value, format: .number.precision(.fractionLength(2)).sign(strategy: .always(includingZero: false)))
                 .monospacedDigit()

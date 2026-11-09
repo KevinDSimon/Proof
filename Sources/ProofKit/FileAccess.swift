@@ -195,23 +195,36 @@ public final class FileAccess {
         try save()
     }
 
-    /// Replaces a read-only grant with a read-write one. `url` must be the location itself,
-    /// as chosen again by the person; any other folder is refused and nothing changes.
+    /// Replaces a read-only grant with a read-write one. `url` must be the location itself, as
+    /// chosen again by the person; any other folder is refused and nothing changes. A location
+    /// that is a single photo is granted through the folder it sits in, and becomes that folder,
+    /// so its sidecars can be written (decision 0008). References to the photo stay valid.
     public func grantWriteAccess(_ id: UUID, with url: URL) throws {
         guard let index = locations.firstIndex(where: { $0.id == id }) else { return }
-        let current = accessed[id] ?? locations[index].lastKnownURL
-        guard Self.components(of: url) == Self.components(of: current) else {
-            throw FileAccessError.notTheSavedLocation(name: locations[index].name)
+        let target = Self.writeGrantFolder(for: accessed[id] ?? locations[index].lastKnownURL)
+        guard Self.components(of: url) == Self.components(of: target) else {
+            throw FileAccessError.notTheSavedLocation(name: target.lastPathComponent)
         }
         endAccess(id)
         locations[index].bookmark = try system.bookmarkData(for: url)
+        locations[index].lastKnownURL = url
+        locations[index].name = url.lastPathComponent
         locations[index].canWrite = true
         try save()
     }
 
-    /// Whether Proof may write next to `url`, such as a sidecar beside a photo.
+    /// The folder the person grants to make `location` writable: the location itself, or for a
+    /// single photo, its folder.
+    public static func writeGrantFolder(for location: URL) -> URL {
+        let isDirectory = (try? location.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory
+        return isDirectory == false ? location.deletingLastPathComponent() : location
+    }
+
+    /// Whether Proof may write next to `url`, such as a sidecar beside a photo. Never for a
+    /// location that is a single photo: the sandbox allows writing beside it only through its folder.
     public func canWrite(to url: URL) -> Bool {
-        location(containing: url)?.canWrite ?? false
+        guard let location = location(containing: url), location.canWrite else { return false }
+        return Self.writeGrantFolder(for: location.lastKnownURL) == location.lastKnownURL
     }
 
     /// Resolves a location and holds access to it. A location that moved or was renamed

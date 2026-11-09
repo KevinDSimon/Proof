@@ -161,6 +161,38 @@ struct FileAccessTests {
         #expect(try makeAccess().locations == [albums])
     }
 
+    @Test("A saved single photo granted through its folder becomes that folder, and the photo keeps its reference")
+    func singlePhotoBecomesFolder() throws {
+        let photo = try makeFile("Loose/a.DNG")
+        try makeFile("Loose/b.DNG")
+        let access = try makeAccess()
+        let saved = try access.add(photo)
+        #expect(!access.canWrite(to: photo))
+
+        let folder = root.appendingPathComponent("Loose")
+        #expect(FileAccess.writeGrantFolder(for: photo).lastPathComponent == "Loose")
+        try access.grantWriteAccess(saved.id, with: folder)
+
+        let relaunched = try makeAccess()
+        #expect(relaunched.locations.map(\.name) == ["Loose"])
+        #expect(relaunched.locations.map(\.id) == [saved.id])
+        #expect(relaunched.canWrite(to: photo))
+        #expect(relaunched.reference(for: photo) == FileReference(locationID: saved.id, relativePath: ["a.DNG"]))
+        #expect(relaunched.url(for: FileReference(locationID: saved.id, relativePath: ["b.DNG"])) != nil)
+    }
+
+    @Test("A saved single photo can't be granted through a folder other than its own")
+    func singlePhotoWrongFolder() throws {
+        let photo = try makeFile("Loose/a.DNG")
+        try makeFile("Other/b.DNG")
+        let access = try makeAccess()
+        let saved = try access.add(photo)
+        #expect(throws: FileAccessError.notTheSavedLocation(name: "Loose")) {
+            try access.grantWriteAccess(saved.id, with: root.appendingPathComponent("Other"))
+        }
+        #expect(try makeAccess().locations == [saved])
+    }
+
     @Test("New and relinked folders are writable; photos outside saved folders are not")
     func newGrantsWritable() throws {
         let photo = try makeFile("Albums/a.DNG")
