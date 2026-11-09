@@ -59,7 +59,7 @@ struct Filmstrip: View {
     private func cell(for photo: ListedPhoto) -> some View {
         let isCurrent = library.browse.selectedPhoto == photo.id
         return ZStack {
-            if let image = images[photo.id] {
+            if let image = library.editedThumbnails[photo.id] ?? images[photo.id] {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()

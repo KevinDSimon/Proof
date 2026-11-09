@@ -124,6 +124,74 @@ struct ThumbnailCacheTests {
         #expect(arrived.filter { $0.image == nil }.map(\.url).sorted { $0.path < $1.path } == [broken, missing])
         for photo in photos { #expect(cache.cachedThumbnail(for: photo) != nil) }
     }
+
+    /// Stands in for `RAWRenderer`: a 100-pixel-wide image per exposure, counting renders.
+    final class FakeRenderer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _count = 0
+        var count: Int { lock.withLock { _count } }
+
+        func render(_ url: URL, _ edit: EditRecipe) -> CGImage? {
+            lock.withLock { _count += 1 }
+            let context = CGContext(data: nil, width: 100, height: 50, bitsPerComponent: 8, bytesPerRow: 0,
+                                    space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                    bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+            context?.setFillColor(CGColor(gray: min(1, max(0, 0.5 + edit.basic.exposure / 10)), alpha: 1))
+            context?.fill(CGRect(x: 0, y: 0, width: 100, height: 50))
+            return context?.makeImage()
+        }
+    }
+
+    func edit(exposure: Double) -> EditRecipe {
+        var recipe = EditRecipe()
+        recipe.basic.exposure = exposure
+        return recipe
+    }
+
+    @Test("An edited photo's thumbnail is rendered with its edit, stored, and rendered again when the edit changes")
+    func editedThumbnail() async throws {
+        let photo = try makePhoto("A.DNG")
+        let renderer = FakeRenderer()
+        let cache = ThumbnailCache(directory: root.appendingPathComponent("Cache"),
+                                   renderEdit: { renderer.render($0, $1) })
+
+        let edited = try #require(await cache.thumbnail(for: photo, edit: edit(exposure: 1)))
+        #expect(edited.width == 100)
+        _ = await cache.thumbnail(for: photo, edit: edit(exposure: 1))
+        #expect(renderer.count == 1)
+
+        _ = await cache.thumbnail(for: photo, edit: edit(exposure: 2))
+        #expect(renderer.count == 2)
+        #expect(storedFiles().count == 1)
+    }
+
+    @Test("A neutral edit shows the original's thumbnail without rendering")
+    func neutralEditShowsOriginal() async throws {
+        let photo = try makePhoto("A.DNG")
+        let renderer = FakeRenderer()
+        let cache = ThumbnailCache(directory: root.appendingPathComponent("Cache"),
+                                   renderEdit: { renderer.render($0, $1) })
+        let image = try #require(await cache.thumbnail(for: photo, edit: EditRecipe()))
+        #expect(image.width == 512)
+        #expect(renderer.count == 0)
+    }
+
+    @Test("Photos listed as edited show the edit in their sidecar")
+    func streamReadsSidecars() async throws {
+        let edited = try makePhoto("A.DNG")
+        let plain = try makePhoto("B.DNG")
+        try Sidecar.save(edit(exposure: 1), for: edited, over: nil)
+        let renderer = FakeRenderer()
+        let cache = ThumbnailCache(directory: root.appendingPathComponent("Cache"),
+                                   renderEdit: { renderer.render($0, $1) })
+
+        var widths: [String: Int] = [:]
+        for await (url, image) in cache.thumbnails(for: [edited, plain], edited: [edited]) {
+            widths[url.lastPathComponent] = image?.width
+        }
+        #expect(widths == ["A.DNG": 100, "B.DNG": 512])
+        #expect(renderer.count == 1)
+    }
 }
 
 /// Times thumbnails for a whole folder, for issue #7. Runs only when `PROOF_SAMPLE_FOLDER` names a

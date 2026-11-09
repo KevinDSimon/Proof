@@ -39,4 +39,8 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `crop` | Normalized rectangle and rotation angle. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
 
-Missing fields take their default (no adjustment). Unknown fields are currently ignored; preserving them on save, so a file from a newer Proof survives a round trip through an older one, is a planned change.
+Missing fields take their default (no adjustment). `look` and `crop` are written as `null` when there is none. Proof writes the file with its keys sorted and indented.
+
+## Fields Proof doesn't recognize
+
+A sidecar written by a newer Proof may have fields this version doesn't know, at the top level or inside an object such as `basic` or a layer. Proof keeps them: when it saves, it writes the fields it knows over the JSON it read, so the rest stay as they were. Fields inside `layers` are kept when the number of layers is unchanged. A sidecar with unrecognized fields is never deleted for being neutral (decision 0007).

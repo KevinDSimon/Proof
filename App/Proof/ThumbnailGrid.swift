@@ -18,7 +18,11 @@ struct ThumbnailGrid: View {
     @State private var columnCount = 1
     @FocusState private var isFocused: Bool
 
-    static let cache = ThumbnailCache()
+    /// Its own renderer, so making thumbnails never waits behind, or evicts, the photo in Edit.
+    nonisolated private static let thumbnailRenderer = try? RAWRenderer()
+    nonisolated static let cache = ThumbnailCache(renderEdit: { url, edit in
+        try? await thumbnailRenderer?.thumbnail(of: url, recipe: edit, maxPixelSize: ThumbnailCache.maxPixelSize)
+    })
     private static let cellSize: CGFloat = 160
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
@@ -69,7 +73,7 @@ struct ThumbnailGrid: View {
         return VStack(spacing: 4) {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
-                if let image = images[photo.id] {
+                if let image = library.editedThumbnails[photo.id] ?? images[photo.id] {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
@@ -124,11 +128,13 @@ struct ThumbnailGrid: View {
         let ids = Set(photos.map(\.id))
         images.wrappedValue = images.wrappedValue.filter { ids.contains($0.key) }
         finished.wrappedValue.formIntersection(ids)
-        let urls = photos.filter { !finished.wrappedValue.contains($0.id) }.compactMap { photo in
-            library.url(ofPhoto: photo.name, in: photo.folder).map { (photo.id, $0) }
+        let unfinished = photos.filter { !finished.wrappedValue.contains($0.id) }
+        let urls = unfinished.compactMap { photo in
+            library.url(ofPhoto: photo.name, in: photo.folder).map { (photo.id, $0, photo.photo.isEdited) }
         }
         let references = Dictionary(urls.map { ($0.1, $0.0) }, uniquingKeysWith: { first, _ in first })
-        for await (url, image) in cache.thumbnails(for: urls.map(\.1)) {
+        let edited = Set(urls.filter(\.2).map(\.1))
+        for await (url, image) in cache.thumbnails(for: urls.map(\.1), edited: edited) {
             guard let id = references[url] else { continue }
             finished.wrappedValue.insert(id)
             if let image { images.wrappedValue[id] = NSImage(cgImage: image, size: .zero) }

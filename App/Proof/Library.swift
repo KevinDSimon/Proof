@@ -12,6 +12,27 @@ enum SidebarItem: Codable, Hashable {
     }
 }
 
+/// One photo's edit while Proof runs. Kept for every photo opened in Edit until Proof quits, so
+/// each photo has its own undo history.
+struct PhotoEdit {
+    /// Why the current edit isn't on disk.
+    enum Unsaved {
+        /// The folder, or a photo saved on its own, was saved before Proof could write and
+        /// hasn't been granted again.
+        case noAccess
+        /// The sidecar couldn't be read, so it isn't written over.
+        case unreadable
+        case failed
+    }
+
+    /// What the canvas and controls show. Ahead of `history.recipe` while a change is being made.
+    var recipe: EditRecipe
+    var history: EditHistory
+    /// The sidecar as last read or written; `nil` when there is none.
+    var sidecar: Sidecar?
+    var unsaved: Unsaved?
+}
+
 /// The saved folders, what has been read of them, which folder, filter and photo are chosen, and
 /// whether that photo is being edited. Shared by the sidebar, the grid, the toolbar and the menus.
 @Observable @MainActor
@@ -47,7 +68,25 @@ final class Library {
             browse.keep(only: visiblePhotos)
         }
     }
-    var browse = BrowseState()
+    var browse = BrowseState() {
+        didSet {
+            guard browse.selectedPhoto != oldValue.selectedPhoto || browse.mode != oldValue.mode else { return }
+            if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
+            openSelectedEdit()
+        }
+    }
+    /// The edits of photos opened in Edit since Proof started.
+    private(set) var edits: [PhotoReference: PhotoEdit] = [:]
+    /// Thumbnails of photos edited since Proof started, showing their current edit. The grid and
+    /// the filmstrip show these over the thumbnails they loaded.
+    private(set) var editedThumbnails: [PhotoReference: NSImage] = [:]
+    /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
+    var isAdjusting = false {
+        didSet {
+            commitTask?.cancel()
+            if !isAdjusting, let photo = browse.selectedPhoto { commitEdit(of: photo) }
+        }
+    }
     var isInspectorShown = true
     var isChoosingFolder = false
     /// Kept apart from `isChoosingFolder`, which SwiftUI clears before the picker's result arrives.
@@ -61,6 +100,10 @@ final class Library {
     private var watcher: FolderWatcher?
     /// Available saved locations on network volumes, which are rescanned instead of watched.
     private var networkLocations: Set<UUID> = []
+    /// Commits a change made without a drag, such as a double-click reset, once the controls are idle.
+    private var commitTask: Task<Void, Never>?
+    /// Saved locations Proof has asked once this session to grant again for writing.
+    private var askedForWriteAccess: Set<UUID> = []
     /// Photos whose rating or flag was changed since the filter or folder last changed. They stay
     /// visible even if the filter no longer matches, so a photo doesn't vanish while it's rated.
     private var changedPhotos: Set<PhotoReference> = []
@@ -219,6 +262,115 @@ final class Library {
         changedPhotos.insert(photo)
     }
 
+    // MARK: Edits
+
+    /// The edit of the photo open in Edit.
+    var selectedEdit: PhotoEdit? {
+        browse.selectedPhoto.flatMap { edits[$0] }
+    }
+
+    /// Changes the selected photo's edit. Outside a drag, the change is committed once the
+    /// controls are idle, so a burst of key presses is one undo step.
+    func changeEdit(_ change: (inout EditRecipe) -> Void) {
+        guard let photo = browse.selectedPhoto, edits[photo] != nil else { return }
+        change(&edits[photo]!.recipe)
+        commitTask?.cancel()
+        guard !isAdjusting else { return }
+        commitTask = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            commitEdit(of: photo)
+        }
+    }
+
+    var canUndoEdit: Bool {
+        guard let edit = selectedEdit else { return false }
+        return edit.history.canUndo || edit.recipe != edit.history.recipe
+    }
+
+    var canRedoEdit: Bool {
+        selectedEdit?.history.canRedo == true
+    }
+
+    func undoEdit() {
+        stepEdit { $0.undo() }
+    }
+
+    func redoEdit() {
+        stepEdit { $0.redo() }
+    }
+
+    private func stepEdit(_ step: (inout EditHistory) -> EditRecipe?) {
+        guard let photo = browse.selectedPhoto else { return }
+        commitEdit(of: photo)
+        guard var edit = edits[photo], let recipe = step(&edit.history) else { return }
+        edit.recipe = recipe
+        edits[photo] = edit
+        save(photo)
+    }
+
+    /// Reads the selected photo's sidecar the first time it is opened in Edit. Later visits keep
+    /// the edit and its undo history from memory.
+    private func openSelectedEdit() {
+        guard isEditing, let photo = browse.selectedPhoto, edits[photo] == nil, let url = selectedPhotoURL else { return }
+        do {
+            let sidecar = try Sidecar.read(for: url)
+            let recipe = sidecar?.recipe ?? EditRecipe()
+            edits[photo] = PhotoEdit(recipe: recipe, history: EditHistory(recipe), sidecar: sidecar)
+        } catch {
+            edits[photo] = PhotoEdit(recipe: EditRecipe(), history: EditHistory(EditRecipe()), unsaved: .unreadable)
+        }
+    }
+
+    /// Makes the photo's current change one undo step and saves it.
+    private func commitEdit(of photo: PhotoReference) {
+        guard var edit = edits[photo], edit.history.record(edit.recipe) else { return }
+        edits[photo] = edit
+        save(photo)
+    }
+
+    /// Writes the photo's edit to its sidecar, or deletes the sidecar when the edit is neutral
+    /// (decision 0007). When Proof can't write there, the edit stays in memory and `unsaved` says why.
+    private func save(_ photo: PhotoReference) {
+        guard var edit = edits[photo], let url = url(ofPhoto: photo.name, in: photo.folder) else { return }
+        // Runs last: the thumbnail follows the edit whether or not it could be saved.
+        defer { refreshThumbnail(of: photo, at: url) }
+        defer { edits[photo] = edit }
+        guard edit.unsaved != .unreadable else { return }
+        // Back to what's on disk: nothing to write, and no reason to ask for access.
+        if edit.history.recipe == edit.sidecar?.recipe ?? EditRecipe() {
+            edit.unsaved = nil
+            return
+        }
+        guard ensureCanWrite(nextTo: url) else {
+            edit.unsaved = .noAccess
+            return
+        }
+        do {
+            edit.sidecar = try Sidecar.save(edit.history.recipe, for: url, over: edit.sidecar)
+            edit.unsaved = nil
+        } catch {
+            edit.unsaved = .failed
+            errorMessage = "The edit to “\(photo.name)” couldn't be saved. (\(error.localizedDescription))"
+        }
+        if let index = contents[photo.folder]?.photos.firstIndex(where: { $0.name == photo.name }) {
+            contents[photo.folder]?.photos[index].isEdited = edit.sidecar != nil
+        }
+        // Like a rating change, an edit doesn't make the photo vanish from the Edited filter.
+        changedPhotos.insert(photo)
+    }
+
+    /// Renders the photo's thumbnail with its current edit off the main thread. A result that
+    /// arrives after a newer change is dropped.
+    private func refreshThumbnail(of photo: PhotoReference, at url: URL) {
+        guard let recipe = edits[photo]?.history.recipe else { return }
+        Task {
+            let image = await Task.detached { await ThumbnailGrid.cache.thumbnail(for: url, edit: recipe) }.value
+            guard let image, edits[photo]?.history.recipe == recipe else { return }
+            editedThumbnails[photo] = NSImage(cgImage: image, size: .zero)
+        }
+    }
+
     /// The file of the selected photo.
     var selectedPhotoURL: URL? {
         guard let photo = browse.selectedPhoto else { return nil }
@@ -240,25 +392,33 @@ final class Library {
     func ensureCanWrite(nextTo photo: URL) -> Bool {
         guard let fileAccess else { return false }
         if fileAccess.canWrite(to: photo) { return true }
-        // A location that is a single photo can't hold a sidecar: the sandbox only allows writing
-        // beside a file through a grant to its folder, so asking again wouldn't help.
+        // The picker opens by itself once per folder; after that the inspector offers it. A
+        // location that is a single photo is granted through its folder (decision 0008).
         if let location = fileAccess.location(containing: photo), !isChoosingFolder,
-           (try? location.lastKnownURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+           askedForWriteAccess.insert(location.id).inserted {
             requestFolder(.grantWrite(location))
         }
         return false
     }
 
+    /// Opens the folder picker to grant the selected photo's folder again, for the inspector's button.
+    func grantWriteAccessForSelectedPhoto() {
+        guard let photo = browse.selectedPhoto,
+              let location = locations.first(where: { $0.id == photo.folder.locationID }) else { return }
+        requestFolder(.grantWrite(location))
+    }
+
     /// Where the folder picker opens: the folder being granted again, otherwise the system default.
     var folderPickerDirectory: URL? {
-        if case .grantWrite(let location) = folderRequest { location.lastKnownURL } else { nil }
+        if case .grantWrite(let location) = folderRequest { FileAccess.writeGrantFolder(for: location.lastKnownURL) } else { nil }
     }
 
     var folderPickerMessage: String {
         switch folderRequest {
         case .add: ""
         case .locate(let location): "Choose where “\(location.name)” is now."
-        case .grantWrite(let location): "Proof needs permission to save edits in “\(location.name)”. Your photos are never changed."
+        case .grantWrite(let location):
+            "Proof needs permission to save edits in “\(FileAccess.writeGrantFolder(for: location.lastKnownURL).lastPathComponent)”. Your photos are never changed."
         }
     }
 
@@ -287,6 +447,15 @@ final class Library {
             case .grantWrite(let location):
                 try fileAccess.grantWriteAccess(location.id, with: url)
                 refreshLocations()
+                // A single photo became its folder: list the folder's photos, as with Locate.
+                if location.lastKnownURL.standardizedFileURL != url.standardizedFileURL {
+                    contents = contents.filter { $0.key.locationID != location.id }
+                    Task { await load(FileReference(locationID: location.id, relativePath: []), force: true) }
+                    if selection == .allPhotos { readAllPhotos() }
+                }
+                for (photo, edit) in edits where photo.folder.locationID == location.id && edit.unsaved == .noAccess {
+                    save(photo)
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -325,6 +494,13 @@ final class Library {
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.becameActive() }
+        }
+        // A change made just before quitting hasn't been committed yet.
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                if let photo = self?.browse.selectedPhoto { self?.commitEdit(of: photo) }
+            }
         }
     }
 

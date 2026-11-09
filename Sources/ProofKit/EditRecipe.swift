@@ -14,6 +14,10 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var crop: Crop?
     public var layers: [Layer]
 
+    private enum CodingKeys: String, CodingKey {
+        case formatVersion, processVersion, basic, curve, look, crop, layers
+    }
+
     public init(
         basic: BasicAdjustments = BasicAdjustments(),
         curve: ToneCurve = ToneCurve(),
@@ -39,6 +43,24 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         look = try c.decodeIfPresent(Look.self, forKey: .look)
         crop = try c.decodeIfPresent(Crop.self, forKey: .crop)
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
+    }
+
+    /// Writes `look` and `crop` as `null` when there are none, so saving over a sidecar that had
+    /// one replaces it instead of keeping the old value (see `Sidecar`).
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(formatVersion, forKey: .formatVersion)
+        try c.encode(processVersion, forKey: .processVersion)
+        try c.encode(basic, forKey: .basic)
+        try c.encode(curve, forKey: .curve)
+        try c.encode(look, forKey: .look)
+        try c.encode(crop, forKey: .crop)
+        try c.encode(layers, forKey: .layers)
+    }
+
+    /// Whether the edit leaves the photo as it is. The version numbers don't count.
+    public var isNeutral: Bool {
+        basic.isNeutral && curve == ToneCurve() && look == nil && crop == nil && layers.isEmpty
     }
 
     /// The sidecar URL for an original photo: the full file name plus `.proof`.

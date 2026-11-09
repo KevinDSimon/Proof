@@ -48,4 +48,23 @@ struct EditRecipeTests {
         let original = URL(fileURLWithPath: "/Volumes/home/Albums/2025/L1000957.DNG")
         #expect(EditRecipe.sidecarURL(for: original).path == "/Volumes/home/Albums/2025/L1000957.DNG.proof")
     }
+
+    @Test("A recipe with any adjustment isn't neutral")
+    func neutrality() {
+        var recipe = EditRecipe()
+        recipe.basic.shadows = 10
+        #expect(!recipe.isNeutral)
+        recipe.basic.shadows = 0
+        recipe.look = Look(lut: "Portra.cube")
+        #expect(!recipe.isNeutral)
+        recipe.look = nil
+        #expect(recipe.isNeutral)
+    }
+
+    @Test("No look and no crop are written as null")
+    func absentValuesEncodeAsNull() throws {
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(EditRecipe())) as? [String: Any]
+        #expect(object?["look"] is NSNull)
+        #expect(object?["crop"] is NSNull)
+    }
 }

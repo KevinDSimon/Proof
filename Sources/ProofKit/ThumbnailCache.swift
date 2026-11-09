@@ -10,21 +10,36 @@ import UniformTypeIdentifiers
 ///
 /// A thumbnail is made from the embedded JPEG preview that cameras and DNG converters store in a
 /// RAW file, so the RAW data itself isn't decoded. Only a file with no embedded preview is decoded
-/// in full. Originals are only read.
+/// in full. An edited photo's thumbnail is rendered with its edit instead, so it matches the
+/// photo in Edit. Originals are only read.
 public final class ThumbnailCache: Sendable {
+    /// Renders `url` with `edit` at no more than `maxPixelSize` on the long edge.
+    public typealias RenderEdit = @Sendable (_ url: URL, _ edit: EditRecipe) async -> CGImage?
+
     /// Long edge of a stored thumbnail, in pixels: sharp in a Retina grid cell, small on disk.
     public static let maxPixelSize = 512
 
     public let directory: URL
     private let maxConcurrentReads: Int
+    private let renderEdit: RenderEdit?
 
     /// `directory` is created when the first thumbnail is stored. `maxConcurrentReads` limits how
     /// many photos are read at once when making thumbnails, so a NAS isn't asked for a whole
-    /// folder in parallel.
+    /// folder in parallel. Without `renderEdit`, edited photos show their embedded preview.
     public init(directory: URL = .applicationSupportDirectory.appendingPathComponent("Proof/Thumbnails"),
-                maxConcurrentReads: Int = 4) {
+                maxConcurrentReads: Int = 4, renderEdit: RenderEdit? = nil) {
         self.directory = directory
         self.maxConcurrentReads = maxConcurrentReads
+        self.renderEdit = renderEdit
+    }
+
+    /// The thumbnail of `url` showing `edit`, read from the cache or rendered and stored. With no
+    /// edit, or a neutral one, it is the thumbnail of the original. Blocks on file I/O and rendering.
+    public func thumbnail(for url: URL, edit: EditRecipe?) async -> CGImage? {
+        guard let edit = Self.shown(edit) else { return thumbnail(for: url) }
+        guard let entry = entry(for: url, edit: edit) else { return nil }
+        if let image = Self.readImage(at: entry.file, embeddedOnly: false) { return image }
+        return await makeThumbnail(of: url, edit: edit, storingAs: entry)
     }
 
     /// The thumbnail of `url`, read from the cache or made and stored if the cache has none for
@@ -46,31 +61,34 @@ public final class ThumbnailCache: Sendable {
     }
 
     /// Thumbnails for `urls`. Cached thumbnails arrive first, then the rest as they are made, a few
-    /// at a time. Each URL arrives once; its image is `nil` if the file can't be read. Cancelling
-    /// the consuming task stops making thumbnails.
-    public func thumbnails(for urls: [URL]) -> AsyncStream<(url: URL, image: CGImage?)> {
+    /// at a time. Each URL arrives once; its image is `nil` if the file can't be read. Photos in
+    /// `edited` have their sidecar read and show their edit. Cancelling the consuming task stops
+    /// making thumbnails.
+    public func thumbnails(for urls: [URL], edited: Set<URL> = []) -> AsyncStream<(url: URL, image: CGImage?)> {
         AsyncStream { continuation in
             let task = Task.detached { [self] in
-                var missing: [(url: URL, entry: Entry?)] = []
-                await withTaskGroup(of: (URL, Entry?, CGImage?).self) { group in
+                var missing: [(url: URL, edit: EditRecipe?, entry: Entry?)] = []
+                await withTaskGroup(of: (URL, EditRecipe?, Entry?, CGImage?).self) { group in
                     var next = 0
                     func addNext() {
                         guard next < urls.count else { return }
                         let url = urls[next]
                         next += 1
                         group.addTask {
-                            let entry = self.entry(for: url)
-                            return (url, entry, entry.flatMap { Self.readImage(at: $0.file, embeddedOnly: false) })
+                            // A sidecar that can't be read shows the original, as Edit does.
+                            let edit = edited.contains(url) ? Self.shown((try? Sidecar.read(for: url))??.recipe) : nil
+                            let entry = self.entry(for: url, edit: edit)
+                            return (url, edit, entry, entry.flatMap { Self.readImage(at: $0.file, embeddedOnly: false) })
                         }
                     }
                     // Checking the cache costs one metadata lookup per file, which on a share is
                     // a round trip, so these run in parallel too.
                     for _ in 0..<maxConcurrentReads * 4 { addNext() }
-                    for await (url, entry, image) in group {
+                    for await (url, edit, entry, image) in group {
                         if let image {
                             continuation.yield((url, image))
                         } else {
-                            missing.append((url, entry))
+                            missing.append((url, edit, entry))
                         }
                         addNext()
                     }
@@ -82,12 +100,11 @@ public final class ThumbnailCache: Sendable {
                     var next = 0
                     func addNext() {
                         guard next < missing.count, !Task.isCancelled else { return }
-                        let (url, entry) = missing[next]
+                        let (url, edit, entry) = missing[next]
                         next += 1
                         group.addTask {
-                            guard let entry, let image = Self.makeThumbnail(of: url) else { return (url, nil) }
-                            self.store(image, as: entry)
-                            return (url, image)
+                            guard let entry else { return (url, nil) }
+                            return (url, await self.makeThumbnail(of: url, edit: edit, storingAs: entry))
                         }
                     }
                     for _ in 0..<maxConcurrentReads { addNext() }
@@ -112,14 +129,20 @@ public final class ThumbnailCache: Sendable {
         var file: URL
     }
 
-    func entry(for url: URL) -> Entry? {
+    /// An edited photo's entry is also named from its edit, so every change to the edit misses
+    /// the cache and the photo keeps one thumbnail at a time.
+    func entry(for url: URL, edit: EditRecipe? = nil) -> Entry? {
         // Asks the file system each time. A URL keeps the resource values it has already read,
         // so a file changed since then would otherwise still match its old thumbnail.
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
               let size = attributes[.size] as? Int, let modified = attributes[.modificationDate] as? Date
         else { return nil }
         let folder = directory.appendingPathComponent(Self.hash(url.standardizedFileURL.path), isDirectory: true)
-        let version = Self.hash("\(size) \(modified.timeIntervalSinceReferenceDate)")
+        var version = "\(size) \(modified.timeIntervalSinceReferenceDate)"
+        if let edit = Self.shown(edit), let data = try? Self.editEncoder.encode(edit) {
+            version += " " + String(decoding: data, as: UTF8.self)
+        }
+        version = Self.hash(version)
         return Entry(folder: folder, file: folder.appendingPathComponent(version + ".jpg"))
     }
 
@@ -136,11 +159,37 @@ public final class ThumbnailCache: Sendable {
         try? (data as Data).write(to: entry.file, options: .atomic)
     }
 
+    private static let editEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return encoder
+    }()
+
+    /// The edit a thumbnail shows: `nil` for none or a neutral one.
+    private static func shown(_ edit: EditRecipe?) -> EditRecipe? {
+        edit.flatMap { $0.isNeutral ? nil : $0 }
+    }
+
     private static func hash(_ string: String) -> String {
         SHA256.hash(data: Data(string.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: Reading images
+
+    /// Renders an edited photo, or reads an unedited one's preview, and stores the result. An edit
+    /// that can't be rendered falls back to the original's preview, which isn't stored as the edit's.
+    private func makeThumbnail(of url: URL, edit: EditRecipe?, storingAs entry: Entry) async -> CGImage? {
+        if let edit, let renderEdit {
+            if let image = await renderEdit(url, edit) {
+                store(image, as: entry)
+                return image
+            }
+            return Self.makeThumbnail(of: url)
+        }
+        guard let image = Self.makeThumbnail(of: url) else { return nil }
+        if edit == nil { store(image, as: entry) }
+        return image
+    }
 
     private static func makeThumbnail(of url: URL) -> CGImage? {
         readImage(at: url, embeddedOnly: true) ?? readImage(at: url, embeddedOnly: false, decode: true)

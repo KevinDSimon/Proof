@@ -22,6 +22,13 @@ public actor RAWRenderer {
     private let commandQueue: MTLCommandQueue
     private var filter: CIRAWFilter?
     private var openURL: URL?
+    /// Separate from `context` and without cached intermediates, so thumbnails of many photos
+    /// don't fill GPU memory or evict the open photo's decode.
+    private lazy var thumbnailContext = CIContext(mtlCommandQueue: commandQueue, options: [
+        .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
+        .workingFormat: CIFormat.RGBAh,
+        .cacheIntermediates: false,
+    ])
 
     public init(device: MTLDevice? = MTLCreateSystemDefaultDevice()) throws {
         guard let device, let commandQueue = device.makeCommandQueue() else {
@@ -94,6 +101,22 @@ public actor RAWRenderer {
         let origin = image.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
         try context.startTask(toRender: origin, to: destination).waitUntilCompleted()
         return RenderedPhoto(texture: texture)
+    }
+
+    /// A thumbnail of `url` with `recipe` applied, at most `maxPixelSize` on the long edge, for
+    /// the grid and the filmstrip. It doesn't change the open photo or its cached intermediates.
+    public func thumbnail(of url: URL, recipe: EditRecipe, maxPixelSize: Int) throws -> CGImage {
+        guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else {
+            throw RAWRendererError.unsupportedFile(url)
+        }
+        let size = CGSize(width: maxPixelSize, height: maxPixelSize)
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation, fitting: size))
+        filter.exposure = Float(recipe.basic.exposure)
+        guard let image = filter.outputImage,
+              let thumbnail = thumbnailContext.createCGImage(image, from: image.extent.integral, format: .RGBA8,
+                                                             colorSpace: Self.colorSpace)
+        else { throw RAWRendererError.renderFailed }
+        return thumbnail
     }
 
     /// Draws a photo from `render(fitting:)` centered in `drawable`, scaled to fit, over
