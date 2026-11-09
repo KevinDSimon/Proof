@@ -59,7 +59,9 @@ struct HistogramTests {
         let median = times.sorted()[times.count / 2]
         let measured = try #require(histogram)
         #expect(abs(measured.green.reduce(0, +) - 1) < 0.001)
-        // It runs beside the render loop, not in it, but should still keep up with a slider drag.
-        #expect(median < .milliseconds(10), "Histogram median \(median), all \(times)")
+        // It runs beside the render loop, not in it, but should still keep up with a slider drag:
+        // inside one 30 fps frame, the bar renders are held to. Alone it takes about 6 ms on an M2;
+        // other suites rendering on the GPU at the same time can more than double that.
+        #expect(median < .milliseconds(33), "Histogram median \(median), all \(times)")
     }
 }
