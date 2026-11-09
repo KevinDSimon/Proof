@@ -49,6 +49,29 @@ struct SidecarTests {
         #expect(!sidecarExists)
     }
 
+    @Test("Reverting deletes the sidecar, even one with unrecognized fields")
+    func revertDeletes() throws {
+        let json = #"{"formatVersion": 1, "basic": {"exposure": 1}, "grain": {"amount": 30}}"#
+        try Data(json.utf8).write(to: sidecarURL)
+        try Sidecar.delete(for: photo)
+        #expect(!sidecarExists)
+    }
+
+    @Test("Reverting a photo without a sidecar does nothing")
+    func revertWithoutSidecar() throws {
+        try Sidecar.delete(for: photo)
+        #expect(!sidecarExists)
+    }
+
+    @Test("Undoing a revert writes the edit back as a new sidecar")
+    func undoRevertWritesNewSidecar() throws {
+        try Sidecar.save(edited(exposure: 0.5), for: photo, over: nil)
+        try Sidecar.delete(for: photo)
+
+        try Sidecar.save(edited(exposure: 0.5), for: photo, over: nil)
+        #expect(try Sidecar.read(for: photo)?.recipe == edited(exposure: 0.5))
+    }
+
     @Test("A sidecar with unrecognized fields is kept when the edit returns to neutral")
     func unrecognizedKeptWhenNeutral() throws {
         let json = #"{"formatVersion": 1, "basic": {"exposure": 1, "texture": 20}, "grain": {"amount": 30}}"#

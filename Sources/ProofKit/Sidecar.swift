@@ -57,16 +57,7 @@ public struct Sidecar: Equatable, Sendable {
     public static func save(_ recipe: EditRecipe, for original: URL, over existing: Sidecar?) throws -> Sidecar? {
         let url = EditRecipe.sidecarURL(for: original)
         if recipe.isNeutral, existing?.hasUnrecognizedFields != true {
-            try coordinate { coordinator, error in
-                coordinator.coordinate(writingItemAt: url, options: .forDeleting, error: error) { url in
-                    do {
-                        try FileManager.default.removeItem(at: url)
-                    } catch CocoaError.fileNoSuchFile {
-                    } catch let caught {
-                        error?.pointee = caught as NSError
-                    }
-                }
-            }
+            try delete(for: original)
             return nil
         }
         let data = try existing.map { try $0.data(saving: recipe) } ?? data(for: recipe)
@@ -80,6 +71,21 @@ public struct Sidecar: Equatable, Sendable {
             }
         }
         return try Sidecar(data: data)
+    }
+
+    /// Deletes the sidecar next to `original` with `NSFileCoordinator`, whatever it holds, as
+    /// Revert to Original does. Nothing happens when there is none. Blocks on file I/O.
+    public static func delete(for original: URL) throws {
+        try coordinate { coordinator, error in
+            coordinator.coordinate(writingItemAt: EditRecipe.sidecarURL(for: original), options: .forDeleting, error: error) { url in
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch CocoaError.fileNoSuchFile {
+                } catch let caught {
+                    error?.pointee = caught as NSError
+                }
+            }
+        }
     }
 
     /// Runs one coordinated access and throws the error the coordinator or the accessor reported.

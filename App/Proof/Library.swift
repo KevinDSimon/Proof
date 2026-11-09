@@ -309,6 +309,25 @@ final class Library {
         save(photo)
     }
 
+    /// The selected photo has an edit to revert, whatever its undo history.
+    var canRevertEdit: Bool {
+        guard let edit = selectedEdit else { return false }
+        return !edit.recipe.isNeutral || edit.sidecar != nil
+    }
+
+    /// Photo › Revert to Original: makes the edit neutral as one undo step, without asking, and
+    /// deletes the sidecar (decision 0007). Undo writes the edit back as a new sidecar.
+    func revertEdit() {
+        guard let photo = browse.selectedPhoto else { return }
+        commitTask?.cancel()
+        commitEdit(of: photo)
+        guard var edit = edits[photo] else { return }
+        edit.history.record(EditRecipe())
+        edit.recipe = EditRecipe()
+        edits[photo] = edit
+        save(photo, reverting: true)
+    }
+
     /// Reads the selected photo's sidecar the first time it is opened in Edit. Later visits keep
     /// the edit and its undo history from memory.
     private func openSelectedEdit() {
@@ -330,15 +349,16 @@ final class Library {
     }
 
     /// Writes the photo's edit to its sidecar, or deletes the sidecar when the edit is neutral
-    /// (decision 0007). When Proof can't write there, the edit stays in memory and `unsaved` says why.
-    private func save(_ photo: PhotoReference) {
+    /// (decision 0007). `reverting` deletes the sidecar whatever it holds.
+    /// When Proof can't write there, the edit stays in memory and `unsaved` says why.
+    private func save(_ photo: PhotoReference, reverting: Bool = false) {
         guard var edit = edits[photo], let url = url(ofPhoto: photo.name, in: photo.folder) else { return }
         // Runs last: the thumbnail follows the edit whether or not it could be saved.
         defer { refreshThumbnail(of: photo, at: url) }
         defer { edits[photo] = edit }
         guard edit.unsaved != .unreadable else { return }
         // Back to what's on disk: nothing to write, and no reason to ask for access.
-        if edit.history.recipe == edit.sidecar?.recipe ?? EditRecipe() {
+        if edit.history.recipe == edit.sidecar?.recipe ?? EditRecipe(), !(reverting && edit.sidecar != nil) {
             edit.unsaved = nil
             return
         }
@@ -347,11 +367,18 @@ final class Library {
             return
         }
         do {
-            edit.sidecar = try Sidecar.save(edit.history.recipe, for: url, over: edit.sidecar)
+            if reverting {
+                try Sidecar.delete(for: url)
+                edit.sidecar = nil
+            } else {
+                edit.sidecar = try Sidecar.save(edit.history.recipe, for: url, over: edit.sidecar)
+            }
             edit.unsaved = nil
         } catch {
             edit.unsaved = .failed
-            errorMessage = "The edit to “\(photo.name)” couldn't be saved. (\(error.localizedDescription))"
+            errorMessage = reverting
+                ? "The edit to “\(photo.name)” couldn't be removed. (\(error.localizedDescription))"
+                : "The edit to “\(photo.name)” couldn't be saved. (\(error.localizedDescription))"
         }
         if let index = contents[photo.folder]?.photos.firstIndex(where: { $0.name == photo.name }) {
             contents[photo.folder]?.photos[index].isEdited = edit.sidecar != nil

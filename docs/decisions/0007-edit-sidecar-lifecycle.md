@@ -41,3 +41,6 @@ Decision 0002 stores each edit in `<original file name>.proof` next to the origi
 - A batch rename in Finder or another app keeps edits. A move to another folder keeps them only if the sidecars move too.
 - Two devices editing the same photo at once overwrite each other; the last change wins, and the other device sees it on reload.
 - People are asked to grant each saved folder once more, a single time, rather than once per feature.
+
+## Amendment, 2026-11-09
+Building Revert to Original in issue #61 changed one point. Revert deletes the sidecar directly instead of moving it to the Trash, including a sidecar with fields this version doesn't recognize. Network volumes such as a NAS share often have no Trash, so moving the file failed there. Undo already restores the edit from memory on any volume, which makes a confirmation dialog unnecessary. A reverted edit can no longer be recovered once Proof quits; that tradeoff was accepted to keep Revert immediate and the same on every volume.

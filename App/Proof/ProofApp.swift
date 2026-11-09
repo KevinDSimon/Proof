@@ -56,6 +56,8 @@ struct ProofApp: App {
                 Button("Back to Folder") { library.browse.finishEditing() }
                     .keyboardShortcut(.escape, modifiers: [])
                     .disabled(!library.isEditing)
+                Button("Revert to Original") { library.revertEdit() }
+                    .disabled(!library.isEditing || !library.canRevertEdit)
                 Divider()
                 // Lightroom's keys: 0 to 5 for stars, P, U and X for the flag.
                 Picker("Rating", selection: Binding(get: { library.selectedPhotoMetadata?.rating ?? 0 },
