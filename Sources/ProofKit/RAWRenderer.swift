@@ -165,8 +165,10 @@ public actor RAWRenderer {
         let shaded = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)
         let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks)
             .apply(to: shaded)
-        // 3. Color, 4. LUT, 5. layers and 6. crop follow here as they are built.
-        return toned
+        // 3. Color: vibrance, then saturation.
+        let colored = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
+        // 4. LUT, 5. layers and 6. crop follow here as they are built.
+        return colored
     }
 
     public static let pixelFormat = MTLPixelFormat.bgra8Unorm
