@@ -15,8 +15,6 @@ struct PhotoCanvas: NSViewRepresentable {
     let url: URL
     let renderer: RAWRenderer
     var recipe: EditRecipe
-    /// While a control is being dragged the photo renders smaller, so it keeps up with the control.
-    var isAdjusting: Bool
     /// The gray of the canvas around the photo, from 0 to 1.
     var backdropGray: Double
     var onError: (Error) -> Void
@@ -42,7 +40,7 @@ struct PhotoCanvas: NSViewRepresentable {
     func updateNSView(_ view: MTKView, context: Context) {
         context.coordinator.onError = onError
         context.coordinator.setBackdrop(backdropGray)
-        context.coordinator.show(url, recipe: recipe, isAdjusting: isAdjusting)
+        context.coordinator.show(url, recipe: recipe)
     }
 }
 
@@ -59,16 +57,11 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         var recipe: EditRecipe
     }
 
-    /// The preview's share of the window's width and height while a control is dragged: a quarter
-    /// of the pixels. The canvas scales it up to the window until the full render on release.
-    private static let previewScale: CGFloat = 0.5
-
     private let renderer: RAWRenderer
     private let commandQueue: MTLCommandQueue?
     private var url: URL?
     private var size: CGSize = .zero
     private var recipe = EditRecipe()
-    private var isAdjusting = false
     private var photo: RenderedPhoto?
     /// What `photo` was rendered from, or the request that failed, so it isn't retried.
     private var rendered: RenderRequest?
@@ -91,7 +84,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         view?.needsDisplay = true
     }
 
-    func show(_ url: URL, recipe: EditRecipe, isAdjusting: Bool) {
+    func show(_ url: URL, recipe: EditRecipe) {
         if url != self.url {
             self.url = url
             photo = nil
@@ -99,7 +92,6 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         }
         if size == .zero { size = view?.drawableSize ?? .zero }
         self.recipe = recipe
-        self.isAdjusting = isAdjusting
         renderLatest()
     }
 
@@ -127,8 +119,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
 
     private var latest: RenderRequest? {
         guard let url, size.width > 0, size.height > 0 else { return nil }
-        let scale = isAdjusting ? Self.previewScale : 1
-        return RenderRequest(url: url, size: CGSize(width: size.width * scale, height: size.height * scale), recipe: recipe)
+        return RenderRequest(url: url, size: size, recipe: recipe)
     }
 
     /// Runs one render at a time. A render in flight is never discarded: while a slider is

@@ -326,7 +326,7 @@ struct EditCanvas: View {
 
     var body: some View {
         PhotoCanvas(url: url, renderer: renderer, recipe: library.selectedEdit?.recipe ?? EditRecipe(),
-                    isAdjusting: library.isAdjusting, backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
+                    backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
         }
     }

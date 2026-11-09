@@ -121,6 +121,29 @@ struct RAWRendererTests {
         }
     }
 
+    /// Records how long an exposure change takes at window sizes, to decide whether a slider
+    /// drag needs a reduced preview. Each size is warmed up once; the median is printed.
+    @Test("Exposure render timings at window sizes", .enabled(if: sampleDNG != nil))
+    func windowTimings() async throws {
+        let renderer = try RAWRenderer()
+        try await renderer.open(try #require(sampleDNG))
+        for target in [CGSize(width: 1600, height: 1000), CGSize(width: 2880, height: 1800), CGSize(width: 3456, height: 2234)] {
+            _ = try await renderer.render(fitting: target)
+            var times: [Double] = []
+            var size = ""
+            for exposure in [0.5, -0.5, 1, -1, 1.5, -1.5, 2, 0.25, -0.25] {
+                let start = ContinuousClock.now
+                let photo = try await renderer.render(fitting: target, recipe: .exposure(exposure))
+                times.append((ContinuousClock.now - start) / .milliseconds(1))
+                size = "\(photo.texture.width)×\(photo.texture.height)"
+            }
+            times.sort()
+            print("Window render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
+                + "\(String(format: "%.1f", times[times.count / 2])) ms, "
+                + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
+        }
+    }
+
     private func pixels(_ photo: RenderedPhoto) throws -> [UInt8] {
         let image = try #require(CIImage(mtlTexture: photo.texture, options: [.colorSpace: RAWRenderer.colorSpace]))
         let rowBytes = photo.texture.width * 4
