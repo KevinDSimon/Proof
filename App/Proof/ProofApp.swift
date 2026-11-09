@@ -53,11 +53,36 @@ struct ProofApp: App {
                 Button("Edit") { library.browse.edit() }
                     .keyboardShortcut(.return, modifiers: [])
                     .disabled(library.isEditing || library.browse.selectedPhoto == nil)
+                // While cropping, Esc cancels the crop instead.
                 Button("Back to Folder") { library.browse.finishEditing() }
-                    .keyboardShortcut(.escape, modifiers: [])
+                    .keyboardShortcut(library.isCropping ? nil : KeyboardShortcut(.escape, modifiers: []))
                     .disabled(!library.isEditing)
                 Button("Revert to Original") { library.revertEdit() }
                     .disabled(!library.isEditing || !library.canRevertEdit)
+                Divider()
+                // C opens and closes the crop tool, as R does in Lightroom's.
+                if library.isCropping {
+                    Button("Done Cropping") { library.finishCropping() }
+                        .keyboardShortcut(.return, modifiers: [])
+                    Button("Cancel Cropping") { library.cancelCropping() }
+                        .keyboardShortcut(.escape, modifiers: [])
+                    Button("Swap Crop Orientation") { library.swapCropOrientation() }
+                        .keyboardShortcut("x", modifiers: [])
+                } else {
+                    Button("Crop") { library.startCropping() }
+                        .keyboardShortcut("c", modifiers: [])
+                        .disabled(!library.isEditing || library.selectedEdit == nil)
+                }
+                Button("Rotate Left") { library.rotate(clockwise: false) }
+                    .keyboardShortcut("[")
+                    .disabled(!library.isEditing || library.selectedEdit == nil)
+                Button("Rotate Right") { library.rotate(clockwise: true) }
+                    .keyboardShortcut("]")
+                    .disabled(!library.isEditing || library.selectedEdit == nil)
+                Button("Flip Horizontal") { library.flipHorizontally() }
+                    .disabled(!library.isEditing || library.selectedEdit == nil)
+                Button("Flip Vertical") { library.flipVertically() }
+                    .disabled(!library.isEditing || library.selectedEdit == nil)
                 Divider()
                 // Lightroom's keys: 0 to 5 for stars, P, U and X for the flag.
                 Picker("Rating", selection: Binding(get: { library.selectedPhotoMetadata?.rating ?? 0 },
@@ -74,7 +99,9 @@ struct ProofApp: App {
                                                   set: { library.setFlag($0) })) {
                     Text("Flagged").tag(PhotoMetadata.Flag.flagged).keyboardShortcut("p", modifiers: [])
                     Text("Unflagged").tag(PhotoMetadata.Flag.unflagged).keyboardShortcut("u", modifiers: [])
-                    Text("Rejected").tag(PhotoMetadata.Flag.rejected).keyboardShortcut("x", modifiers: [])
+                    // While cropping, X swaps the crop's orientation instead, as in Lightroom.
+                    Text("Rejected").tag(PhotoMetadata.Flag.rejected)
+                        .keyboardShortcut(library.isCropping ? nil : KeyboardShortcut("x", modifiers: []))
                 }
                 .pickerStyle(.inline)
                 .disabled(library.browse.selectedPhoto == nil)
@@ -110,8 +137,14 @@ struct ContentView: View {
             }
             .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
                                             set: { if library.isEditing { library.isInspectorShown = $0 } })) {
-                AdjustmentsInspector(library: library)
-                    .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
+                Group {
+                    if library.isCropping {
+                        CropInspector(library: library)
+                    } else {
+                        AdjustmentsInspector(library: library)
+                    }
+                }
+                .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
             }
         }
         // Both modes follow the system appearance. The toolbar keeps the system's default
@@ -171,7 +204,7 @@ struct ContentView: View {
         ToolbarItem(placement: .navigation) {
             // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
             Button("Back to Folder", systemImage: "chevron.backward") { library.browse.finishEditing() }
-                .keyboardShortcut(.cancelAction)
+                .keyboardShortcut(library.isCropping ? nil : .cancelAction)
                 .help("Return to the folder")
         }
         // Stars and flags are separate groups, as in Lightroom.
@@ -188,8 +221,9 @@ struct ContentView: View {
         Group {
             if let renderer, let url = library.selectedPhotoURL {
                 VStack(spacing: 0) {
+                    // More margin while cropping, so the handles clear the window's edges.
                     EditCanvas(library: library, url: url, renderer: renderer)
-                        .padding(24)
+                        .padding(library.isCropping ? 40 : 24)
                     Filmstrip(library: library, photos: library.visiblePhotos)
                         .padding(.bottom, 8)
                 }
@@ -206,6 +240,25 @@ struct ContentView: View {
         // Declared on the photo's column rather than the window, so the button sits over the
         // photo and stays put when the inspector opens and closes.
         .toolbar {
+            if library.isCropping {
+                ToolbarItemGroup {
+                    // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
+                    Button("Cancel") { library.cancelCropping() }
+                        .keyboardShortcut(.cancelAction)
+                        .help("Return to the crop from before the tool opened (Esc)")
+                    Button("Done") { library.finishCropping() }
+                        .keyboardShortcut(.return, modifiers: [])
+                        .help("Keep the crop (Return)")
+                }
+            } else {
+                ToolbarItem {
+                    Button("Crop", systemImage: "crop") { library.startCropping() }
+                        .help("Crop, straighten, rotate and flip the photo (C)")
+                        .disabled(library.selectedEdit == nil)
+                }
+            }
+            // The crop tool and the inspector are separate groups.
+            ToolbarSpacer(.fixed)
             ToolbarItem {
                 Button("Inspector", systemImage: "sidebar.trailing") { library.isInspectorShown.toggle() }
                     .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")
@@ -325,12 +378,26 @@ struct EditCanvas: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        PhotoCanvas(url: url, renderer: renderer, recipe: library.selectedEdit?.recipe ?? EditRecipe(),
-                    backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
+        let backdrop = PhotoCanvas.backdropGray(for: colorScheme)
+        PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdropGray: backdrop,
+                    angle: library.isCropping ? library.selectedCrop.angle : 0) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
         } onHistogram: { histogram, url in
             library.showHistogram(histogram, of: url)
         }
+        .overlay {
+            if library.isCropping, let frame = library.selectedCropFrame {
+                CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
+            }
+        }
+    }
+
+    /// While cropping, the whole photo, turned and flipped: the canvas tilts it and the overlay
+    /// marks the rectangle, so a drag doesn't wait for a render.
+    private var shownRecipe: EditRecipe {
+        var recipe = library.selectedEdit?.recipe ?? EditRecipe()
+        if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
+        return recipe
     }
 }
 
@@ -348,7 +415,6 @@ private struct SelectedHistogram: View {
 /// plain color as the photo's canvas, so the panel and the photo read as one surface.
 struct AdjustmentsInspector: View {
     let library: Library
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Form {
@@ -490,15 +556,7 @@ struct AdjustmentsInspector: View {
                 }
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        // More room than the grouped form's default, which reads as tight beside the photo.
-        // Sections are spaced apart by their headers' top padding: macOS has no
-        // `listSectionSpacing`.
-        // Added to the grouped form's own 10 pt inset, so the cards sit 16 pt from the panel's edges.
-        .contentMargins(.horizontal, 6, for: .scrollContent)
-        .contentMargins(.vertical, 8, for: .scrollContent)
-        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
+        .inspectorForm()
     }
 
     private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }

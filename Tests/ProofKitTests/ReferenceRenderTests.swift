@@ -19,6 +19,7 @@ struct ReferenceRenderTests {
         ("edited", edited),
         ("contrast-whites-blacks", contrastWhitesBlacks),
         ("color", color),
+        ("crop", crop),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -53,6 +54,20 @@ struct ReferenceRenderTests {
         var recipe = EditRecipe()
         recipe.basic.vibrance = 60
         recipe.basic.saturation = 25
+        return recipe
+    }()
+
+    /// A quarter turn, a flip and a straightened 4:5 crop, so a change to any part of the
+    /// geometry stage, or to its order, shows.
+    static let crop: EditRecipe = {
+        var crop = Crop(aspect: AspectRatio(4, 5))
+        crop.rotate(clockwise: true)
+        crop.flipHorizontally()
+        let turned = crop.turnedSize(of: CGSize(width: 3, height: 2))
+        crop = CropFrame.whole(turned).withAspect(crop.aspect).straightened(6)
+            .moved(by: CGVector(dx: 0, dy: -1)).applied(to: crop)
+        var recipe = EditRecipe()
+        recipe.crop = crop
         return recipe
     }()
 

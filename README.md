@@ -10,7 +10,7 @@ Status: pre-alpha. Nothing to download yet.
 - Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation
 - Tone curve (RGB and per channel) and a histogram
 - `.cube` LUTs with a strength slider
-- Crop, straighten, before/after, copy and paste settings, undo
+- Crop, straighten, rotate and flip, before/after, copy and paste settings, undo
 - Export to JPEG, HEIC and TIFF
 
 After v1: Texture, Clarity and Dehaze (v1.1), then masks as layers (v1.2). An iPad and iPhone version comes after the Mac app. See [docs/roadmap.md](docs/roadmap.md).

@@ -73,15 +73,23 @@ public actor RAWRenderer {
     }
 
     /// Renders the open photo with `recipe` applied, scaled to fit `targetSize` (in pixels) and
-    /// never larger than the sensor. The texture has the photo's aspect ratio, not the target's.
+    /// never larger than the sensor. The texture has the cropped photo's aspect ratio, not the target's.
     public func render(fitting targetSize: CGSize, recipe: EditRecipe = EditRecipe()) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         let scale = Self.scaleFactor(
             nativeSize: filter.nativeSize,
             orientation: filter.orientation,
+            crop: recipe.crop,
             fitting: targetSize
         )
         return try render(scaleFactor: scale, recipe: recipe)
+    }
+
+    /// The photo's size in pixels as the camera oriented it, before any crop or turn. Blocks on
+    /// file I/O; `nil` if it isn't a RAW photo.
+    public static func orientedSize(of url: URL) -> CGSize? {
+        guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else { return nil }
+        return oriented(filter.nativeSize, filter.orientation)
     }
 
     /// Renders at an exact `CIRAWFilter.scaleFactor`. Internal so that only export and timing
@@ -120,7 +128,8 @@ public actor RAWRenderer {
             throw RAWRendererError.unsupportedFile(url)
         }
         let size = CGSize(width: maxPixelSize, height: maxPixelSize)
-        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation, fitting: size))
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                    crop: recipe.crop, fitting: size))
         let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
         guard let image = Self.apply(recipe, to: filter, asShot: asShot),
               let thumbnail = thumbnailContext.createCGImage(image, from: image.extent.integral, format: .RGBA8,
@@ -140,11 +149,14 @@ public actor RAWRenderer {
 
     /// Draws a photo from `render(fitting:)` centered in `drawable`, scaled to fit, over
     /// `background`. Cheap enough to run in a view's draw callback while a new render is pending.
+    /// The crop tool passes `angle`, in degrees clockwise, to straighten the photo around its
+    /// center as it is dragged; the photo is scaled to fit as if upright.
     public nonisolated func draw(
         _ photo: RenderedPhoto?,
         into drawable: MTLTexture,
         commandBuffer: MTLCommandBuffer,
-        background: CIColor
+        background: CIColor,
+        angle: Double = 0
     ) throws {
         let bounds = CGRect(x: 0, y: 0, width: drawable.width, height: drawable.height)
         var composed = CIImage(color: background).cropped(to: bounds)
@@ -154,10 +166,17 @@ public actor RAWRenderer {
             }
             let scale = min(bounds.width / image.extent.width, bounds.height / image.extent.height)
             let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            let placed = scaled.transformed(by: CGAffineTransform(
+            var placed = scaled.transformed(by: CGAffineTransform(
                 translationX: ((bounds.width - scaled.extent.width) / 2).rounded(),
                 y: ((bounds.height - scaled.extent.height) / 2).rounded()
             ))
+            if angle != 0 {
+                // Core Image's y axis points up here too, so a clockwise turn is a negative angle.
+                let center = CGPoint(x: placed.extent.midX, y: placed.extent.midY)
+                placed = placed.transformed(by: CGAffineTransform(translationX: -center.x, y: -center.y)
+                    .concatenating(CGAffineTransform(rotationAngle: -angle * .pi / 180))
+                    .concatenating(CGAffineTransform(translationX: center.x, y: center.y)))
+            }
             composed = placed.composited(over: composed)
         }
 
@@ -185,26 +204,60 @@ public actor RAWRenderer {
             .apply(to: shaded)
         // 3. Color: vibrance, then saturation.
         let colored = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
-        // 4. LUT, 5. layers and 6. crop follow here as they are built.
-        return colored
+        // 4. LUT and 5. layers follow here as they are built.
+        // 6. Turn, flip, straighten and crop.
+        guard let crop = recipe.crop else { return colored }
+        return Self.applyGeometry(crop, to: colored)
+    }
+
+    /// Turns and flips `image`, then straightens and crops it, as `Crop` describes. The result
+    /// starts at the origin.
+    static func applyGeometry(_ crop: Crop, to image: CIImage) -> CIImage {
+        // Core Image's y axis points up, so a clockwise turn on screen is a negative angle.
+        var turn = CGAffineTransform(rotationAngle: -Double(crop.rotation) * .pi / 180)
+        if crop.flipHorizontal { turn = turn.concatenating(CGAffineTransform(scaleX: -1, y: 1)) }
+        if crop.flipVertical { turn = turn.concatenating(CGAffineTransform(scaleX: 1, y: -1)) }
+        var turned = image.transformed(by: turn)
+        turned = turned.transformed(by: CGAffineTransform(translationX: -turned.extent.minX, y: -turned.extent.minY))
+        guard crop.width != 1 || crop.height != 1 || crop.x != 0 || crop.y != 0 || crop.angle != 0 else { return turned }
+
+        let (w, h) = (turned.extent.width, turned.extent.height)
+        // The crop's center, from a top-left origin to Core Image's bottom-left one.
+        let center = CGPoint(x: (crop.x + crop.width / 2) * w, y: (1 - crop.y - crop.height / 2) * h)
+        // Whole pixels, rounded down so the result never outgrows the size it was scaled to fit:
+        // Core Image rounds a fractional crop outward, which would show an edge.
+        let rect = CGRect(x: -(crop.width * w / 2).rounded(.down), y: -(crop.height * h / 2).rounded(.down),
+                          width: max((crop.width * w).rounded(.down), 1), height: max((crop.height * h).rounded(.down), 1))
+        // Clamped so the rectangle's edges, which may touch the photo's, don't blend with nothing.
+        // Cropped last, at the origin, so the extent is exactly the rectangle's.
+        return turned.clampedToExtent()
+            .transformed(by: CGAffineTransform(translationX: -center.x, y: -center.y)
+                .concatenating(CGAffineTransform(rotationAngle: -crop.angle * .pi / 180))
+                .concatenating(CGAffineTransform(translationX: -rect.minX, y: -rect.minY)))
+            .cropped(to: CGRect(origin: .zero, size: rect.size))
     }
 
     public static let pixelFormat = MTLPixelFormat.bgra8Unorm
     public static let colorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
 
-    /// The `CIRAWFilter.scaleFactor` that fits the photo inside `targetSize`. `nativeSize` is
-    /// the sensor's size before orientation, so portrait photos swap width and height.
+    /// The `CIRAWFilter.scaleFactor` that fits the photo, cropped by `crop`, inside `targetSize`.
+    /// `nativeSize` is the sensor's size before orientation, so portrait photos swap width and height.
     static func scaleFactor(
         nativeSize: CGSize,
         orientation: CGImagePropertyOrientation,
+        crop: Crop? = nil,
         fitting targetSize: CGSize
     ) -> CGFloat {
         guard nativeSize.width > 0, nativeSize.height > 0 else { return 1 }
-        let quarterTurn: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
-        let oriented = quarterTurn.contains(orientation)
-            ? CGSize(width: nativeSize.height, height: nativeSize.width)
-            : nativeSize
-        let scale = min(targetSize.width / oriented.width, targetSize.height / oriented.height)
+        let oriented = oriented(nativeSize, orientation)
+        let shown = crop?.outputSize(of: oriented) ?? oriented
+        guard shown.width > 0, shown.height > 0 else { return 1 }
+        let scale = min(targetSize.width / shown.width, targetSize.height / shown.height)
         return min(max(scale, 0.01), 1)
+    }
+
+    private static func oriented(_ nativeSize: CGSize, _ orientation: CGImagePropertyOrientation) -> CGSize {
+        let quarterTurn: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
+        return quarterTurn.contains(orientation) ? CGSize(width: nativeSize.height, height: nativeSize.width) : nativeSize
     }
 }

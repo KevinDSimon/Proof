@@ -37,6 +37,24 @@ struct EditRecipeTests {
         #expect(recipe.layers.isEmpty)
     }
 
+    @Test("A format 2 crop reads with no turn, flips or ratio, and saves as format 3")
+    func migratesFormat2Crop() throws {
+        let json = #"{"formatVersion": 2, "crop": {"x": 0.1, "y": 0.2, "width": 0.5, "height": 0.6, "angle": 2}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
+        #expect(recipe.crop == Crop(x: 0.1, y: 0.2, width: 0.5, height: 0.6, angle: 2))
+        #expect(recipe.crop?.rotation == 0 && recipe.crop?.flipHorizontal == false && recipe.crop?.aspect == nil)
+        #expect(recipe.formatVersion == 3)
+    }
+
+    @Test("A crop that changes nothing leaves the recipe neutral")
+    func identityCropIsNeutral() {
+        var recipe = EditRecipe()
+        recipe.crop = Crop(aspect: AspectRatio(3, 2))
+        #expect(recipe.isNeutral)
+        recipe.crop?.rotation = 90
+        #expect(!recipe.isNeutral)
+    }
+
     @Test("Curve points encode as two-element arrays")
     func curvePointEncoding() throws {
         let data = try JSONEncoder().encode(CurvePoint(0.25, 0.5))
@@ -110,7 +128,7 @@ struct EditRecipeTests {
         #expect(recipe.basic.temperature == 1900)
     }
 
-    @Test("A format 2 file's contrast, whites and blacks read and write unchanged")
+    @Test("A format 2 file's contrast, whites and blacks read and write unchanged, as the current format")
     func contrastWhitesBlacksRoundTrip() throws {
         let json = #"{"formatVersion": 2, "processVersion": 1, "basic": {"contrast": 35, "whites": -20, "blacks": 15.5}}"#
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
@@ -123,7 +141,7 @@ struct EditRecipeTests {
         #expect(basic["contrast"] as? Double == 35)
         #expect(basic["whites"] as? Double == -20)
         #expect(basic["blacks"] as? Double == 15.5)
-        #expect(written?["formatVersion"] as? Int == 2)
+        #expect(written?["formatVersion"] as? Int == EditRecipe.currentFormatVersion)
     }
 
     static let asShot = WhiteBalance(temperature: 6112, tint: 10)
