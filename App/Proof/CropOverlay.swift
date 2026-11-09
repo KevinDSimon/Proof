@@ -22,6 +22,17 @@ struct CropOverlay: View {
                     draw(in: &context, size: size, box: layout.box)
                 }
                 .allowsHitTesting(false)
+                // Beneath the rectangle and its handles, so only the part outside each corner turns the photo.
+                ForEach(Self.corners, id: \.self) { corner in
+                    let point = layout.point(of: corner)
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .frame(width: 2 * Self.rotateReach, height: 2 * Self.rotateReach)
+                        .position(point)
+                        .pointerStyle(.image(Image(nsImage: RotateCursor.image(for: corner)), hotSpot: .center))
+                        .gesture(rotate(around: CGPoint(x: layout.box.midX, y: layout.box.midY)))
+                        .accessibilityHidden(true)
+                }
                 Color.clear
                     .contentShape(Rectangle())
                     .frame(width: max(layout.box.width - 2 * Self.handleReach, 0),
@@ -40,12 +51,59 @@ struct CropOverlay: View {
                         .gesture(drag(layout: layout) { start, delta in start.dragging(handle, by: delta, aspect: aspect) })
                         .accessibilityHidden(true)
                 }
+                // Over the rectangle and its handles, so the drag draws a line wherever it starts.
+                if library.isDrawingLevelLine {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .pointerStyle(.rectSelection)
+                        .gesture(levelLine)
+                        .accessibilityHidden(true)
+                }
             }
         }
     }
 
+    /// The line being drawn to level the photo along, in points; `nil` while none is.
+    @State private var drawnLine: (start: CGPoint, end: CGPoint)?
+
+    private var levelLine: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in drawnLine = (value.startLocation, value.location) }
+            .onEnded { value in
+                drawnLine = nil
+                library.level(from: value.startLocation, to: value.location)
+            }
+    }
+
     /// How far from the border a drag still takes a handle, in points.
     private static let handleReach = 12.0
+    /// How far outside a corner a drag turns the photo, in points.
+    private static let rotateReach = 36.0
+    private static let corners: [CropHandle] = [.topLeft, .topRight, .bottomRight, .bottomLeft]
+
+    /// The straighten angle and the turn's center when the current corner drag started.
+    @State private var rotateStart: (angle: Double, center: CGPoint)?
+
+    /// Turns the photo with the pointer around the rectangle's center, as the straighten slider does.
+    private func rotate(around center: CGPoint) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                // The rectangle shrinks as the photo turns; its center at the start stays the pivot.
+                let start = rotateStart ?? (library.selectedCrop.angle, center)
+                if rotateStart == nil {
+                    rotateStart = start
+                    library.isStraightening = true
+                    library.isAdjusting = true
+                }
+                let turn = Horizon.turn(around: start.center, from: value.startLocation, to: value.location)
+                library.setStraighten(start.angle + turn)
+            }
+            .onEnded { _ in
+                rotateStart = nil
+                library.isStraightening = false
+                library.isAdjusting = false
+            }
+    }
 
     private func drag(layout: Layout, change: @escaping (CropFrame, CGVector) -> CropFrame) -> some Gesture {
         DragGesture(minimumDistance: 1)
@@ -75,7 +133,7 @@ struct CropOverlay: View {
         var shadowed = context
         shadowed.addFilter(.shadow(color: .black.opacity(0.45), radius: 1))
 
-        let divisions = library.isStraightening ? 8 : dragStart != nil ? 3 : 0
+        let divisions = library.isStraightening || drawnLine != nil ? 8 : dragStart != nil ? 3 : 0
         if divisions > 0 {
             var grid = Path()
             for index in 1..<divisions {
@@ -104,6 +162,13 @@ struct CropOverlay: View {
         handles.move(to: CGPoint(x: left, y: box.midY - length / 2)); handles.addLine(to: CGPoint(x: left, y: box.midY + length / 2))
         handles.move(to: CGPoint(x: right, y: box.midY - length / 2)); handles.addLine(to: CGPoint(x: right, y: box.midY + length / 2))
         shadowed.stroke(handles, with: .color(line), style: StrokeStyle(lineWidth: 3, lineCap: .square))
+
+        if let drawn = drawnLine {
+            var path = Path()
+            path.move(to: drawn.start)
+            path.addLine(to: drawn.end)
+            shadowed.stroke(path, with: .color(line), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        }
     }
 
     /// Where the rectangle sits in the view.
@@ -122,6 +187,12 @@ struct CropOverlay: View {
                                  y: viewSize.height / 2 + scale * (dx * sin(radians) + dy * cos(radians)))
             let size = CGSize(width: frame.size.width * scale, height: frame.size.height * scale)
             box = CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height)
+        }
+
+        /// The corner or edge midpoint of the rectangle that `handle` sits on.
+        func point(of handle: CropHandle) -> CGPoint {
+            CGPoint(x: box.midX + Double(handle.horizontal) * box.width / 2,
+                    y: box.midY + Double(handle.vertical) * box.height / 2)
         }
 
         /// The area that picks up `handle`: a square at a corner, the rest of the edge between.
@@ -153,5 +224,58 @@ private extension CropHandle {
         case .bottomLeft: .bottomLeading
         case .left: .leading
         }
+    }
+}
+
+/// The pointer outside a crop corner. macOS has no rotate cursor, so this draws one in the style
+/// of its resize cursors: a black curved arrow with a white outline, curving around the corner.
+@MainActor
+private enum RotateCursor {
+    private static var images: [CropHandle: NSImage] = [:]
+
+    static func image(for corner: CropHandle) -> NSImage {
+        if let image = images[corner] { return image }
+        // Drawn for the top right corner, then turned a quarter turn clockwise per corner.
+        let turns: Double = switch corner {
+        case .topRight: 0
+        case .bottomRight: 1
+        case .bottomLeft: 2
+        default: 3
+        }
+        let size = 24.0
+        let image = NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
+            let transform = NSAffineTransform()
+            transform.translateX(by: size / 2, yBy: size / 2)
+            transform.rotate(byDegrees: turns * 90)
+            transform.translateX(by: -size / 2, yBy: -size / 2)
+            transform.concat()
+
+            // A quarter circle bulging toward the corner, from its top end to its right end.
+            let center = NSPoint(x: 6, y: 18), radius = 11.0
+            let arc = NSBezierPath()
+            arc.appendArc(withCenter: center, radius: radius, startAngle: -86, endAngle: -4, clockwise: false)
+            let heads = NSBezierPath()
+            for (point, direction) in [(NSPoint(x: center.x, y: center.y - radius), CGVector(dx: -1, dy: 0)),
+                                       (NSPoint(x: center.x + radius, y: center.y), CGVector(dx: 0, dy: 1))] {
+                heads.move(to: NSPoint(x: point.x + 3 * direction.dx, y: point.y + 3 * direction.dy))
+                heads.line(to: NSPoint(x: point.x - 1.5 * direction.dx + 3.2 * direction.dy, y: point.y - 1.5 * direction.dy + 3.2 * direction.dx))
+                heads.line(to: NSPoint(x: point.x - 1.5 * direction.dx - 3.2 * direction.dy, y: point.y - 1.5 * direction.dy - 3.2 * direction.dx))
+                heads.close()
+            }
+            NSColor.white.set()
+            arc.lineWidth = 4.5
+            arc.stroke()
+            heads.lineWidth = 2.5
+            heads.lineJoinStyle = .round
+            heads.stroke()
+            heads.fill()
+            NSColor.black.set()
+            arc.lineWidth = 1.5
+            arc.stroke()
+            heads.fill()
+            return true
+        }
+        images[corner] = image
+        return image
     }
 }
