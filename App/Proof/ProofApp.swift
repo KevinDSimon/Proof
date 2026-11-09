@@ -207,14 +207,6 @@ struct ContentView: View {
                 .keyboardShortcut(library.isCropping ? nil : .cancelAction)
                 .help("Return to the folder")
         }
-        // Stars and flags are separate groups, as in Lightroom.
-        ToolbarItem(placement: .principal) {
-            StarButtons(rating: library.selectedPhotoMetadata?.rating ?? 0, setRating: library.setRating)
-        }
-        ToolbarSpacer(.fixed, placement: .principal)
-        ToolbarItem(placement: .principal) {
-            FlagButtons(flag: library.selectedPhotoMetadata?.flag ?? .unflagged, setFlag: library.setFlag)
-        }
     }
 
     @ViewBuilder private var editor: some View {
@@ -240,6 +232,16 @@ struct ContentView: View {
         // Declared on the photo's column rather than the window, so the button sits over the
         // photo and stays put when the inspector opens and closes.
         .toolbar {
+            // Stars and flags are separate groups, as in Lightroom, at the trailing end so the
+            // title stands on its own.
+            ToolbarItem {
+                StarButtons(rating: library.selectedPhotoMetadata?.rating ?? 0, setRating: library.setRating)
+            }
+            ToolbarSpacer(.fixed)
+            ToolbarItem {
+                FlagButtons(flag: library.selectedPhotoMetadata?.flag ?? .unflagged, setFlag: library.setFlag)
+            }
+            ToolbarSpacer(.fixed)
             if library.isCropping {
                 ToolbarItemGroup {
                     // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
