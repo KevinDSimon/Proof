@@ -7,7 +7,7 @@ L1000957.DNG
 L1000957.DNG.proof
 ```
 
-The sidecar travels with the photo when the folder is copied or synced, so a NAS folder carries its edits to every device.
+The sidecar travels with the photo when the folder is copied or synced, so a NAS folder carries its edits to every device. When the file is created, deleted, relinked after a rename and reloaded is set out in decision 0007 (`docs/decisions/0007-edit-sidecar-lifecycle.md`).
 
 ## Example
 
