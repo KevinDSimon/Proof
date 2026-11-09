@@ -353,11 +353,6 @@ struct AdjustmentsInspector: View {
     var body: some View {
         Form {
             Section {
-                SelectedHistogram(library: library)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-            Section {
                 Picker("Preset", selection: Binding(get: { basic.whiteBalance },
                                                     set: { preset in library.changeEdit { $0.basic.choose(preset) } })) {
                     ForEach(WhiteBalancePreset.allCases.filter { $0 != .custom || basic.whiteBalance == .custom }, id: \.self) {
@@ -490,6 +485,14 @@ struct AdjustmentsInspector: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        // Outside the form, so it fills the panel's width without a section card around it, and
+        // stays in view while the adjustments scroll under it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SelectedHistogram(library: library)
+                .padding(.horizontal, 10)
+                .padding(.top, 12)
+                .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)))
+        }
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 
