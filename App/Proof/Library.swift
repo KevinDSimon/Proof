@@ -19,7 +19,10 @@ final class Library {
     var selection: FileReference? {
         didSet {
             UserDefaults.standard.set(try? JSONEncoder().encode(selection), forKey: Self.selectionKey)
-            if selection != oldValue { browse = BrowseState() }
+            if selection != oldValue {
+                browse = BrowseState()
+                readEmbeddedMetadata()
+            }
         }
     }
     var filter: PhotoFilter = .all {
@@ -33,6 +36,7 @@ final class Library {
     var errorMessage: String?
 
     private let fileAccess: FileAccess?
+    private var metadataTask: Task<Void, Never>?
     private static let selectionKey = "selectedFolder"
 
     init() {
@@ -60,7 +64,28 @@ final class Library {
         guard let url = fileAccess?.url(for: folder) else { return }
         let read = await Task.detached { try? FolderContents.read(at: url) }.value
         contents[folder] = read ?? FolderContents(subfolders: [], photos: [])
-        if folder == selection { browse.keep(only: visiblePhotos) }
+        if folder == selection {
+            browse.keep(only: visiblePhotos)
+            readEmbeddedMetadata()
+        }
+    }
+
+    /// Reads ratings from inside the selected folder's photos that have no XMP sidecar. Only the
+    /// selected folder is read, because the sidebar loads every visible folder and opening each
+    /// photo on a NAS is slow.
+    private func readEmbeddedMetadata() {
+        metadataTask?.cancel()
+        guard let folder = selection, let photos = contents[folder]?.photos else { return }
+        let missing = photos.filter { $0.metadata == nil }.compactMap { photo in
+            url(ofPhoto: photo.name, in: folder).map { (name: photo.name, url: $0) }
+        }
+        guard !missing.isEmpty else { return }
+        metadataTask = Task {
+            for await batch in FolderContents.embeddedMetadata(of: missing) {
+                contents[folder]?.setMetadata(batch)
+                if folder == selection { browse.keep(only: visiblePhotos) }
+            }
+        }
     }
 
     var isEditing: Bool { browse.mode == .editing }

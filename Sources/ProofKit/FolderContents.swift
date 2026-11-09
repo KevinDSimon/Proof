@@ -12,13 +12,14 @@ public struct FolderContents: Equatable, Sendable {
         public var name: String
         /// A `.proof` sidecar sits next to it.
         public var isEdited: Bool
-        /// Stars from 0 to 5. `nil` until ratings are read from XMP.
-        public var rating: Int?
+        /// Rating, flag and label from XMP. `nil` until read: `read(at:)` reads sidecars, and
+        /// `embeddedMetadata(of:)` reads photos that have none.
+        public var metadata: PhotoMetadata?
 
-        public init(name: String, isEdited: Bool, rating: Int? = nil) {
+        public init(name: String, isEdited: Bool, metadata: PhotoMetadata? = nil) {
             self.name = name
             self.isEdited = isEdited
-            self.rating = rating
+            self.metadata = metadata
         }
     }
 
@@ -29,19 +30,31 @@ public struct FolderContents: Equatable, Sendable {
 
     /// Reads `url` without descending into subfolders. A saved location that is a single photo
     /// lists that photo. Hidden files and packages such as photo libraries are skipped.
+    /// Photos with an XMP sidecar get their metadata from it; the others are left `nil`.
     /// Blocks on file I/O, so call it off the main thread.
     public static func read(at url: URL) throws -> FolderContents {
-        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey, .contentTypeKey]
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey, .contentTypeKey, .contentModificationDateKey]
         let values = try url.resourceValues(forKeys: keys)
         guard values.isDirectory == true, values.isPackage != true else {
+            guard isRAW(values) else { return FolderContents(subfolders: [], photos: []) }
             let isEdited = FileManager.default.fileExists(atPath: EditRecipe.sidecarURL(for: url).path)
-            let photos = isRAW(values) ? [Photo(name: url.lastPathComponent, isEdited: isEdited)] : []
-            return FolderContents(subfolders: [], photos: photos)
+            let folder = url.deletingLastPathComponent()
+            let base = url.deletingPathExtension().lastPathComponent
+            let candidates = [base + ".xmp", base + ".XMP", url.lastPathComponent + ".xmp", url.lastPathComponent + ".XMP"]
+                .map { folder.appendingPathComponent($0) }
+                .filter { FileManager.default.fileExists(atPath: $0.path) }
+            let photo = Photo(name: url.lastPathComponent, isEdited: isEdited,
+                              metadata: newestSidecar(of: candidates).flatMap(readSidecar))
+            return FolderContents(subfolders: [], photos: [photo])
         }
 
         let entries = try FileManager.default.contentsOfDirectory(
             at: url, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles])
         let names = Set(entries.map(\.lastPathComponent))
+        var sidecars: [String: [URL]] = [:]
+        for entry in entries where entry.pathExtension.lowercased() == "xmp" {
+            sidecars[entry.lastPathComponent.lowercased(), default: []].append(entry)
+        }
         var subfolders: [String] = []
         var photos: [Photo] = []
         for entry in entries {
@@ -50,13 +63,58 @@ public struct FolderContents: Equatable, Sendable {
             if values.isDirectory == true {
                 if values.isPackage != true { subfolders.append(name) }
             } else if isRAW(values) {
-                photos.append(Photo(name: name, isEdited: names.contains(name + ".proof")))
+                let candidates = PhotoMetadata.sidecarKeys(for: name).flatMap { sidecars[$0] ?? [] }
+                photos.append(Photo(name: name, isEdited: names.contains(name + ".proof"),
+                                    metadata: newestSidecar(of: candidates).flatMap(readSidecar)))
             }
         }
         let finderOrder = { (a: String, b: String) in a.localizedStandardCompare(b) == .orderedAscending }
         return FolderContents(
             subfolders: subfolders.sorted(by: finderOrder),
             photos: photos.sorted { finderOrder($0.name, $1.name) })
+    }
+
+    /// Stores metadata read from the photos themselves, by photo name.
+    public mutating func setMetadata(_ metadata: [String: PhotoMetadata]) {
+        for index in photos.indices {
+            if let value = metadata[photos[index].name] { photos[index].metadata = value }
+        }
+    }
+
+    /// Reads the XMP embedded in each photo, for photos without a sidecar, delivering results in
+    /// small batches so a folder on a NAS fills in as it is read. A photo that can't be read is
+    /// delivered as `PhotoMetadata.unrated`.
+    public static func embeddedMetadata(of photos: [(name: String, url: URL)]) -> AsyncStream<[String: PhotoMetadata]> {
+        AsyncStream { continuation in
+            let task = Task.detached(priority: .utility) {
+                var batch: [String: PhotoMetadata] = [:]
+                for photo in photos {
+                    if Task.isCancelled { break }
+                    batch[photo.name] = PhotoMetadata.embedded(in: photo.url) ?? .unrated
+                    if batch.count == 16 {
+                        continuation.yield(batch)
+                        batch = [:]
+                    }
+                }
+                if !batch.isEmpty { continuation.yield(batch) }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// When two apps have each left a sidecar, such as `IMG_1.xmp` and `IMG_1.DNG.xmp`, the one
+    /// changed most recently is the one the person last worked in.
+    private static func newestSidecar(of urls: [URL]) -> URL? {
+        urls.max { modified($0) < modified($1) }
+    }
+
+    private static func modified(_ url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+    }
+
+    private static func readSidecar(_ url: URL) -> PhotoMetadata? {
+        (try? Data(contentsOf: url)).flatMap(PhotoMetadata.init(xmp:))
     }
 
     private static func isRAW(_ values: URLResourceValues) -> Bool {
@@ -73,7 +131,7 @@ public enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     public func includes(_ photo: FolderContents.Photo) -> Bool {
         switch self {
         case .all: true
-        case .fiveStars: photo.rating == 5
+        case .fiveStars: photo.metadata?.rating == 5 && photo.metadata?.flag != .rejected
         case .edited: photo.isEdited
         }
     }
