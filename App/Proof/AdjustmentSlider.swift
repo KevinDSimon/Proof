@@ -16,7 +16,7 @@ struct AdjustmentSlider: View {
     var showsSign = false
     /// Read by VoiceOver after the value, such as "stops" or "Kelvin".
     var unit = ""
-    /// Colors along the slider from left to right, for adjustments that shift color.
+    /// Colors along the slider from left to right, showing what the adjustment does to the photo.
     var track: [Color] = []
     /// Maps a value to the slider's 0–1 position and back. Linear when `nil`.
     var position: ((Double) -> Double)?
@@ -70,12 +70,14 @@ struct AdjustmentSlider: View {
         .onChange(of: value) { if !isEditingText || text != formatted(value) { text = formatted(value) } }
     }
 
-    /// Colors the slider's groove for adjustments that shift color. The slider's own fill is
+    /// Colors the slider's groove to show what the adjustment does. The slider's own fill is
     /// hidden over it so the colors show from end to end.
     @ViewBuilder private var trackBackground: some View {
         if !track.isEmpty {
             Capsule()
                 .fill(LinearGradient(colors: track, startPoint: .leading, endPoint: .trailing))
+                // A hairline edge keeps a light end visible on a light panel.
+                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
                 .frame(height: 4)
                 .padding(.horizontal, 2)
                 .accessibilityHidden(true)

@@ -378,7 +378,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.exposure },
                                    set: { value in library.changeEdit { $0.basic.exposure = value } }),
                     range: -5...5, fineStep: 0.01, step: 0.1, coarseStep: 1, fractionDigits: 2,
-                    showsSign: true, unit: "stops",
+                    showsSign: true, unit: "stops", track: Self.exposureTrack,
                     reset: { library.changeEdit { $0.basic.exposure = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
             } header: {
@@ -415,6 +415,8 @@ struct AdjustmentsInspector: View {
     /// which reads as a dark band. The faded middle takes the panel's color in either appearance.
     private static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
     private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
+    /// Dark to light, the way exposure moves the photo.
+    private static let exposureTrack = [Color(white: 0.08), Color(white: 0.97)]
 
     private static func fading(_ start: Color, into end: Color) -> [Color] {
         [start, start.opacity(0.15), end.opacity(0.15), end]
