@@ -138,8 +138,13 @@ struct ContentView: View {
                 .keyboardShortcut(.cancelAction)
                 .help("Return to the folder")
         }
+        // Stars and flags are separate groups, as in Lightroom.
         ToolbarItem(placement: .principal) {
-            RatingDisplay(metadata: library.selectedPhotoMetadata)
+            StarsDisplay(rating: library.selectedPhotoMetadata?.rating ?? 0)
+        }
+        ToolbarSpacer(.fixed, placement: .principal)
+        ToolbarItem(placement: .principal) {
+            FlagDisplay(flag: library.selectedPhotoMetadata?.flag ?? .unflagged)
         }
     }
 

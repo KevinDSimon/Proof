@@ -6,11 +6,12 @@ extension View {
     /// and the stars in the bottom-left, as Lightroom does. Apply it to the image itself so the
     /// badges sit on the photo's corners rather than the cell's. White on a dark backing keeps
     /// them readable on any photo without adding color. Stars are one star and the count, which
-    /// fits even a narrow portrait thumbnail in the filmstrip.
+    /// fits even a narrow portrait thumbnail in the filmstrip. Only a flagged photo shows a flag;
+    /// a rejected photo is dimmed instead, badges and all, as Lightroom does.
     func ratingBadges(_ metadata: PhotoMetadata?, size: CGFloat) -> some View {
         overlay(alignment: .topTrailing) {
-            if let symbol = metadata.flatMap({ RatingBadges.flagSymbol($0.flag) }) {
-                Image(systemName: symbol)
+            if metadata?.flag == .flagged {
+                FlagIcon(flag: .flagged, size: size)
                     .badgeStyle(size: size)
             }
         }
@@ -23,6 +24,7 @@ extension View {
                 .badgeStyle(size: size)
             }
         }
+        .opacity(metadata?.flag == .rejected ? 0.35 : 1)
     }
 
     fileprivate func badgeStyle(size: CGFloat) -> some View {
@@ -36,16 +38,34 @@ extension View {
     }
 }
 
-enum RatingBadges {
-    /// Rejected uses Lightroom's crossed-out flag. Unflagged shows nothing on a thumbnail.
-    static func flagSymbol(_ flag: PhotoMetadata.Flag) -> String? {
+/// Lightroom's flag icons: a filled flag for flagged, an outlined flag for unflagged, and a filled
+/// flag with an X for rejected. SF Symbols has no flag with an X, so the X is cut out of the flag.
+struct FlagIcon: View {
+    let flag: PhotoMetadata.Flag
+    /// The point size of the surrounding font, so the X scales with the flag.
+    var size: CGFloat = 12
+
+    var body: some View {
         switch flag {
-        case .flagged: "flag.fill"
-        case .rejected: "flag.slash.fill"
-        case .unflagged: nil
+        case .flagged:
+            Image(systemName: "flag.fill")
+        case .unflagged:
+            Image(systemName: "flag")
+        case .rejected:
+            Image(systemName: "flag.fill")
+                .overlay(alignment: .center) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: size * 0.45, weight: .black))
+                        // The flag's cloth sits above and right of the symbol's center.
+                        .offset(x: size / 12, y: -size / 8)
+                        .blendMode(.destinationOut)
+                }
+                .compositingGroup()
         }
     }
+}
 
+enum RatingBadges {
     /// The photo's name followed by its rating and flag, for VoiceOver.
     static func accessibilityLabel(name: String, metadata: PhotoMetadata?) -> String {
         guard let metadata else { return name }
@@ -58,35 +78,51 @@ enum RatingBadges {
         }
         return parts.joined(separator: ", ")
     }
+
+    static let readOnlyHelp = "From other apps. Proof can't change ratings or flags yet."
 }
 
-/// The current photo's stars and flag in the Edit toolbar. Read-only: Proof shows what other apps
-/// recorded but doesn't write XMP yet.
-struct RatingDisplay: View {
-    let metadata: PhotoMetadata?
+/// The current photo's stars in the Edit toolbar: filled up to the rating, outlined after.
+/// Read-only until Proof writes XMP.
+struct StarsDisplay: View {
+    let rating: Int
 
     var body: some View {
-        let rating = metadata?.rating ?? 0
-        let flag = metadata?.flag ?? .unflagged
-        HStack(spacing: 10) {
-            HStack(spacing: 2) {
-                ForEach(1...5, id: \.self) { star in
-                    Image(systemName: star <= rating ? "star.fill" : "star")
-                        .foregroundStyle(star <= rating ? .primary : .tertiary)
-                }
+        HStack(spacing: 2) {
+            ForEach(1...5, id: \.self) { star in
+                Image(systemName: star <= rating ? "star.fill" : "star")
+                    .foregroundStyle(star <= rating ? .primary : .tertiary)
             }
-            Image(systemName: RatingBadges.flagSymbol(flag) ?? "flag")
-                .foregroundStyle(flag == .unflagged ? .tertiary : .primary)
         }
         .font(.system(size: 12))
         .padding(.horizontal, 8)
-        .help("Rating and flag from other apps. Proof doesn't change them yet.")
+        .help(RatingBadges.readOnlyHelp)
         .accessibilityElement()
-        .accessibilityLabel(accessibilityText(rating: rating, flag: flag))
+        .accessibilityLabel(rating == 0 ? "No stars" : rating == 1 ? "1 star" : "\(rating) stars")
     }
+}
 
-    private func accessibilityText(rating: Int, flag: PhotoMetadata.Flag) -> String {
-        let stars = rating == 0 ? "No stars" : rating == 1 ? "1 star" : "\(rating) stars"
-        return "\(stars), \(flag == .unflagged ? "unflagged" : flag.rawValue)"
+/// The current photo's flag in the Edit toolbar: Flagged, Unflagged and Rejected side by side,
+/// with the current one inverted. Read-only until Proof writes XMP.
+struct FlagDisplay: View {
+    let flag: PhotoMetadata.Flag
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach([PhotoMetadata.Flag.flagged, .unflagged, .rejected], id: \.self) { option in
+                let isCurrent = option == flag
+                FlagIcon(flag: option, size: 12)
+                    .foregroundStyle(isCurrent ? AnyShapeStyle(.background) : AnyShapeStyle(.secondary))
+                    .frame(width: 24, height: 20)
+                    .background {
+                        if isCurrent { Capsule().fill(.primary) }
+                    }
+            }
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 2)
+        .help(RatingBadges.readOnlyHelp)
+        .accessibilityElement()
+        .accessibilityLabel(flag.rawValue.capitalized)
     }
 }
