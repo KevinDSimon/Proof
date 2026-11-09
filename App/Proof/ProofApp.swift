@@ -469,11 +469,10 @@ struct AdjustmentsInspector: View {
     /// for Shadows.
     private static let highlightsTrack = [Color(white: 0.5), Color(white: 0.97)]
     private static let shadowsTrack = [Color(white: 0.08), Color(white: 0.5)]
-    /// Whites and Blacks reach further toward each end than Highlights and Shadows.
-    private static let whitesTrack = [Color(white: 0.75), Color(white: 1)]
-    private static let blacksTrack = [Color(white: 0), Color(white: 0.25)]
-    /// Flat gray at low contrast, black against white at high contrast.
-    private static let contrastTrack = [Color(white: 0.5), Color(white: 0.5), Color(white: 0.08), Color(white: 0.97)]
+    /// Dark to light end to end, as Lightroom draws its tone sliders.
+    private static let contrastTrack = exposureTrack
+    private static let whitesTrack = exposureTrack
+    private static let blacksTrack = exposureTrack
 
     private static func fading(_ start: Color, into end: Color) -> [Color] {
         [start, start.opacity(0.15), end.opacity(0.15), end]
