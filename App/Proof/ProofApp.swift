@@ -435,6 +435,32 @@ struct AdjustmentsInspector: View {
                 }
             }
             .disabled(library.selectedEdit == nil)
+            Section {
+                AdjustmentSlider(
+                    title: "Vibrance",
+                    value: Binding(get: { basic.vibrance },
+                                   set: { value in library.changeEdit { $0.basic.vibrance = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.vibranceTrack,
+                    reset: { library.changeEdit { $0.basic.vibrance = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Saturation",
+                    value: Binding(get: { basic.saturation },
+                                   set: { value in library.changeEdit { $0.basic.saturation = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.saturationTrack,
+                    reset: { library.changeEdit { $0.basic.saturation = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+            } header: {
+                SectionHeader(title: "Color", canReset: basic.vibrance != 0 || basic.saturation != 0) {
+                    library.changeEdit {
+                        $0.basic.vibrance = 0
+                        $0.basic.saturation = 0
+                    }
+                }
+            }
+            .disabled(library.selectedEdit == nil)
             if let unsaved = library.selectedEdit?.unsaved {
                 Section {
                     Text(Self.message(for: unsaved))
@@ -472,6 +498,16 @@ struct AdjustmentsInspector: View {
     private static let shadowsTrack = exposureTrack
     private static let whitesTrack = exposureTrack
     private static let blacksTrack = exposureTrack
+    /// Gray to a full spectrum, teal through blue and magenta to red, growing more colorful
+    /// toward the right. A single color would suggest the slider pushes the photo toward it.
+    private static let vibranceTrack = [
+        Color(white: 0.5),
+        Color(hue: 0.47, saturation: 0.3, brightness: 0.7),
+        Color(hue: 0.6, saturation: 0.6, brightness: 0.85),
+        Color(hue: 0.83, saturation: 0.75, brightness: 0.9),
+        Color(hue: 1, saturation: 0.85, brightness: 0.95),
+    ]
+    private static let saturationTrack = vibranceTrack
 
     private static func fading(_ start: Color, into end: Color) -> [Color] {
         [start, start.opacity(0.15), end.opacity(0.15), end]

@@ -18,6 +18,7 @@ struct ReferenceRenderTests {
         ("neutral", EditRecipe()),
         ("edited", edited),
         ("contrast-whites-blacks", contrastWhitesBlacks),
+        ("color", color),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -33,6 +34,8 @@ struct ReferenceRenderTests {
         recipe.basic.contrast = 25
         recipe.basic.whites = 20
         recipe.basic.blacks = -15
+        recipe.basic.vibrance = 30
+        recipe.basic.saturation = -10
         return recipe
     }()
 
@@ -42,6 +45,14 @@ struct ReferenceRenderTests {
         recipe.basic.contrast = 50
         recipe.basic.whites = 40
         recipe.basic.blacks = -40
+        return recipe
+    }()
+
+    /// Vibrance and saturation alone, strong enough that a change to either filter shows.
+    static let color: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.basic.vibrance = 60
+        recipe.basic.saturation = 25
         return recipe
     }()
 
