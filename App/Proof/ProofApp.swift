@@ -340,12 +340,53 @@ struct AdjustmentsInspector: View {
 
     var body: some View {
         Form {
-            Section("Light") {
-                ExposureSlider(value: Binding(get: { library.selectedEdit?.recipe.basic.exposure ?? 0 },
-                                              set: { value in library.changeEdit { $0.basic.exposure = value } }),
-                               isAdjusting: { library.isAdjusting = $0 })
-                    .disabled(library.selectedEdit == nil)
+            Section {
+                Picker("Preset", selection: Binding(get: { basic.whiteBalance },
+                                                    set: { preset in library.changeEdit { $0.basic.choose(preset) } })) {
+                    ForEach(WhiteBalancePreset.allCases.filter { $0 != .custom || basic.whiteBalance == .custom }, id: \.self) {
+                        Text(Self.title(of: $0))
+                    }
+                }
+                AdjustmentSlider(
+                    title: "Temperature",
+                    value: Binding(get: { shown.temperature },
+                                   set: { kelvin in library.changeEdit { $0.basic.setTemperature(kelvin) } }),
+                    range: WhiteBalance.temperatureRange, fineStep: 1, step: 10, coarseStep: 100, fractionDigits: 0,
+                    unit: "Kelvin", track: Self.temperatureTrack,
+                    position: WhiteBalance.sliderPosition(forTemperature:),
+                    valueAtPosition: WhiteBalance.temperature(atSliderPosition:),
+                    reset: { library.changeEdit { $0.basic.resetTemperature() } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Tint",
+                    value: Binding(get: { shown.tint },
+                                   set: { tint in library.changeEdit { $0.basic.setTint(tint) } }),
+                    range: WhiteBalance.tintRange, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.tintTrack,
+                    reset: { library.changeEdit { $0.basic.resetTint() } },
+                    isAdjusting: { library.isAdjusting = $0 })
+            } header: {
+                SectionHeader(title: "White Balance", canReset: basic.whiteBalance != .asShot) {
+                    library.changeEdit { $0.basic.resetWhiteBalance() }
+                }
             }
+            // White balance can't be shown until the camera's has been read from the photo.
+            .disabled(library.selectedEdit?.asShot == nil)
+            Section {
+                AdjustmentSlider(
+                    title: "Exposure",
+                    value: Binding(get: { basic.exposure },
+                                   set: { value in library.changeEdit { $0.basic.exposure = value } }),
+                    range: -5...5, fineStep: 0.01, step: 0.1, coarseStep: 1, fractionDigits: 2,
+                    showsSign: true, unit: "stops", track: Self.exposureTrack,
+                    reset: { library.changeEdit { $0.basic.exposure = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+            } header: {
+                SectionHeader(title: "Light", canReset: basic.exposure != 0) {
+                    library.changeEdit { $0.basic.exposure = 0 }
+                }
+            }
+            .disabled(library.selectedEdit == nil)
             if let unsaved = library.selectedEdit?.unsaved {
                 Section {
                     Text(Self.message(for: unsaved))
@@ -361,6 +402,39 @@ struct AdjustmentsInspector: View {
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 
+    private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }
+
+    /// The white balance the photo shows, the camera's where it hasn't been changed.
+    private var shown: WhiteBalance {
+        basic.whiteBalance(asShot: library.selectedEdit?.asShot ?? WhiteBalance(temperature: 5500, tint: 0))
+    }
+
+    /// Blue to yellow and green to magenta, the way each slider shifts the photo. These show the
+    /// photo's colors, so they are the one place the inspector isn't gray. Each color fades out
+    /// toward the middle rather than blending into the other: opposite colors blend to gray,
+    /// which reads as a dark band. The faded middle takes the panel's color in either appearance.
+    private static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
+    private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
+    /// Dark to light, the way exposure moves the photo.
+    private static let exposureTrack = [Color(white: 0.08), Color(white: 0.97)]
+
+    private static func fading(_ start: Color, into end: Color) -> [Color] {
+        [start, start.opacity(0.15), end.opacity(0.15), end]
+    }
+
+    private static func title(of preset: WhiteBalancePreset) -> String {
+        switch preset {
+        case .asShot: "As Shot"
+        case .daylight: "Daylight"
+        case .cloudy: "Cloudy"
+        case .shade: "Shade"
+        case .tungsten: "Tungsten"
+        case .fluorescent: "Fluorescent"
+        case .flash: "Flash"
+        case .custom: "Custom"
+        }
+    }
+
     private static func message(for unsaved: PhotoEdit.Unsaved) -> String {
         switch unsaved {
         case .noAccess: "Not saved. Proof needs permission to save edits in this photo's folder."
@@ -370,24 +444,21 @@ struct AdjustmentsInspector: View {
     }
 }
 
-/// Exposure in stops, −5 to +5, the range the edit format allows. Double-click the value to reset.
-struct ExposureSlider: View {
-    @Binding var value: Double
-    /// Called with `true` when a drag starts and `false` when it ends.
-    var isAdjusting: (Bool) -> Void = { _ in }
+/// A section title with a Reset button that returns the section's adjustments to none.
+struct SectionHeader: View {
+    let title: String
+    let canReset: Bool
+    let reset: () -> Void
 
     var body: some View {
         HStack {
-            Slider(value: $value, in: -5...5) {
-                Text("Exposure")
-            } onEditingChanged: { isAdjusting($0) }
-            .accessibilityValue(String(format: "%+.2f stops", value))
-            Text(value, format: .number.precision(.fractionLength(2)).sign(strategy: .always(includingZero: false)))
-                .monospacedDigit()
-                .frame(width: 44, alignment: .trailing)
-                .onTapGesture(count: 2) { value = 0 }
-                .help("Double-click to reset")
-                .accessibilityHidden(true)
+            Text(title)
+            Spacer()
+            Button("Reset", action: reset)
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .disabled(!canReset)
+                .accessibilityLabel("Reset \(title)")
         }
     }
 }

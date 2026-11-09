@@ -31,6 +31,9 @@ struct PhotoEdit {
     /// The sidecar as last read or written; `nil` when there is none.
     var sidecar: Sidecar?
     var unsaved: Unsaved?
+    /// The camera's white balance, which the white balance controls show for As Shot. `nil`
+    /// until it has been read from the photo.
+    var asShot: WhiteBalance?
 }
 
 /// The saved folders, what has been read of them, which folder, filter and photo are chosen, and
@@ -338,6 +341,11 @@ final class Library {
             edits[photo] = PhotoEdit(recipe: recipe, history: EditHistory(recipe), sidecar: sidecar)
         } catch {
             edits[photo] = PhotoEdit(recipe: EditRecipe(), history: EditHistory(EditRecipe()), unsaved: .unreadable)
+        }
+        // Off the main thread: it opens the RAW file, which can be slow on a network volume.
+        Task {
+            let asShot = await Task.detached { WhiteBalance.asShot(of: url) }.value
+            edits[photo]?.asShot = asShot
         }
     }
 
