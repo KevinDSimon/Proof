@@ -495,7 +495,8 @@ struct AdjustmentsInspector: View {
         // More room than the grouped form's default, which reads as tight beside the photo.
         // Sections are spaced apart by their headers' top padding: macOS has no
         // `listSectionSpacing`.
-        .contentMargins(.horizontal, 16, for: .scrollContent)
+        // Added to the grouped form's own 10 pt inset, so the cards sit 16 pt from the panel's edges.
+        .contentMargins(.horizontal, 6, for: .scrollContent)
         .contentMargins(.vertical, 8, for: .scrollContent)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
