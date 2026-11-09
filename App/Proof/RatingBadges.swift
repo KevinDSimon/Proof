@@ -100,3 +100,60 @@ enum RatingBadges {
 
     static let unsavedNote = "Changes aren't saved to the photo yet."
 }
+
+/// The Edit toolbar's star buttons, packed closer than separate toolbar items would be. Clicking
+/// the current rating clears it.
+struct StarButtons: View {
+    let rating: Int
+    let setRating: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(1...5, id: \.self) { star in
+                Button {
+                    setRating(star == rating ? 0 : star)
+                } label: {
+                    Image(systemName: star <= rating ? "star.fill" : "star")
+                        .frame(width: 22, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("\(RatingBadges.title(ofRating: star)) (\(star)). \(RatingBadges.unsavedNote)")
+                .accessibilityLabel(RatingBadges.title(ofRating: star))
+                .accessibilityAddTraits(star == rating ? .isSelected : [])
+            }
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 6)
+    }
+}
+
+/// The Edit toolbar's Flagged, Unflagged and Rejected buttons, packed closely, with the current
+/// flag on a gray backing as the system marks a selected toolbar button.
+struct FlagButtons: View {
+    let flag: PhotoMetadata.Flag
+    let setFlag: (PhotoMetadata.Flag) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(RatingBadges.flags, id: \.self) { option in
+                Button {
+                    setFlag(option)
+                } label: {
+                    FlagIcon(flag: option)
+                        .frame(width: 28, height: 24)
+                        .background {
+                            if option == flag { Capsule().fill(.quaternary) }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("\(RatingBadges.title(of: option)). \(RatingBadges.unsavedNote)")
+                .accessibilityLabel(RatingBadges.title(of: option))
+                .accessibilityAddTraits(option == flag ? .isSelected : [])
+            }
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 4)
+    }
+}

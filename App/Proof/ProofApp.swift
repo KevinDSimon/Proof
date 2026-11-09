@@ -158,26 +158,13 @@ struct ContentView: View {
                 .keyboardShortcut(.cancelAction)
                 .help("Return to the folder")
         }
-        // Stars and flags are separate groups, as in Lightroom. Clicking the current rating clears it.
-        ToolbarItemGroup(placement: .principal) {
-            let rating = library.selectedPhotoMetadata?.rating ?? 0
-            ForEach(1...5, id: \.self) { star in
-                Button(RatingBadges.title(ofRating: star), systemImage: star <= rating ? "star.fill" : "star") {
-                    library.setRating(star == rating ? 0 : star)
-                }
-                .help("\(RatingBadges.title(ofRating: star)) (\(star)). \(RatingBadges.unsavedNote)")
-            }
+        // Stars and flags are separate groups, as in Lightroom.
+        ToolbarItem(placement: .principal) {
+            StarButtons(rating: library.selectedPhotoMetadata?.rating ?? 0, setRating: library.setRating)
         }
         ToolbarSpacer(.fixed, placement: .principal)
-        ToolbarItemGroup(placement: .principal) {
-            let flag = library.selectedPhotoMetadata?.flag ?? .unflagged
-            ForEach(RatingBadges.flags, id: \.self) { option in
-                Toggle(isOn: Binding(get: { flag == option },
-                                     set: { library.setFlag($0 ? option : .unflagged) })) {
-                    Label { Text(RatingBadges.title(of: option)) } icon: { FlagIcon(flag: option) }
-                }
-                .help("\(RatingBadges.title(of: option)). \(RatingBadges.unsavedNote)")
-            }
+        ToolbarItem(placement: .principal) {
+            FlagButtons(flag: library.selectedPhotoMetadata?.flag ?? .unflagged, setFlag: library.setFlag)
         }
     }
 
