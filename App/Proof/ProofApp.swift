@@ -495,7 +495,7 @@ struct AdjustmentsInspector: View {
         // More room than the grouped form's default, which reads as tight beside the photo.
         // Sections are spaced apart by their headers' top padding: macOS has no
         // `listSectionSpacing`.
-        .contentMargins(.horizontal, 14, for: .scrollContent)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.vertical, 8, for: .scrollContent)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
