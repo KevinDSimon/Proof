@@ -90,6 +90,12 @@ final class Library {
 
     var isEditing: Bool { browse.mode == .editing }
 
+    /// What other apps recorded in XMP for the selected photo; `nil` until it has been read.
+    var selectedPhotoMetadata: PhotoMetadata? {
+        guard let selection, let name = browse.selectedPhoto else { return nil }
+        return contents[selection]?.photos.first { $0.name == name }?.metadata
+    }
+
     /// The file of the selected photo.
     var selectedPhotoURL: URL? {
         guard let selection, let name = browse.selectedPhoto else { return nil }

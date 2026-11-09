@@ -138,6 +138,9 @@ struct ContentView: View {
                 .keyboardShortcut(.cancelAction)
                 .help("Return to the folder")
         }
+        ToolbarItem(placement: .principal) {
+            RatingDisplay(metadata: library.selectedPhotoMetadata)
+        }
     }
 
     @ViewBuilder private var editor: some View {

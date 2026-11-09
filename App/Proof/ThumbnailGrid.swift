@@ -72,23 +72,32 @@ struct ThumbnailGrid: View {
 
     private func cell(for photo: FolderContents.Photo) -> some View {
         let isSelected = library.browse.selectedPhoto == photo.name
-        return ZStack {
-            if let image = images[photo.name] {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-            } else if finished.contains(photo.name) {
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.secondary)
-                    .help("This photo couldn't be read.")
-            } else {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(.quaternary)
+        return VStack(spacing: 4) {
+            // Photos sit on the bottom of their square so the name is right under each one.
+            ZStack(alignment: .bottom) {
+                if let image = images[photo.name] {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .ratingBadges(photo.metadata, size: 10)
+                } else if finished.contains(photo.name) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                        .help("This photo couldn't be read.")
+                } else {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(.quaternary)
+                }
             }
+            .selectionRing(isSelected)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .aspectRatio(1, contentMode: .fit)
+            Text(photo.name)
+                .font(.caption)
+                .foregroundStyle(isSelected ? .primary : .secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
-        .selectionRing(isSelected)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .aspectRatio(1, contentMode: .fit)
         .contentShape(Rectangle())
         .onTapGesture {
             library.browse.selectedPhoto = photo.name
@@ -100,7 +109,7 @@ struct ThumbnailGrid: View {
         })
         .help(photo.name)
         .accessibilityElement()
-        .accessibilityLabel(photo.name)
+        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.metadata))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(named: "Edit") {
             library.browse.selectedPhoto = photo.name
