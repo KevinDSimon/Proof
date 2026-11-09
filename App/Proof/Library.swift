@@ -37,6 +37,9 @@ struct PhotoEdit {
     /// The camera's white balance, which the white balance controls show for As Shot. `nil`
     /// until it has been read from the photo.
     var asShot: WhiteBalance?
+    /// The photo's size in pixels as the camera oriented it, which the crop tool lays out by.
+    /// `nil` until it has been read from the photo.
+    var size: CGSize?
 }
 
 /// The saved folders, what has been read of them, which folder, filter and photo are chosen, and
@@ -77,6 +80,8 @@ final class Library {
     var browse = BrowseState() {
         didSet {
             guard browse.selectedPhoto != oldValue.selectedPhoto || browse.mode != oldValue.mode else { return }
+            // Leaving the photo any way but Done or Cancel keeps the crop.
+            if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
         }
@@ -360,11 +365,174 @@ final class Library {
         }
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.
         Task {
-            let (asShot, settings) = await Task.detached {
-                (WhiteBalance.asShot(of: url), CaptureSettings.read(from: url))
+            let (asShot, settings, size) = await Task.detached {
+                (WhiteBalance.asShot(of: url), CaptureSettings.read(from: url), RAWRenderer.orientedSize(of: url))
             }.value
             edits[photo]?.asShot = asShot
             edits[photo]?.captureSettings = settings
+            edits[photo]?.size = size
+        }
+    }
+
+    // MARK: Crop
+
+    /// The crop tool is open on the selected photo.
+    private(set) var isCropping = false
+    /// The straighten slider is being dragged, which shows a finer grid over the photo.
+    var isStraightening = false
+    /// The edit when the crop tool opened, which Cancel returns to.
+    private var recipeBeforeCrop: EditRecipe?
+    /// The rectangle as it was before straightening shrank it, so it grows back as the angle
+    /// returns toward zero.
+    private var unstraightenedFrame: CropFrame?
+
+    /// The selected photo's crop. A photo without one starts locked to its own shape (Original).
+    var selectedCrop: Crop {
+        selectedEdit?.recipe.crop ?? Crop.uncropped(photoSize: selectedEdit?.size)
+    }
+
+    /// The selected photo turned and flipped, in pixels: the space the crop rectangle is in.
+    /// `nil` until the photo's size has been read.
+    var turnedPhotoSize: CGSize? {
+        selectedEdit?.size.map { selectedCrop.turnedSize(of: $0) }
+    }
+
+    /// The crop rectangle of the selected photo, in the units of `turnedPhotoSize`.
+    var selectedCropFrame: CropFrame? {
+        turnedPhotoSize.map { CropFrame(selectedCrop, imageSize: $0) }
+    }
+
+    func startCropping() {
+        guard isEditing, !isCropping, let photo = browse.selectedPhoto, let edit = edits[photo] else { return }
+        commitTask?.cancel()
+        commitEdit(of: photo)
+        recipeBeforeCrop = edit.recipe
+        unstraightenedFrame = nil
+        isCropping = true
+    }
+
+    /// Done: keeps the crop and closes the tool.
+    func finishCropping() {
+        guard isCropping, let photo = browse.selectedPhoto else { return }
+        endCropping(of: photo)
+        commitEdit(of: photo)
+    }
+
+    /// Cancel: returns to the edit from when the tool opened, as one undo step.
+    func cancelCropping() {
+        guard isCropping, let photo = browse.selectedPhoto else { return }
+        commitTask?.cancel()
+        if let recipeBeforeCrop { edits[photo]?.recipe = recipeBeforeCrop }
+        endCropping(of: photo)
+        commitEdit(of: photo)
+    }
+
+    /// Closes the tool. A crop that changes nothing is removed, so it doesn't keep the ratio alone.
+    private func endCropping(of photo: PhotoReference) {
+        if edits[photo]?.recipe.crop?.isIdentity == true { edits[photo]?.recipe.crop = nil }
+        isCropping = false
+        isStraightening = false
+        recipeBeforeCrop = nil
+        unstraightenedFrame = nil
+    }
+
+    /// Sets the rectangle from a drag on the photo. It becomes the size straightening starts from.
+    func setCropFrame(_ frame: CropFrame) {
+        unstraightenedFrame = frame
+        changeCrop { frame.applied(to: $0) }
+    }
+
+    /// Sets the straighten angle, shrinking the rectangle as needed to keep it on the photo.
+    func setStraighten(_ angle: Double) {
+        guard let current = selectedCropFrame else { return }
+        // The kept rectangle applies only while nothing else, such as undo, has changed the crop.
+        var base = current
+        if let kept = unstraightenedFrame, kept.imageSize == current.imageSize,
+           kept.straightened(current.angle).isClose(to: current) {
+            base = kept
+        }
+        unstraightenedFrame = base
+        changeCrop { base.straightened(angle).applied(to: $0) }
+    }
+
+    /// Locks the rectangle to `aspect`, or unlocks it for `nil`, taking the largest rectangle of
+    /// that shape around the current center.
+    func setCropAspect(_ aspect: AspectRatio?) {
+        guard let current = selectedCropFrame else { return }
+        unstraightenedFrame = nil
+        changeCrop { crop in
+            var crop = crop
+            crop.aspect = aspect
+            return current.withAspect(aspect).applied(to: crop)
+        }
+    }
+
+    /// Switches the rectangle between landscape and portrait. Freeform stays freeform.
+    func swapCropOrientation() {
+        guard let current = selectedCropFrame else { return }
+        let shape = selectedCrop.aspect ?? AspectRatio(current.size.width, current.size.height)
+        unstraightenedFrame = nil
+        changeCrop { crop in
+            var crop = crop
+            if crop.aspect != nil { crop.aspect = shape.swapped }
+            return current.withAspect(shape.swapped).applied(to: crop)
+        }
+    }
+
+    /// The selected photo's own shape, as the crop is turned: what Original locks to.
+    var originalAspect: AspectRatio? {
+        turnedPhotoSize.map { AspectRatio($0.width, $0.height) }
+    }
+
+    func rotate(clockwise: Bool) {
+        unstraightenedFrame = nil
+        changeCrop { var crop = $0; crop.rotate(clockwise: clockwise); return crop }
+    }
+
+    func flipHorizontally() {
+        unstraightenedFrame = nil
+        changeCrop { var crop = $0; crop.flipHorizontally(); return crop }
+    }
+
+    func flipVertically() {
+        unstraightenedFrame = nil
+        changeCrop { var crop = $0; crop.flipVertically(); return crop }
+    }
+
+    /// Removes the rectangle and straighten and locks the ratio to Original, keeping the turn and flips.
+    func resetCropRectangle() {
+        unstraightenedFrame = nil
+        let original = originalAspect
+        changeCrop { Crop(rotation: $0.rotation, flipHorizontal: $0.flipHorizontal, flipVertical: $0.flipVertical,
+                          aspect: original) }
+    }
+
+    /// Whether the crop differs from where the crop tool starts: the whole photo, locked to Original.
+    var canResetCropRectangle: Bool {
+        let crop = selectedCrop
+        guard let original = originalAspect, let aspect = crop.aspect else { return crop.hasRectangle || crop.aspect == nil }
+        return crop.hasRectangle || !aspect.matches(original)
+    }
+
+    /// Undoes the turn and flips, keeping the rectangle on the same part of the photo.
+    func resetCropTurn() {
+        unstraightenedFrame = nil
+        changeCrop { crop in
+            var crop = crop
+            if crop.flipHorizontal { crop.flipHorizontally() }
+            if crop.flipVertical { crop.flipVertically() }
+            while crop.rotation != 0 { crop.rotate(clockwise: false) }
+            return crop
+        }
+    }
+
+    /// Outside the crop tool, such as a menu's rotate, a crop that ends up changing nothing is removed.
+    private func changeCrop(_ change: (Crop) -> Crop) {
+        // Read before `changeEdit`: reading the edit while it is being changed stops the app.
+        let uncropped = Crop.uncropped(photoSize: selectedEdit?.size)
+        changeEdit { recipe in
+            let crop = change(recipe.crop ?? uncropped)
+            recipe.crop = !isCropping && crop.isIdentity ? nil : crop
         }
     }
 

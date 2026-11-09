@@ -13,7 +13,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 
 ```json
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "processVersion": 1,
   "basic": {
     "whiteBalance": "custom", "temperature": 4800, "tint": 12, "exposure": 0.3,
@@ -22,7 +22,10 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
   },
   "curve": { "rgb": [[0, 0], [1, 1]], "red": [[0, 0], [1, 1]], "green": [[0, 0], [1, 1]], "blue": [[0, 0], [1, 1]] },
   "look": { "lut": "Portra.cube", "strength": 0.7 },
-  "crop": null,
+  "crop": {
+    "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
+    "rotation": 90, "flipHorizontal": false, "flipVertical": false, "aspect": [4, 5]
+  },
   "layers": []
 }
 ```
@@ -36,7 +39,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
 | `curve` | Control points per channel, each `[input, output]` from 0 to 1, sorted by input. |
 | `look` | The LUT's file name in the LUT library and its strength from 0 to 1. `null` for none. |
-| `crop` | Normalized rectangle and rotation angle. `null` for none. |
+| `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
 
 Missing fields take their default (no adjustment). `look` and `crop` are written as `null` when there is none. Proof writes the file with its keys sorted and indented.
@@ -51,7 +54,22 @@ Missing fields take their default (no adjustment). `look` and `crop` are written
 
 As Shot is `whiteBalance: "asShot"` with `temperature` and `tint` both `null`, and is written that way so a save replaces earlier values. A preset writes its Kelvin with a tint of 0: Daylight 5500, Cloudy 6500, Shade 7500, Tungsten 2850, Fluorescent 3800, Flash 5500. Moving either slider sets `custom`. The values are absolute, the same in every version, so a preset's Kelvin can change later without changing saved edits.
 
+## Crop
+
+| Field | Meaning |
+| --- | --- |
+| `rotation` | Quarter turns clockwise: 0, 90, 180 or 270. Applied first, to the photo as the camera oriented it. |
+| `flipHorizontal`, `flipVertical` | Mirror the turned photo left to right and top to bottom. Applied after the turn. Proof writes both flips together as a half turn instead. |
+| `x`, `y`, `width`, `height` | The crop rectangle, from 0 to 1 of the turned and flipped photo's width and height, measured from its top left. |
+| `angle` | Straighten in degrees, from −45 to 45. Positive turns the photo clockwise around the rectangle's center, under the rectangle; the result is the rectangle, upright. |
+| `aspect` | The locked ratio as `[width, height]`, such as `[4, 5]`, or `null` for freeform. It only says which shape the crop tool keeps; the rectangle alone sets the render. |
+
+Missing crop fields take their default: the whole photo, no straighten, no turn or flips, freeform. The rectangle is expected to lie within the photo once straightened; Proof keeps it there. A crop that changes nothing is written as `null`.
+
 ## Earlier formats
+
+Format 2 had `crop` with the rectangle and `angle` but no turn, flips or ratio. No version of Proof wrote or rendered one, so a format 2 crop is read with its rectangle and angle as they are, no turn or flips and a freeform ratio, and saved as format 3.
+
 
 Format 1 stored `temperature` and `tint` as −100 to +100 offsets. No version of Proof rendered them, so a format 1 file is read with both `null`, keeping the camera's white balance, and saved as format 2.
 

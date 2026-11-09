@@ -4,7 +4,7 @@ import Foundation
 /// One photo's edit, saved as JSON in `<original file name>.proof` next to the original.
 /// The layout is documented in docs/edit-format.md; change both together.
 public struct EditRecipe: Codable, Equatable, Sendable {
-    public static let currentFormatVersion = 2
+    public static let currentFormatVersion = 3
     public static let currentProcessVersion = 1
 
     public var formatVersion: Int
@@ -50,6 +50,8 @@ public struct EditRecipe: Codable, Equatable, Sendable {
             basic.resetWhiteBalance()
             for index in layers.indices { layers[index].basic.resetWhiteBalance() }
         }
+        // Format 2 had no turn, flips or ratio in `crop`, which read as none. No version of Proof
+        // wrote or rendered a format 2 crop, so its rectangle and angle are kept as they are.
         formatVersion = Self.currentFormatVersion
     }
 
@@ -68,7 +70,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && look == nil && crop == nil && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && look == nil && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
     /// The sidecar URL for an original photo: the full file name plus `.proof`.
@@ -299,23 +301,6 @@ public struct Look: Codable, Equatable, Sendable {
     public init(lut: String, strength: Double = 1) {
         self.lut = lut
         self.strength = strength
-    }
-}
-
-/// Normalized crop rectangle (0...1 of the image) and rotation in degrees.
-public struct Crop: Codable, Equatable, Sendable {
-    public var x: Double
-    public var y: Double
-    public var width: Double
-    public var height: Double
-    public var angle: Double
-
-    public init(x: Double, y: Double, width: Double, height: Double, angle: Double = 0) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.angle = angle
     }
 }
 

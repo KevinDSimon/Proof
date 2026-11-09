@@ -17,6 +17,9 @@ struct PhotoCanvas: NSViewRepresentable {
     var recipe: EditRecipe
     /// The gray of the canvas around the photo, from 0 to 1.
     var backdropGray: Double
+    /// Degrees clockwise to tilt the photo around its center as it is drawn. The crop tool
+    /// straightens this way, without waiting for a render.
+    var angle: Double = 0
     var onError: (Error) -> Void
     /// Receives the histogram of each render shown, with the photo it belongs to.
     var onHistogram: (Histogram, URL) -> Void = { _, _ in }
@@ -43,6 +46,7 @@ struct PhotoCanvas: NSViewRepresentable {
         context.coordinator.onError = onError
         context.coordinator.onHistogram = onHistogram
         context.coordinator.setBackdrop(backdropGray)
+        context.coordinator.setAngle(angle)
         context.coordinator.show(url, recipe: recipe)
     }
 }
@@ -77,6 +81,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
 
     private var background = CIColor(red: 0, green: 0, blue: 0, colorSpace: RAWRenderer.colorSpace)!
     private var backdropGray: Double?
+    private var angle = 0.0
     private static let log = Logger(subsystem: "Proof", category: "render")
 
     init(renderer: RAWRenderer) {
@@ -88,6 +93,12 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         guard gray != backdropGray else { return }
         backdropGray = gray
         background = CIColor(red: gray, green: gray, blue: gray, colorSpace: RAWRenderer.colorSpace)!
+        view?.needsDisplay = true
+    }
+
+    func setAngle(_ angle: Double) {
+        guard angle != self.angle else { return }
+        self.angle = angle
         view?.needsDisplay = true
     }
 
@@ -116,7 +127,8 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         guard let drawable = view.currentDrawable,
               let commandBuffer = commandQueue?.makeCommandBuffer() else { return }
         do {
-            try renderer.draw(photo, into: drawable.texture, commandBuffer: commandBuffer, background: background)
+            try renderer.draw(photo, into: drawable.texture, commandBuffer: commandBuffer, background: background,
+                              angle: angle)
             commandBuffer.present(drawable)
             commandBuffer.commit()
         } catch {
