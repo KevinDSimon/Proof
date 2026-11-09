@@ -40,7 +40,7 @@ See [edit-format.md](edit-format.md) for the recipe format.
 
 ### Edits
 
-`Sidecar` in `ProofKit` reads and writes a photo's `.proof` file with `NSFileCoordinator`. It keeps the JSON it read, so saving keeps fields this version doesn't recognize. Saving a neutral recipe deletes the file instead, unless it has unrecognized fields; a photo with no sidecar and a neutral edit gets no file (decision 0007).
+`Sidecar` in `ProofKit` reads and writes a photo's `.proof` file with `NSFileCoordinator`. It keeps the JSON it read, so saving keeps fields this version doesn't recognize. Saving a neutral recipe deletes the file instead, unless it has unrecognized fields; a photo with no sidecar and a neutral edit gets no file (decision 0007). Revert to Original deletes the file whatever it holds, as one undo step; undoing it saves the edit as a new file.
 
 When a photo is first opened in Edit, `Library` reads its sidecar into a `PhotoEdit`, which holds the recipe the controls show and an `EditHistory`. Each undo step is a whole recipe. A slider drag becomes one step when it ends; a change made without a drag, such as a double-click reset, becomes one once the controls have been idle for 0.4 seconds. Each step is saved as soon as it is made. Each photo keeps its edit and undo history in memory until Proof quits, so returning to a photo still allows undo. Edit › Undo and Redo (⌘Z, ⇧⌘Z) apply to the photo open in Edit.
 

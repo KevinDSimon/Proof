@@ -46,4 +46,14 @@ struct EditHistoryTests {
         let undone = history.undo()
         #expect(undone == EditRecipe())
     }
+
+    @Test("Reverting a photo opened with an edit, and no steps yet, is one step that undo restores")
+    func revertIsOneStep() {
+        var history = EditHistory(recipe(exposure: 1, contrast: 20))
+        history.record(EditRecipe())
+        #expect(history.recipe == EditRecipe())
+        let undone = history.undo()
+        #expect(undone == recipe(exposure: 1, contrast: 20))
+        #expect(!history.canUndo)
+    }
 }
