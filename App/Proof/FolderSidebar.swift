@@ -40,6 +40,10 @@ struct FolderSidebar: View {
             if !library.isEditing {
                 Button("Add Folder", systemImage: "folder.badge.plus") { library.requestFolder(.add) }
                     .help("Add a folder of RAW photos")
+                if !library.locations.isEmpty {
+                    Button("Refresh", systemImage: "arrow.clockwise") { library.refresh() }
+                        .help("Read the folders again, including folders on network volumes")
+                }
             }
         }
         .confirmationDialog("Remove “\(removing?.name ?? "")” from Proof?",

@@ -28,6 +28,10 @@ struct ProofApp: App {
                 .pickerStyle(.inline)
                 .disabled(library.selection == nil || library.isEditing)
                 Divider()
+                Button("Refresh") { library.refresh() }
+                    .keyboardShortcut("r")
+                    .disabled(library.locations.isEmpty || library.isEditing)
+                Divider()
             }
             CommandGroup(after: .sidebar) {
                 Button(library.isInspectorShown ? "Hide Inspector" : "Show Inspector") {

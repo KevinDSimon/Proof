@@ -184,6 +184,13 @@ public final class FileAccess {
         return .available(url)
     }
 
+    /// Resolves a location again after a drive or network share connects or disconnects. Access
+    /// held to a location that is no longer there is released first, so it can become `offline`.
+    public func recheck(_ id: UUID) -> LocationStatus {
+        if let url = accessed[id], !system.exists(url) { endAccess(id) }
+        return resolve(id)
+    }
+
     /// The saved location that is or contains `url`. When saved locations are nested,
     /// the innermost one wins.
     public func location(containing url: URL) -> SavedLocation? {
