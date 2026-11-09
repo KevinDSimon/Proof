@@ -123,4 +123,19 @@ struct FolderContentsTests {
         contents.setMetadata(["A.DNG": .init(rating: 5), "B.DNG": .init(rating: 4)])
         #expect(contents.photos.map(\.metadata?.rating) == [2, 4])
     }
+
+    @Test("Reading a folder again keeps metadata it can't read again, and takes what it can")
+    func keepsMetadataWhenReadAgain() {
+        let earlier = FolderContents(subfolders: [], photos: [
+            .init(name: "A.DNG", isEdited: false, metadata: .init(rating: 3)),
+            .init(name: "B.DNG", isEdited: false, metadata: .init(rating: 2)),
+            .init(name: "Gone.DNG", isEdited: false, metadata: .init(rating: 5))])
+        let reread = FolderContents(subfolders: [], photos: [
+            .init(name: "A.DNG", isEdited: false),
+            .init(name: "B.DNG", isEdited: false, metadata: .init(rating: 4)),
+            .init(name: "New.DNG", isEdited: false)])
+        let kept = reread.keepingMetadata(from: earlier)
+        #expect(kept.photos.map(\.name) == ["A.DNG", "B.DNG", "New.DNG"])
+        #expect(kept.photos.map(\.metadata?.rating) == [3, 4, nil])
+    }
 }

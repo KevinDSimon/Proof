@@ -153,6 +153,22 @@ struct FileAccessTests {
         #expect(try makeAccess(system).resolve(location.id) == .offline)
     }
 
+    @Test("Checking again makes a location offline when its volume goes away, and available when it returns")
+    func recheckFollowsVolume() throws {
+        let system = FakeBookmarks(volume: URL(fileURLWithPath: "/Volumes/home"))
+        let access = try makeAccess(system)
+        let location = try access.add(URL(fileURLWithPath: "/Volumes/home/Albums"))
+        #expect(access.resolve(location.id) == .available(URL(fileURLWithPath: "/Volumes/home/Albums")))
+
+        system.unmounted = true
+        #expect(access.recheck(location.id) == .offline)
+        #expect(system.accessCount == 0)
+
+        system.unmounted = false
+        #expect(access.recheck(location.id) == .available(URL(fileURLWithPath: "/Volumes/home/Albums")))
+        #expect(system.accessCount == 1)
+    }
+
     @Test("A stale bookmark is replaced with a fresh one")
     func refreshesStaleBookmark() throws {
         let system = FakeBookmarks(volume: nil)

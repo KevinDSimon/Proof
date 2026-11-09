@@ -76,6 +76,16 @@ public struct FolderContents: Equatable, Sendable {
 
     /// Fills in metadata read from the photos themselves, by photo name. A photo that already has
     /// metadata keeps it, so a rating changed while the folder was being read isn't overwritten.
+    /// This listing, with the metadata `earlier` had for photos this listing has none for: XMP read
+    /// from inside the photo, or a rating changed in Proof. Used when a folder is read again.
+    public func keepingMetadata(from earlier: FolderContents?) -> FolderContents {
+        guard let earlier else { return self }
+        var kept = self
+        kept.setMetadata(Dictionary(earlier.photos.compactMap { photo in photo.metadata.map { (photo.name, $0) } },
+                                    uniquingKeysWith: { first, _ in first }))
+        return kept
+    }
+
     public mutating func setMetadata(_ metadata: [String: PhotoMetadata]) {
         for index in photos.indices where photos[index].metadata == nil {
             if let value = metadata[photos[index].name] { photos[index].metadata = value }

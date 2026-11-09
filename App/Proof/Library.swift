@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 import ProofKit
 
@@ -55,6 +55,10 @@ final class Library {
     private let fileAccess: FileAccess?
     private var metadataTask: Task<Void, Never>?
     private var allPhotosTask: Task<Void, Never>?
+    /// Watches the available saved folders on local disks.
+    private var watcher: FolderWatcher?
+    /// Available saved locations on network volumes, which are rescanned instead of watched.
+    private var networkLocations: Set<UUID> = []
     /// Photos whose rating or flag was changed since the filter or folder last changed. They stay
     /// visible even if the filter no longer matches, so a photo doesn't vanish while it's rated.
     private var changedPhotos: Set<PhotoReference> = []
@@ -65,6 +69,7 @@ final class Library {
             .appendingPathComponent("Proof/locations.json"))
         if fileAccess == nil { errorMessage = "Proof couldn't load its saved folders." }
         refreshLocations()
+        observeSystem()
         // Before All Photos, the selection was saved as a folder reference.
         selection = UserDefaults.standard.data(forKey: Self.selectionKey).flatMap { data in
             (try? JSONDecoder().decode(SidebarItem.self, from: data))
@@ -102,7 +107,11 @@ final class Library {
     }
 
     private func isAvailable(_ location: SavedLocation) -> Bool {
-        if case .available = status(of: location.id) { true } else { false }
+        isAvailable(location.id)
+    }
+
+    private func isAvailable(_ id: UUID) -> Bool {
+        if case .available = status(of: id) { true } else { false }
     }
 
     /// A folder's name as the sidebar shows it: its own name, or the saved location's.
@@ -121,7 +130,7 @@ final class Library {
         guard force || contents[folder] == nil else { return }
         guard let url = fileAccess?.url(for: folder) else { return }
         let read = await Task.detached { try? FolderContents.read(at: url) }.value
-        contents[folder] = read ?? FolderContents(subfolders: [], photos: [])
+        contents[folder] = (read ?? FolderContents(subfolders: [], photos: [])).keepingMetadata(from: contents[folder])
         if .folder(folder) == selection {
             browse.keep(only: visiblePhotos)
             readEmbeddedMetadata()
@@ -260,10 +269,98 @@ final class Library {
         if selection == .allPhotos { readAllPhotos() }
     }
 
+    /// Reads every folder already read again, on local disks and network volumes, after checking
+    /// which saved folders are available. For View › Refresh and the toolbar button.
+    func refresh() {
+        recheckLocations()
+        reload(contents.keys.filter { isAvailable($0.locationID) })
+    }
+
+    /// Follows changes Proof is told about: drives and shares connecting and disconnecting, and
+    /// Proof becoming the active app, when folders on network volumes are read again.
+    private func observeSystem() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
+            workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.recheckLocations() }
+            }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.becameActive() }
+        }
+    }
+
+    private func becameActive() {
+        recheckLocations()
+        reload(contents.keys.filter { networkLocations.contains($0.locationID) })
+    }
+
+    /// Resolves the saved locations again, so a folder whose drive connected becomes available
+    /// and one whose drive went away shows as offline.
+    private func recheckLocations() {
+        guard let fileAccess else { return }
+        let before = statuses
+        statuses = Dictionary(uniqueKeysWithValues: locations.map { ($0.id, fileAccess.recheck($0.id)) })
+        guard statuses != before else { return }
+        // What was read on a drive that went away is forgotten, so it is read fresh when it returns.
+        contents = contents.filter { isAvailable($0.key.locationID) }
+        watchLocalFolders()
+        browse.keep(only: visiblePhotos)
+        if selection == .allPhotos { readAllPhotos() }
+        // The sidebar reads the folders it shows, but a selected subfolder may be collapsed out of view.
+        if let folder = selection?.folder, isAvailable(folder.locationID) {
+            Task { await load(folder) }
+        }
+    }
+
+    /// Watches the available saved folders on local disks with FSEvents. Locations that are a
+    /// single photo aren't watched.
+    private func watchLocalFolders() {
+        var local: [URL] = []
+        networkLocations = []
+        for location in locations {
+            guard case .available(let url) = status(of: location.id) else { continue }
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .volumeIsLocalKey])
+            if values?.volumeIsLocal == false {
+                networkLocations.insert(location.id)
+            } else if values?.isDirectory == true {
+                local.append(url)
+            }
+        }
+        watcher = FolderWatcher(folders: local) { [weak self] changes in self?.foldersChanged(changes) }
+    }
+
+    /// Reads again the folders FSEvents reported, if they've been read.
+    private func foldersChanged(_ changes: [FolderWatcher.Change]) {
+        guard let fileAccess else { return }
+        let changed = changes.compactMap { change in
+            fileAccess.reference(for: change.folder).map { (folder: $0, includesSubfolders: change.includesSubfolders) }
+        }
+        reload(contents.keys.filter { folder in
+            changed.contains { change in
+                change.folder.locationID == folder.locationID
+                    && (change.includesSubfolders ? folder.relativePath.starts(with: change.folder.relativePath)
+                                                  : folder.relativePath == change.folder.relativePath)
+            }
+        })
+    }
+
+    /// Reads `folders` again in sidebar order. For All Photos, new subfolders are read afterwards.
+    private func reload(_ folders: [FileReference]) {
+        guard !folders.isEmpty else { return }
+        let ordered = folders.sorted { $0.relativePath.count < $1.relativePath.count }
+        Task {
+            for folder in ordered { await load(folder, force: true) }
+            if selection == .allPhotos { readAllPhotos() }
+        }
+    }
+
     private func refreshLocations() {
         guard let fileAccess else { return }
         locations = fileAccess.locations
         // Resolving never mounts a volume, so this doesn't wait on a disconnected NAS.
         statuses = Dictionary(uniqueKeysWithValues: locations.map { ($0.id, fileAccess.resolve($0.id)) })
+        watchLocalFolders()
     }
 }

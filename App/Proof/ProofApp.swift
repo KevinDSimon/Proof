@@ -28,6 +28,10 @@ struct ProofApp: App {
                 .pickerStyle(.inline)
                 .disabled(library.selection == nil || library.isEditing)
                 Divider()
+                Button("Refresh") { library.refresh() }
+                    .keyboardShortcut("r")
+                    .disabled(library.locations.isEmpty || library.isEditing)
+                Divider()
             }
             CommandGroup(after: .sidebar) {
                 Button(library.isInspectorShown ? "Hide Inspector" : "Show Inspector") {
@@ -138,6 +142,12 @@ struct ContentView: View {
     }
 
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
+        if !library.locations.isEmpty {
+            ToolbarItem {
+                Button("Refresh", systemImage: "arrow.clockwise") { library.refresh() }
+                    .help("Read the folders again, including folders on network volumes")
+            }
+        }
         if library.selection != nil {
             ToolbarItem {
                 Picker("Filter", selection: $library.filter) {
