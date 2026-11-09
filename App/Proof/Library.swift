@@ -385,6 +385,12 @@ final class Library {
     /// The rectangle as it was before straightening shrank it, so it grows back as the angle
     /// returns toward zero.
     private var unstraightenedFrame: CropFrame?
+    /// The next drag on the photo draws a line to level the photo along, instead of moving the rectangle.
+    var isDrawingLevelLine = false
+    /// Auto is looking for the horizon.
+    private(set) var isFindingHorizon = false
+    /// Auto found no horizon, which the crop tool shows for a moment.
+    private(set) var foundNoHorizon = false
 
     /// The selected photo's crop. A photo without one starts locked to its own shape (Original).
     var selectedCrop: Crop {
@@ -432,6 +438,8 @@ final class Library {
         if edits[photo]?.recipe.crop?.isIdentity == true { edits[photo]?.recipe.crop = nil }
         isCropping = false
         isStraightening = false
+        isDrawingLevelLine = false
+        foundNoHorizon = false
         recipeBeforeCrop = nil
         unstraightenedFrame = nil
     }
@@ -453,6 +461,43 @@ final class Library {
         }
         unstraightenedFrame = base
         changeCrop { base.straightened(angle).applied(to: $0) }
+    }
+
+    /// Straightens so the line drawn from `start` to `end`, in points on the photo as shown,
+    /// becomes level or upright, and ends drawing. A click without a drag changes nothing.
+    func level(from start: CGPoint, to end: CGPoint) {
+        isDrawingLevelLine = false
+        guard let correction = Horizon.correction(from: start, to: end, minimumLength: 8) else { return }
+        setStraighten(selectedCrop.angle + correction)
+    }
+
+    /// Straightens to the horizon Vision finds in the selected photo. When there is none, the
+    /// angle stays as it was and `foundNoHorizon` is set for two seconds.
+    func autoStraighten(with renderer: RAWRenderer) async {
+        guard isCropping, !isFindingHorizon, let photo = browse.selectedPhoto, let url = selectedPhotoURL,
+              let recipe = selectedEdit?.recipe else { return }
+        isFindingHorizon = true
+        foundNoHorizon = false
+        let correction: Double?
+        do {
+            try await renderer.open(url)
+            // About the size of the photo on screen: enough for Vision, quick to render.
+            correction = try await renderer.horizonCorrection(fitting: CGSize(width: 1024, height: 1024), recipe: recipe)
+        } catch {
+            isFindingHorizon = false
+            errorMessage = "The horizon couldn't be found. (\(error))"
+            return
+        }
+        isFindingHorizon = false
+        // The photo or the tool may have changed while Vision looked.
+        guard isCropping, browse.selectedPhoto == photo else { return }
+        if let correction {
+            setStraighten(correction)
+        } else {
+            foundNoHorizon = true
+            try? await Task.sleep(for: .seconds(2))
+            foundNoHorizon = false
+        }
     }
 
     /// Locks the rectangle to `aspect`, or unlocks it for `nil`, taking the largest rectangle of

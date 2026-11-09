@@ -85,6 +85,22 @@ public actor RAWRenderer {
         return try render(scaleFactor: scale, recipe: recipe)
     }
 
+    /// The straighten angle that levels the horizon in the open photo, from `Horizon`, or `nil`
+    /// when none is found. Vision looks at the photo with `recipe` applied, turned and flipped
+    /// but not straightened or cropped, at about `targetSize`.
+    public func horizonCorrection(fitting targetSize: CGSize, recipe: EditRecipe) async throws -> Double? {
+        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        var recipe = recipe
+        recipe.crop = recipe.crop?.turnedOnly
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                    crop: recipe.crop, fitting: targetSize))
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot),
+              let cgImage = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
+                                                  colorSpace: Self.colorSpace)
+        else { throw RAWRendererError.renderFailed }
+        return try await Horizon.correction(in: cgImage)
+    }
+
     /// The photo's size in pixels as the camera oriented it, before any crop or turn. Blocks on
     /// file I/O; `nil` if it isn't a RAW photo.
     public static func orientedSize(of url: URL) -> CGSize? {

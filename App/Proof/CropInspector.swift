@@ -4,6 +4,8 @@ import SwiftUI
 /// The crop tool's controls, which take the inspector's place while the tool is open.
 struct CropInspector: View {
     let library: Library
+    /// Renders the photo for Auto to look for the horizon in.
+    let renderer: RAWRenderer?
     /// Custom was chosen from the menu, so the ratio fields show even for a ratio the menu has.
     @State private var choseCustom = false
     @State private var customWidth = ""
@@ -42,6 +44,30 @@ struct CropInspector: View {
                         library.isStraightening = adjusting
                         library.isAdjusting = adjusting
                     })
+                LabeledContent {
+                    HStack {
+                        Toggle(isOn: Binding(get: { library.isDrawingLevelLine }, set: { library.isDrawingLevelLine = $0 })) {
+                            Label("Draw Line", systemImage: "ruler")
+                                .labelStyle(.iconOnly)
+                                .frame(width: Self.levelButtonWidth)
+                        }
+                        .toggleStyle(.button)
+                        .help("Drag along something in the photo that should be level or upright")
+                        Button {
+                            guard let renderer else { return }
+                            Task { await library.autoStraighten(with: renderer) }
+                        } label: {
+                            Text("Auto").frame(width: Self.levelButtonWidth)
+                        }
+                        .disabled(renderer == nil || library.isFindingHorizon)
+                        .help("Straighten to the horizon found in the photo")
+                    }
+                } label: {
+                    Text("Level")
+                    if library.foundNoHorizon {
+                        Text("No horizon found")
+                    }
+                }
             } header: {
                 SectionHeader(title: "Crop", canReset: library.canResetCropRectangle) {
                     library.resetCropRectangle()
@@ -80,6 +106,9 @@ struct CropInspector: View {
     }
 
     private var crop: Crop { library.selectedCrop }
+
+    /// The ruler and Auto buttons share one width, so they read as a pair.
+    private static let levelButtonWidth = 36.0
 
     /// The menu item for the locked ratio, in either orientation.
     private var shownChoice: AspectChoice {

@@ -139,7 +139,7 @@ struct ContentView: View {
                                             set: { if library.isEditing { library.isInspectorShown = $0 } })) {
                 Group {
                     if library.isCropping {
-                        CropInspector(library: library)
+                        CropInspector(library: library, renderer: renderer)
                     } else {
                         AdjustmentsInspector(library: library)
                     }
