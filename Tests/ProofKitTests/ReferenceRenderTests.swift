@@ -27,6 +27,8 @@ struct ReferenceRenderTests {
         recipe.basic.temperature = 4800
         recipe.basic.tint = 12
         recipe.basic.exposure = 0.7
+        recipe.basic.highlights = -60
+        recipe.basic.shadows = 40
         return recipe
     }()
 
