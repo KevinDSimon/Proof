@@ -20,6 +20,8 @@ final class Library {
     enum FolderRequest {
         case add
         case locate(SavedLocation)
+        /// A folder saved with a read-only grant, chosen again so Proof can write sidecars in it.
+        case grantWrite(SavedLocation)
     }
 
     private(set) var locations: [SavedLocation] = []
@@ -232,6 +234,38 @@ final class Library {
                                                  relativePath: folder.relativePath + [name]))
     }
 
+    /// Whether Proof may write a sidecar next to `photo`. When it can't, the person is asked
+    /// to grant the photo's saved folder again, once (decision 0007), and this returns `false`;
+    /// the caller keeps its change in memory until a later call returns `true`.
+    func ensureCanWrite(nextTo photo: URL) -> Bool {
+        guard let fileAccess else { return false }
+        if fileAccess.canWrite(to: photo) { return true }
+        // A location that is a single photo can't hold a sidecar: the sandbox only allows writing
+        // beside a file through a grant to its folder, so asking again wouldn't help.
+        if let location = fileAccess.location(containing: photo), !isChoosingFolder,
+           (try? location.lastKnownURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+            requestFolder(.grantWrite(location))
+        }
+        return false
+    }
+
+    /// Where the folder picker opens: the folder being granted again, otherwise the system default.
+    var folderPickerDirectory: URL? {
+        if case .grantWrite(let location) = folderRequest { location.lastKnownURL } else { nil }
+    }
+
+    var folderPickerMessage: String {
+        switch folderRequest {
+        case .add: ""
+        case .locate(let location): "Choose where “\(location.name)” is now."
+        case .grantWrite(let location): "Proof needs permission to save edits in “\(location.name)”. Your photos are never changed."
+        }
+    }
+
+    var folderPickerConfirmation: String {
+        if case .grantWrite = folderRequest { "Grant Access" } else { "Open" }
+    }
+
     func requestFolder(_ request: FolderRequest) {
         folderRequest = request
         isChoosingFolder = true
@@ -250,6 +284,9 @@ final class Library {
                 contents = contents.filter { $0.key.locationID != location.id }
                 refreshLocations()
                 if selection == .allPhotos { readAllPhotos() }
+            case .grantWrite(let location):
+                try fileAccess.grantWriteAccess(location.id, with: url)
+                refreshLocations()
             }
         } catch {
             errorMessage = error.localizedDescription

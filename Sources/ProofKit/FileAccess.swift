@@ -11,6 +11,39 @@ public struct SavedLocation: Codable, Identifiable, Equatable, Sendable {
     public var lastKnownURL: URL
     /// The volume it lives on. `nil` or `/` means the startup disk.
     public var volumeURL: URL?
+    /// Whether the grant lets Proof write sidecars here. Locations saved before Proof wrote
+    /// anything have read-only grants and need to be granted once more (decision 0007).
+    public var canWrite: Bool
+
+    public init(id: UUID, name: String, bookmark: Data, lastKnownURL: URL, volumeURL: URL?, canWrite: Bool) {
+        self.id = id
+        self.name = name
+        self.bookmark = bookmark
+        self.lastKnownURL = lastKnownURL
+        self.volumeURL = volumeURL
+        self.canWrite = canWrite
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        bookmark = try c.decode(Data.self, forKey: .bookmark)
+        lastKnownURL = try c.decode(URL.self, forKey: .lastKnownURL)
+        volumeURL = try c.decodeIfPresent(URL.self, forKey: .volumeURL)
+        canWrite = try c.decodeIfPresent(Bool.self, forKey: .canWrite) ?? false
+    }
+}
+
+public enum FileAccessError: Error, LocalizedError, Equatable {
+    /// A write grant was offered for a different folder than the saved location.
+    case notTheSavedLocation(name: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .notTheSavedLocation(let name): "Choose the folder “\(name)” to let Proof save in it."
+        }
+    }
 }
 
 /// Whether a saved location can be read right now.
@@ -87,7 +120,7 @@ public struct SystemBookmarks: BookmarkSystem {
 
     private var creationOptions: URL.BookmarkCreationOptions {
         #if os(macOS)
-        securityScoped ? [.withSecurityScope, .securityScopeAllowOnlyReadAccess] : []
+        securityScoped ? [.withSecurityScope] : []
         #else
         []
         #endif
@@ -135,7 +168,8 @@ public final class FileAccess {
             name: url.lastPathComponent,
             bookmark: try system.bookmarkData(for: url),
             lastKnownURL: url,
-            volumeURL: system.volumeURL(of: url)
+            volumeURL: system.volumeURL(of: url),
+            canWrite: true
         )
         locations.append(location)
         try save()
@@ -157,7 +191,27 @@ public final class FileAccess {
         locations[index].lastKnownURL = url
         locations[index].name = url.lastPathComponent
         locations[index].volumeURL = system.volumeURL(of: url)
+        locations[index].canWrite = true
         try save()
+    }
+
+    /// Replaces a read-only grant with a read-write one. `url` must be the location itself,
+    /// as chosen again by the person; any other folder is refused and nothing changes.
+    public func grantWriteAccess(_ id: UUID, with url: URL) throws {
+        guard let index = locations.firstIndex(where: { $0.id == id }) else { return }
+        let current = accessed[id] ?? locations[index].lastKnownURL
+        guard Self.components(of: url) == Self.components(of: current) else {
+            throw FileAccessError.notTheSavedLocation(name: locations[index].name)
+        }
+        endAccess(id)
+        locations[index].bookmark = try system.bookmarkData(for: url)
+        locations[index].canWrite = true
+        try save()
+    }
+
+    /// Whether Proof may write next to `url`, such as a sidecar beside a photo.
+    public func canWrite(to url: URL) -> Bool {
+        location(containing: url)?.canWrite ?? false
     }
 
     /// Resolves a location and holds access to it. A location that moved or was renamed
