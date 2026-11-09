@@ -23,6 +23,9 @@ struct ReferenceRenderTests {
     /// adjustments here and record the edited reference again.
     static let edited: EditRecipe = {
         var recipe = EditRecipe()
+        recipe.basic.whiteBalance = .custom
+        recipe.basic.temperature = 4800
+        recipe.basic.tint = 12
         recipe.basic.exposure = 0.7
         return recipe
     }()

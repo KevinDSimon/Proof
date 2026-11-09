@@ -22,6 +22,8 @@ public actor RAWRenderer {
     private let commandQueue: MTLCommandQueue
     private var filter: CIRAWFilter?
     private var openURL: URL?
+    /// The open photo's camera white balance, read before any render changes the filter's.
+    private var asShot = WhiteBalance(temperature: 6500, tint: 0)
     /// Separate from `context` and without cached intermediates, so thumbnails of many photos
     /// don't fill GPU memory or evict the open photo's decode.
     private lazy var thumbnailContext = CIContext(mtlCommandQueue: commandQueue, options: [
@@ -57,6 +59,7 @@ public actor RAWRenderer {
         // Only one photo's decode stays in GPU memory.
         context.clearCaches()
         self.filter = filter
+        asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
         openURL = url
     }
 
@@ -77,7 +80,7 @@ public actor RAWRenderer {
     func render(scaleFactor scale: CGFloat, recipe: EditRecipe) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         filter.scaleFactor = Float(scale)
-        guard let image = Self.apply(recipe, to: filter) else { throw RAWRendererError.renderFailed }
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot) else { throw RAWRendererError.renderFailed }
 
         let extent = image.extent.integral
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -109,7 +112,8 @@ public actor RAWRenderer {
         }
         let size = CGSize(width: maxPixelSize, height: maxPixelSize)
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation, fitting: size))
-        guard let image = Self.apply(recipe, to: filter),
+        let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot),
               let thumbnail = thumbnailContext.createCGImage(image, from: image.extent.integral, format: .RGBA8,
                                                              colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
@@ -148,8 +152,12 @@ public actor RAWRenderer {
     /// Builds the Core Image graph for `recipe` in the order set out in docs/architecture.md. The
     /// canvas, thumbnails and export all go through here, so they can't drift apart. Stages that
     /// have no controls yet pass the image through; each one is filled in by its own issue.
-    static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter) -> CIImage? {
-        // 1. RAW decode in linear light. Exposure is in stops.
+    /// `asShot` is the camera's white balance, which a filter reused across renders has lost.
+    static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance) -> CIImage? {
+        // 1. RAW decode in linear light. White balance is in Kelvin and tint; exposure in stops.
+        let whiteBalance = recipe.basic.whiteBalance(asShot: asShot)
+        filter.neutralTemperature = Float(whiteBalance.temperature)
+        filter.neutralTint = Float(whiteBalance.tint)
         filter.exposure = Float(recipe.basic.exposure)
         // 2. Tone, 3. color, 4. LUT, 5. layers and 6. crop follow here as they are built.
         return filter.outputImage

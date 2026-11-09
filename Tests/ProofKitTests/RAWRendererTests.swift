@@ -98,6 +98,46 @@ struct RAWRendererTests {
         #expect(actual == expected)
     }
 
+    @Test("A higher temperature warms a real RAW photo and a positive tint adds magenta", .enabled(if: sampleDNG != nil))
+    func whiteBalanceShiftsColor() async throws {
+        let url = try #require(sampleDNG)
+        let renderer = try RAWRenderer()
+        try await renderer.open(url)
+        let target = CGSize(width: 400, height: 400)
+        func average(temperature: Double, tint: Double) async throws -> [Float] {
+            var recipe = EditRecipe()
+            recipe.basic.setTemperature(temperature)
+            recipe.basic.setTint(tint)
+            return try averageColor(await renderer.render(fitting: target, recipe: recipe))
+        }
+        let cool = try await average(temperature: 3000, tint: 0)
+        let warm = try await average(temperature: 9000, tint: 0)
+        #expect(warm[0] / warm[2] > cool[0] / cool[2])
+        let green = try await average(temperature: 5500, tint: -50)
+        let magenta = try await average(temperature: 5500, tint: 50)
+        #expect(magenta[1] < green[1])
+    }
+
+    /// The renderer reuses one filter, so after a white balance change As Shot has to put the
+    /// camera's values back rather than keep the last ones.
+    @Test("Returning to As Shot renders the same pixels as a fresh renderer", .enabled(if: sampleDNG != nil))
+    func asShotAfterChangeMatchesFresh() async throws {
+        let url = try #require(sampleDNG)
+        let target = CGSize(width: 400, height: 400)
+
+        let fresh = try RAWRenderer()
+        try await fresh.open(url)
+        let expected = try pixels(await fresh.render(fitting: target))
+
+        let reused = try RAWRenderer()
+        try await reused.open(url)
+        var tungsten = EditRecipe()
+        tungsten.basic.choose(.tungsten)
+        _ = try await reused.render(fitting: target, recipe: tungsten)
+        let actual = try pixels(await reused.render(fitting: target))
+        #expect(actual == expected)
+    }
+
     /// Records how long an exposure change takes to render, for issue #3. Each size is warmed up
     /// once, then timed over several exposure values; the median is printed.
     @Test("Exposure render timings at full resolution and a quarter", .enabled(if: sampleDNG != nil))
@@ -154,12 +194,18 @@ struct RAWRendererTests {
     }
 
     private func averageLuminance(_ photo: RenderedPhoto) throws -> Double {
+        let pixel = try averageColor(photo)
+        return Double(0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2])
+    }
+
+    /// The photo's average red, green, blue and alpha.
+    private func averageColor(_ photo: RenderedPhoto) throws -> [Float] {
         let image = try #require(CIImage(mtlTexture: photo.texture, options: [.colorSpace: RAWRenderer.colorSpace]))
         let average = image.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: image.extent)])
         var pixel = [Float](repeating: 0, count: 4)
         CIContext().render(average, toBitmap: &pixel, rowBytes: 16, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
                            format: .RGBAf, colorSpace: RAWRenderer.colorSpace)
-        return Double(0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2])
+        return pixel
     }
 }
 
