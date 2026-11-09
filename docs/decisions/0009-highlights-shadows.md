@@ -15,4 +15,4 @@ Issue #14 adds the Highlights and Shadows sliders. Core Image has `CIHighlightSh
 ## Consequences
 - The kernel compiles on its first use, which adds about 120 ms to that one render. After that, a highlights or shadows change renders a full-window image in about 6 ms on an M2.
 - Compiling at run time needs a GPU that supports dynamic libraries, which every Apple silicon Mac, iPad and iPhone does. Where it isn't supported, the sliders have no effect rather than failing the render.
-- The strengths and the area size were tuned on one photo. Comparison on a backlit scene, a high-contrast scene and a dark interior is still owed in #14, and may change the numbers before a release fixes them.
+- The strengths and the area size were tuned on one photo, by the owner's choice. Photos with other kinds of light may call for different numbers; changing them after a release renders these values needs a new `processVersion`.
