@@ -32,6 +32,10 @@ public actor RAWRenderer {
         .cacheIntermediates: false,
     ])
 
+    /// For the histogram only. Float, so sparse bins keep their precision; nonisolated, so
+    /// measuring never queues behind the next render on the actor. `CIContext` is thread-safe.
+    private nonisolated let histogramContext: CIContext
+
     public init(device: MTLDevice? = MTLCreateSystemDefaultDevice()) throws {
         guard let device, let commandQueue = device.makeCommandQueue() else {
             throw RAWRendererError.noMetalDevice
@@ -45,6 +49,11 @@ public actor RAWRenderer {
             .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
             .workingFormat: CIFormat.RGBAh,
             .cacheIntermediates: true,
+        ])
+        histogramContext = CIContext(mtlCommandQueue: commandQueue, options: [
+            .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
+            .workingFormat: CIFormat.RGBAf,
+            .cacheIntermediates: false,
         ])
     }
 
@@ -118,6 +127,15 @@ public actor RAWRenderer {
                                                              colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
         return thumbnail
+    }
+
+    /// The histogram of a photo from `render(fitting:)`: what the canvas shows, at screen size,
+    /// not the full-resolution photo. It reads the finished texture and renders nothing again.
+    public nonisolated func histogram(of photo: RenderedPhoto) throws -> Histogram {
+        guard let image = CIImage(mtlTexture: photo.texture, options: [.colorSpace: Self.colorSpace]),
+              let histogram = Histogram.measure(image, colorSpace: Self.colorSpace, context: histogramContext)
+        else { throw RAWRendererError.renderFailed }
+        return histogram
     }
 
     /// Draws a photo from `render(fitting:)` centered in `drawable`, scaled to fit, over

@@ -328,7 +328,18 @@ struct EditCanvas: View {
         PhotoCanvas(url: url, renderer: renderer, recipe: library.selectedEdit?.recipe ?? EditRecipe(),
                     backdropGray: PhotoCanvas.backdropGray(for: colorScheme)) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
+        } onHistogram: { histogram, url in
+            library.showHistogram(histogram, of: url)
         }
+    }
+}
+
+/// Reads the histogram in its own body, so a new one redraws only the graph, not the inspector.
+private struct SelectedHistogram: View {
+    let library: Library
+
+    var body: some View {
+        HistogramView(histogram: library.selectedHistogram)
     }
 }
 
@@ -340,6 +351,11 @@ struct AdjustmentsInspector: View {
 
     var body: some View {
         Form {
+            Section {
+                SelectedHistogram(library: library)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
             Section {
                 Picker("Preset", selection: Binding(get: { basic.whiteBalance },
                                                     set: { preset in library.changeEdit { $0.basic.choose(preset) } })) {
