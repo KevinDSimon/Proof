@@ -60,6 +60,7 @@ struct AdjustmentSlider: View {
             } onEditingChanged: { isAdjusting($0) }
                 .labelsHidden()
                 .controlSize(.small)
+                .tint(track.isEmpty ? nil : .clear)
                 .background(alignment: .center) { trackBackground }
                 .accessibilityValue("\(formatted(value)) \(unit)")
                 .accessibilityAction(named: "Reset", reset)
@@ -98,7 +99,9 @@ struct AdjustmentSlider: View {
 
     private func commitText() {
         let typed = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "+", with: "")
-        if let number = Double(typed) { set(number) } else { text = formatted(value) }
+        // Leaving the field without a change mustn't set the value: for white balance that
+        // would turn As Shot into Custom.
+        if let number = Double(typed), formatted(number) != formatted(value) { set(number) } else { text = formatted(value) }
     }
 
     private func formatted(_ number: Double) -> String {
