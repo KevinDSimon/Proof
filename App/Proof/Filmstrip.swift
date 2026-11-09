@@ -74,6 +74,7 @@ struct Filmstrip: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
+                    .ratingBadges(photo.metadata, size: 8)
             } else if finished.contains(photo.name) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
@@ -92,7 +93,7 @@ struct Filmstrip: View {
         }
         .help(photo.name)
         .accessibilityElement()
-        .accessibilityLabel(photo.name)
+        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.metadata))
         .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
     }
 }

@@ -20,13 +20,17 @@ final class Library {
         didSet {
             UserDefaults.standard.set(try? JSONEncoder().encode(selection), forKey: Self.selectionKey)
             if selection != oldValue {
+                changedPhotos = []
                 browse = BrowseState()
                 readEmbeddedMetadata()
             }
         }
     }
     var filter: PhotoFilter = .all {
-        didSet { browse.keep(only: visiblePhotos) }
+        didSet {
+            changedPhotos = []
+            browse.keep(only: visiblePhotos)
+        }
     }
     var browse = BrowseState()
     var isInspectorShown = true
@@ -37,6 +41,9 @@ final class Library {
 
     private let fileAccess: FileAccess?
     private var metadataTask: Task<Void, Never>?
+    /// Photos whose rating or flag was changed since the filter or folder last changed. They stay
+    /// visible even if the filter no longer matches, so a photo doesn't vanish while it's rated.
+    private var changedPhotos: Set<String> = []
     private static let selectionKey = "selectedFolder"
 
     init() {
@@ -55,7 +62,7 @@ final class Library {
     /// The selected folder's photos that pass the filter.
     var visiblePhotos: [FolderContents.Photo] {
         guard let selection, let contents = contents[selection] else { return [] }
-        return contents.photos.filter(filter.includes)
+        return contents.photos.filter { filter.includes($0) || changedPhotos.contains($0.name) }
     }
 
     /// Reads a folder off the main thread. Already-read folders are read again only when `force` is set.
@@ -89,6 +96,33 @@ final class Library {
     }
 
     var isEditing: Bool { browse.mode == .editing }
+
+    /// What other apps recorded in XMP for the selected photo; `nil` until it has been read.
+    var selectedPhotoMetadata: PhotoMetadata? {
+        guard let selection, let name = browse.selectedPhoto else { return nil }
+        return contents[selection]?.photos.first { $0.name == name }?.metadata
+    }
+
+    /// Sets the selected photo's stars. Not saved: Proof doesn't write XMP yet, so the change
+    /// lasts until the folder is read again or Proof quits.
+    func setRating(_ rating: Int) {
+        changeSelectedMetadata { $0.rating = rating }
+    }
+
+    /// Sets the selected photo's flag. Not saved, like `setRating`.
+    func setFlag(_ flag: PhotoMetadata.Flag) {
+        changeSelectedMetadata { $0.flag = flag }
+    }
+
+    private func changeSelectedMetadata(_ change: (inout PhotoMetadata) -> Void) {
+        guard let selection, let name = browse.selectedPhoto,
+              let index = contents[selection]?.photos.firstIndex(where: { $0.name == name })
+        else { return }
+        var metadata = contents[selection]?.photos[index].metadata ?? .unrated
+        change(&metadata)
+        contents[selection]?.photos[index].metadata = metadata
+        changedPhotos.insert(name)
+    }
 
     /// The file of the selected photo.
     var selectedPhotoURL: URL? {

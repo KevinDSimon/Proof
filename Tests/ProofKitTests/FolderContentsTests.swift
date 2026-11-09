@@ -114,4 +114,13 @@ struct FolderContentsTests {
         for await batch in FolderContents.embeddedMetadata(of: urls) { contents.setMetadata(batch) }
         #expect(contents.photos.map(\.metadata) == [.unrated, .init(rating: 4)])
     }
+
+    @Test("Metadata read from the photos fills in only photos that have none yet")
+    func setMetadataKeepsExisting() {
+        var contents = FolderContents(subfolders: [], photos: [
+            .init(name: "A.DNG", isEdited: false, metadata: .init(rating: 2)),
+            .init(name: "B.DNG", isEdited: false)])
+        contents.setMetadata(["A.DNG": .init(rating: 5), "B.DNG": .init(rating: 4)])
+        #expect(contents.photos.map(\.metadata?.rating) == [2, 4])
+    }
 }
