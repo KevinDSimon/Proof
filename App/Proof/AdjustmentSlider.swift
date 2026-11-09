@@ -1,8 +1,9 @@
+import AppKit
 import SwiftUI
 
 /// One adjustment in the inspector: its name and value on one line, the slider below.
 /// The value can be typed. Up and Down arrows in it step by `step`, by `coarseStep` with Shift
-/// and by `fineStep` with Option. Double-clicking the name resets the adjustment.
+/// and by `fineStep` with Option. Double-clicking the name or the slider resets the adjustment.
 struct AdjustmentSlider: View {
     let title: String
     @Binding var value: Double
@@ -57,7 +58,14 @@ struct AdjustmentSlider: View {
                                   set: { set(valueAtPosition?($0) ?? denormalized($0)) }),
                    in: 0...1) {
                 Text(title)
-            } onEditingChanged: { isAdjusting($0) }
+            } onEditingChanged: { editing in
+                isAdjusting(editing)
+                // The slider tracks the mouse itself, so a tap gesture on it never fires. A
+                // double-click shows up as the click count of the press that starts the drag.
+                if editing, let event = NSApp.currentEvent, event.type == .leftMouseDown, event.clickCount == 2 {
+                    reset()
+                }
+            }
                 .labelsHidden()
                 .controlSize(.small)
                 .tint(track.isEmpty ? nil : .clear)
