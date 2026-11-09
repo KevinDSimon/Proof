@@ -14,8 +14,7 @@ struct PhotoCanvas: NSViewRepresentable {
 
     let url: URL
     let renderer: RAWRenderer
-    /// In stops.
-    var exposure: Double
+    var recipe: EditRecipe
     /// The gray of the canvas around the photo, from 0 to 1.
     var backdropGray: Double
     var onError: (Error) -> Void
@@ -41,7 +40,7 @@ struct PhotoCanvas: NSViewRepresentable {
     func updateNSView(_ view: MTKView, context: Context) {
         context.coordinator.onError = onError
         context.coordinator.setBackdrop(backdropGray)
-        context.coordinator.show(url, exposure: exposure)
+        context.coordinator.show(url, recipe: recipe)
     }
 }
 
@@ -55,14 +54,14 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     private struct RenderRequest: Equatable {
         var url: URL
         var size: CGSize
-        var exposure: Double
+        var recipe: EditRecipe
     }
 
     private let renderer: RAWRenderer
     private let commandQueue: MTLCommandQueue?
     private var url: URL?
     private var size: CGSize = .zero
-    private var exposure: Double = 0
+    private var recipe = EditRecipe()
     private var photo: RenderedPhoto?
     /// What `photo` was rendered from, or the request that failed, so it isn't retried.
     private var rendered: RenderRequest?
@@ -85,14 +84,14 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         view?.needsDisplay = true
     }
 
-    func show(_ url: URL, exposure: Double) {
+    func show(_ url: URL, recipe: EditRecipe) {
         if url != self.url {
             self.url = url
             photo = nil
             view?.needsDisplay = true
         }
         if size == .zero { size = view?.drawableSize ?? .zero }
-        self.exposure = exposure
+        self.recipe = recipe
         renderLatest()
     }
 
@@ -120,7 +119,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
 
     private var latest: RenderRequest? {
         guard let url, size.width > 0, size.height > 0 else { return nil }
-        return RenderRequest(url: url, size: size, exposure: exposure)
+        return RenderRequest(url: url, size: size, recipe: recipe)
     }
 
     /// Runs one render at a time. A render in flight is never discarded: while a slider is
@@ -133,7 +132,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
             let start = ContinuousClock.now
             do {
                 try await renderer.open(request.url)
-                let result = try await renderer.render(fitting: request.size, exposure: request.exposure)
+                let result = try await renderer.render(fitting: request.size, recipe: request.recipe)
                 let ms = (ContinuousClock.now - start) / .milliseconds(1)
                 Self.log.debug("Rendered \(result.texture.width)×\(result.texture.height) in \(ms, format: .fixed(precision: 1)) ms")
                 if request.url == url {

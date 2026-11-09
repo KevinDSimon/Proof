@@ -72,8 +72,8 @@ struct RAWRendererTests {
         try await renderer.open(try #require(sampleDNG))
         let target = CGSize(width: 400, height: 400)
         let base = try averageLuminance(await renderer.render(fitting: target))
-        let brighter = try averageLuminance(await renderer.render(fitting: target, exposure: 1))
-        let darker = try averageLuminance(await renderer.render(fitting: target, exposure: -1))
+        let brighter = try averageLuminance(await renderer.render(fitting: target, recipe: .exposure(1)))
+        let darker = try averageLuminance(await renderer.render(fitting: target, recipe: .exposure(-1)))
         #expect(brighter > base)
         #expect(darker < base)
     }
@@ -87,14 +87,14 @@ struct RAWRendererTests {
 
         let fresh = try RAWRenderer()
         try await fresh.open(url)
-        let expected = try pixels(await fresh.render(fitting: target, exposure: 1))
+        let expected = try pixels(await fresh.render(fitting: target, recipe: .exposure(1)))
 
         let reused = try RAWRenderer()
         try await reused.open(url)
         for exposure in [0.0, 1, -1] {
-            _ = try await reused.render(fitting: target, exposure: exposure)
+            _ = try await reused.render(fitting: target, recipe: .exposure(exposure))
         }
-        let actual = try pixels(await reused.render(fitting: target, exposure: 1))
+        let actual = try pixels(await reused.render(fitting: target, recipe: .exposure(1)))
         #expect(actual == expected)
     }
 
@@ -105,18 +105,41 @@ struct RAWRendererTests {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))
         for scale in [1.0, 0.25] {
-            _ = try await renderer.render(scaleFactor: scale, exposure: 0)
+            _ = try await renderer.render(scaleFactor: scale, recipe: EditRecipe())
             var times: [Double] = []
             var size = ""
             for exposure in [0.5, -0.5, 1, -1, 1.5, -1.5, 2] {
                 let start = ContinuousClock.now
-                let photo = try await renderer.render(scaleFactor: scale, exposure: exposure)
+                let photo = try await renderer.render(scaleFactor: scale, recipe: .exposure(exposure))
                 times.append((ContinuousClock.now - start) / .milliseconds(1))
                 size = "\(photo.texture.width)×\(photo.texture.height)"
             }
             times.sort()
             let median = times[times.count / 2]
             print("Exposure render at scaleFactor \(scale) (\(size)): median \(String(format: "%.1f", median)) ms, "
+                + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
+        }
+    }
+
+    /// Records how long an exposure change takes at window sizes, to decide whether a slider
+    /// drag needs a reduced preview. Each size is warmed up once; the median is printed.
+    @Test("Exposure render timings at window sizes", .enabled(if: sampleDNG != nil))
+    func windowTimings() async throws {
+        let renderer = try RAWRenderer()
+        try await renderer.open(try #require(sampleDNG))
+        for target in [CGSize(width: 1600, height: 1000), CGSize(width: 2880, height: 1800), CGSize(width: 3456, height: 2234)] {
+            _ = try await renderer.render(fitting: target)
+            var times: [Double] = []
+            var size = ""
+            for exposure in [0.5, -0.5, 1, -1, 1.5, -1.5, 2, 0.25, -0.25] {
+                let start = ContinuousClock.now
+                let photo = try await renderer.render(fitting: target, recipe: .exposure(exposure))
+                times.append((ContinuousClock.now - start) / .milliseconds(1))
+                size = "\(photo.texture.width)×\(photo.texture.height)"
+            }
+            times.sort()
+            print("Window render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
+                + "\(String(format: "%.1f", times[times.count / 2])) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
         }
     }
@@ -140,4 +163,12 @@ struct RAWRendererTests {
     }
 }
 
-private let sampleDNG = ProcessInfo.processInfo.environment["PROOF_SAMPLE_DNG"].map(URL.init(fileURLWithPath:))
+let sampleDNG = ProcessInfo.processInfo.environment["PROOF_SAMPLE_DNG"].map(URL.init(fileURLWithPath:))
+
+extension EditRecipe {
+    static func exposure(_ stops: Double) -> EditRecipe {
+        var recipe = EditRecipe()
+        recipe.basic.exposure = stops
+        return recipe
+    }
+}

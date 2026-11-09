@@ -60,26 +60,24 @@ public actor RAWRenderer {
         openURL = url
     }
 
-    /// Renders the open photo scaled to fit `targetSize` (in pixels), never larger than the
-    /// sensor. The texture has the photo's aspect ratio, not the target's. `exposure` is in
-    /// stops and is applied by the RAW decoder in linear light.
-    public func render(fitting targetSize: CGSize, exposure: Double = 0) throws -> RenderedPhoto {
+    /// Renders the open photo with `recipe` applied, scaled to fit `targetSize` (in pixels) and
+    /// never larger than the sensor. The texture has the photo's aspect ratio, not the target's.
+    public func render(fitting targetSize: CGSize, recipe: EditRecipe = EditRecipe()) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         let scale = Self.scaleFactor(
             nativeSize: filter.nativeSize,
             orientation: filter.orientation,
             fitting: targetSize
         )
-        return try render(scaleFactor: scale, exposure: exposure)
+        return try render(scaleFactor: scale, recipe: recipe)
     }
 
     /// Renders at an exact `CIRAWFilter.scaleFactor`. Internal so that only export and timing
     /// tests can ask for full sensor resolution; the app goes through `render(fitting:)`.
-    func render(scaleFactor scale: CGFloat, exposure: Double) throws -> RenderedPhoto {
+    func render(scaleFactor scale: CGFloat, recipe: EditRecipe) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         filter.scaleFactor = Float(scale)
-        filter.exposure = Float(exposure)
-        guard let image = filter.outputImage else { throw RAWRendererError.renderFailed }
+        guard let image = Self.apply(recipe, to: filter) else { throw RAWRendererError.renderFailed }
 
         let extent = image.extent.integral
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -111,8 +109,7 @@ public actor RAWRenderer {
         }
         let size = CGSize(width: maxPixelSize, height: maxPixelSize)
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation, fitting: size))
-        filter.exposure = Float(recipe.basic.exposure)
-        guard let image = filter.outputImage,
+        guard let image = Self.apply(recipe, to: filter),
               let thumbnail = thumbnailContext.createCGImage(image, from: image.extent.integral, format: .RGBA8,
                                                              colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
@@ -146,6 +143,16 @@ public actor RAWRenderer {
         destination.colorSpace = Self.colorSpace
         destination.isFlipped = true
         try context.startTask(toRender: composed, to: destination)
+    }
+
+    /// Builds the Core Image graph for `recipe` in the order set out in docs/architecture.md. The
+    /// canvas, thumbnails and export all go through here, so they can't drift apart. Stages that
+    /// have no controls yet pass the image through; each one is filled in by its own issue.
+    static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter) -> CIImage? {
+        // 1. RAW decode in linear light. Exposure is in stops.
+        filter.exposure = Float(recipe.basic.exposure)
+        // 2. Tone, 3. color, 4. LUT, 5. layers and 6. crop follow here as they are built.
+        return filter.outputImage
     }
 
     public static let pixelFormat = MTLPixelFormat.bgra8Unorm

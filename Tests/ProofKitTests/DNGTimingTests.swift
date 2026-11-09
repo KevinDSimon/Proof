@@ -38,12 +38,12 @@ struct DNGTimingTests {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(timingDNG))
         for scale in [0.25, 0.125] {
-            _ = try await renderer.render(scaleFactor: scale, exposure: 0)
+            _ = try await renderer.render(scaleFactor: scale, recipe: EditRecipe())
             var size = ""
             var times: [Double] = []
             for exposure in [0.5, -0.5, 1, -1, 1.5, -1.5, 2] {
                 let start = ContinuousClock.now
-                let photo = try await renderer.render(scaleFactor: scale, exposure: exposure)
+                let photo = try await renderer.render(scaleFactor: scale, recipe: .exposure(exposure))
                 times.append((ContinuousClock.now - start) / .milliseconds(1))
                 size = "\(photo.texture.width)×\(photo.texture.height)"
             }
@@ -64,7 +64,7 @@ struct DNGTimingTests {
             let start = ContinuousClock.now
             try await renderer.open(url)
             opens.append((ContinuousClock.now - start) / .milliseconds(1))
-            let photo = try await renderer.render(scaleFactor: 1, exposure: 0)
+            let photo = try await renderer.render(scaleFactor: 1, recipe: EditRecipe())
             totals.append((ContinuousClock.now - start) / .milliseconds(1))
             size = "\(photo.texture.width)×\(photo.texture.height)"
         }
