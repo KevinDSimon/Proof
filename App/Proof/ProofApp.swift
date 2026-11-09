@@ -465,12 +465,10 @@ struct AdjustmentsInspector: View {
     private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
     /// Dark to light, the way exposure moves the photo.
     private static let exposureTrack = [Color(white: 0.08), Color(white: 0.97)]
-    /// The part of the tonal range each one moves: the bright end for Highlights, the dark end
-    /// for Shadows.
-    private static let highlightsTrack = [Color(white: 0.5), Color(white: 0.97)]
-    private static let shadowsTrack = [Color(white: 0.08), Color(white: 0.5)]
-    /// Dark to light end to end, as Lightroom draws its tone sliders.
+    /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
     private static let contrastTrack = exposureTrack
+    private static let highlightsTrack = exposureTrack
+    private static let shadowsTrack = exposureTrack
     private static let whitesTrack = exposureTrack
     private static let blacksTrack = exposureTrack
 
