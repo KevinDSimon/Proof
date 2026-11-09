@@ -9,6 +9,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "ProofKit"),
-        .testTarget(name: "ProofKitTests", dependencies: ["ProofKit"]),
+        // Reference renders are read from source by path, not bundled.
+        .testTarget(name: "ProofKitTests", dependencies: ["ProofKit"], exclude: ["References"]),
     ]
 )

@@ -37,10 +37,16 @@ swift build
 swift test
 ```
 
-RAW files are never committed, so the test that renders a real photo runs only when `PROOF_SAMPLE_DNG` names one:
+RAW files are never committed, so the tests that render a real photo run only when `PROOF_SAMPLE_DNG` names one:
 
 ```bash
 PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG swift test
+```
+
+Reference renders of that photo, with no edit and with an edit, are kept as PNGs in `Tests/ProofKitTests/References` together with a fingerprint of the photo. They are compared only when `PROOF_SAMPLE_DNG` names the same photo. After a change that is meant to alter pixels, record them again and say in the pull request which renders changed and why:
+
+```bash
+PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG PROOF_RECORD_REFERENCES=1 swift test --filter ReferenceRenderTests
 ```
 
 To run the Mac app:
