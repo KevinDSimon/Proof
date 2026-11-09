@@ -355,7 +355,7 @@ struct AdjustmentsInspector: View {
             Section {
                 SelectedHistogram(library: library)
             } header: {
-                Text("Histogram")
+                SectionTitle("Histogram")
             } footer: {
                 CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
             }
@@ -492,6 +492,11 @@ struct AdjustmentsInspector: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        // More room than the grouped form's default, which reads as tight beside the photo.
+        // Sections are spaced apart by their headers' top padding: macOS has no
+        // `listSectionSpacing`.
+        .contentMargins(.horizontal, 14, for: .scrollContent)
+        .contentMargins(.vertical, 8, for: .scrollContent)
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 
@@ -570,5 +575,22 @@ struct SectionHeader: View {
                 .disabled(!canReset)
                 .accessibilityLabel("Reset \(title)")
         }
+        .padding(.top, SectionTitle.spacing)
+    }
+}
+
+/// A section header with no Reset button, spaced like `SectionHeader`.
+struct SectionTitle: View {
+    /// Extra space above each header, which is what separates the inspector's sections.
+    static let spacing: CGFloat = 14
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .padding(.top, Self.spacing)
     }
 }
