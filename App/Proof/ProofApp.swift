@@ -339,7 +339,7 @@ private struct SelectedHistogram: View {
     let library: Library
 
     var body: some View {
-        HistogramView(histogram: library.selectedHistogram, settings: library.selectedEdit?.captureSettings)
+        HistogramView(histogram: library.selectedHistogram)
             .equatable()
     }
 }
@@ -352,6 +352,13 @@ struct AdjustmentsInspector: View {
 
     var body: some View {
         Form {
+            Section {
+                SelectedHistogram(library: library)
+            } header: {
+                Text("Histogram")
+            } footer: {
+                CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
+            }
             Section {
                 Picker("Preset", selection: Binding(get: { basic.whiteBalance },
                                                     set: { preset in library.changeEdit { $0.basic.choose(preset) } })) {
@@ -485,14 +492,6 @@ struct AdjustmentsInspector: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        // Outside the form, so it fills the panel's width without a section card around it, and
-        // stays in view while the adjustments scroll under it.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            SelectedHistogram(library: library)
-                .padding(.horizontal, 10)
-                .padding(.top, 12)
-                .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)))
-        }
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 

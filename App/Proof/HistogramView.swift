@@ -1,64 +1,39 @@
 import ProofKit
 import SwiftUI
 
-/// The red, green and blue histogram at the top of the inspector, in a dark well in both
-/// appearances, with the camera settings under it. Each channel is a see-through fill with a
-/// solid outline, so every channel's shape stays readable where they overlap; the fills add up
-/// like light, so where all three overlap they read as gray. Like the slider tracks, it shows
-/// the photo's colors, so it is an exception to the inspector's gray.
+/// The red, green and blue histogram in the inspector's Histogram section. Each channel is a
+/// see-through fill with a solid outline, so every channel's shape stays readable where they
+/// overlap. On the dark card the fills add up like light, so where all three overlap they read
+/// as gray; on the light card adding would wash them out, so they are simply layered. Like the
+/// slider tracks, it shows the photo's colors, so it is an exception to the inspector's gray.
 struct HistogramView: View, Equatable {
     var histogram: Histogram?
-    var settings: CaptureSettings?
+    @Environment(\.colorScheme) private var colorScheme
 
-    var body: some View {
-        VStack(spacing: 6) {
-            graph
-                .frame(height: 84)
-            info
-        }
-        .padding(8)
-        .background(Color(white: 0.13), in: .rect(cornerRadius: 6))
+    nonisolated static func == (lhs: HistogramView, rhs: HistogramView) -> Bool {
+        lhs.histogram == rhs.histogram
     }
 
-    private var graph: some View {
-        Canvas { context, size in
+    var body: some View {
+        Canvas { [colorScheme] context, size in
             guard let histogram else { return }
             let peak = Self.peak(of: histogram)
-            context.blendMode = .plusLighter
             let channels = [(histogram.red, Self.red), (histogram.green, Self.green), (histogram.blue, Self.blue)]
             let areas = channels.map { bins, color in (Self.area(of: bins, peak: peak, in: size), color) }
+            context.blendMode = colorScheme == .dark ? .plusLighter : .normal
             for (area, color) in areas {
-                context.fill(area, with: .color(color.opacity(0.35)))
+                context.fill(area, with: .color(color.opacity(colorScheme == .dark ? 0.35 : 0.2)))
             }
             context.blendMode = .normal
             for (area, color) in areas {
                 context.stroke(area, with: .color(color), lineWidth: 1.25)
             }
         }
+        .frame(height: 84)
         .clipped()
         .accessibilityElement()
         .accessibilityLabel("Histogram")
         .accessibilityValue(histogram.map(Self.summary) ?? "No photo measured")
-    }
-
-    /// ISO, focal length, aperture and shutter speed spread across the well, as in Lightroom.
-    /// Each is left out when the photo doesn't record it.
-    @ViewBuilder private var info: some View {
-        let values = [settings?.formattedISO, settings?.formattedFocalLength,
-                      settings?.formattedAperture, settings?.formattedShutterSpeed].compactMap { $0 }
-        HStack {
-            ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                if index > 0 { Spacer(minLength: 4) }
-                Text(value)
-            }
-        }
-        .font(.caption.monospacedDigit())
-        .foregroundStyle(Color(white: 0.7))
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        // Keeps the well's height while the settings are read, so the sliders don't jump.
-        .frame(maxWidth: .infinity, minHeight: 14)
-        .accessibilityElement(children: .combine)
     }
 
     private static let red = Color(red: 0.95, green: 0.3, blue: 0.3)
@@ -93,5 +68,28 @@ struct HistogramView: View, Equatable {
         let highlights = channels.map { $0[Histogram.binCount - 1] }.max() ?? 0
         let percent = FloatingPointFormatStyle<Float>.Percent().precision(.fractionLength(0...1))
         return "Shadows clipped \(shadows.formatted(percent)), highlights clipped \(highlights.formatted(percent))"
+    }
+}
+
+/// ISO, focal length, aperture and shutter speed under the histogram, spread across its width
+/// as in Lightroom. Each is left out when the photo doesn't record it.
+struct CaptureSettingsLine: View {
+    var settings: CaptureSettings?
+
+    var body: some View {
+        let values = [settings?.formattedISO, settings?.formattedFocalLength,
+                      settings?.formattedAperture, settings?.formattedShutterSpeed].compactMap { $0 }
+        HStack {
+            ForEach(Array(values.enumerated()), id: \.offset) { index, value in
+                if index > 0 { Spacer(minLength: 4) }
+                Text(value)
+            }
+        }
+        .font(.caption.monospacedDigit())
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        // Keeps its height while the settings are read, so the sliders don't jump.
+        .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
