@@ -33,7 +33,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | --- | --- |
 | `formatVersion` | Version of this JSON layout. Bumped when fields are renamed or restructured; older files are migrated on read. |
 | `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. |
-| `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. |
+| `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. |
 | `curve` | Control points per channel, each `[input, output]` from 0 to 1, sorted by input. |
 | `look` | The LUT's file name in the LUT library and its strength from 0 to 1. `null` for none. |
 | `crop` | Normalized rectangle and rotation angle. `null` for none. |

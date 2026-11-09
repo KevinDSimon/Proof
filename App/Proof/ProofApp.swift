@@ -382,6 +382,14 @@ struct AdjustmentsInspector: View {
                     reset: { library.changeEdit { $0.basic.exposure = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
+                    title: "Contrast",
+                    value: Binding(get: { basic.contrast },
+                                   set: { value in library.changeEdit { $0.basic.contrast = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.contrastTrack,
+                    reset: { library.changeEdit { $0.basic.contrast = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
                     title: "Highlights",
                     value: Binding(get: { basic.highlights },
                                    set: { value in library.changeEdit { $0.basic.highlights = value } }),
@@ -397,12 +405,32 @@ struct AdjustmentsInspector: View {
                     showsSign: true, track: Self.shadowsTrack,
                     reset: { library.changeEdit { $0.basic.shadows = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Whites",
+                    value: Binding(get: { basic.whites },
+                                   set: { value in library.changeEdit { $0.basic.whites = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.whitesTrack,
+                    reset: { library.changeEdit { $0.basic.whites = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Blacks",
+                    value: Binding(get: { basic.blacks },
+                                   set: { value in library.changeEdit { $0.basic.blacks = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.blacksTrack,
+                    reset: { library.changeEdit { $0.basic.blacks = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
             } header: {
-                SectionHeader(title: "Light", canReset: basic.exposure != 0 || basic.highlights != 0 || basic.shadows != 0) {
+                SectionHeader(title: "Light", canReset: basic.exposure != 0 || basic.contrast != 0 || basic.highlights != 0
+                              || basic.shadows != 0 || basic.whites != 0 || basic.blacks != 0) {
                     library.changeEdit {
                         $0.basic.exposure = 0
+                        $0.basic.contrast = 0
                         $0.basic.highlights = 0
                         $0.basic.shadows = 0
+                        $0.basic.whites = 0
+                        $0.basic.blacks = 0
                     }
                 }
             }
@@ -441,6 +469,11 @@ struct AdjustmentsInspector: View {
     /// for Shadows.
     private static let highlightsTrack = [Color(white: 0.5), Color(white: 0.97)]
     private static let shadowsTrack = [Color(white: 0.08), Color(white: 0.5)]
+    /// Whites and Blacks reach further toward each end than Highlights and Shadows.
+    private static let whitesTrack = [Color(white: 0.75), Color(white: 1)]
+    private static let blacksTrack = [Color(white: 0), Color(white: 0.25)]
+    /// Flat gray at low contrast, black against white at high contrast.
+    private static let contrastTrack = [Color(white: 0.5), Color(white: 0.5), Color(white: 0.08), Color(white: 0.97)]
 
     private static func fading(_ start: Color, into end: Color) -> [Color] {
         [start, start.opacity(0.15), end.opacity(0.15), end]
