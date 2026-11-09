@@ -49,6 +49,12 @@ Reference renders of that photo, with no edit and with an edit, are kept as PNGs
 PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG PROOF_RECORD_REFERENCES=1 swift test --filter ReferenceRenderTests
 ```
 
+To compare Highlights and Shadows with Core Image's `CIHighlightShadowAdjust`, point `PROOF_COMPARE_DIR` at a folder of RAW photos. The test writes one strip per photo and method to `PROOF_COMPARE_OUTPUT`, or to a temporary folder:
+
+```bash
+PROOF_COMPARE_DIR=~/Pictures/Compare PROOF_COMPARE_OUTPUT=~/Desktop/compare swift test --filter comparisonStrips
+```
+
 To run the Mac app:
 
 1. Open `App/Proof.xcodeproj` in Xcode. Xcode resolves the `ProofKit` package from the repository root.

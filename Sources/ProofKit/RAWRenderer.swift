@@ -159,8 +159,11 @@ public actor RAWRenderer {
         filter.neutralTemperature = Float(whiteBalance.temperature)
         filter.neutralTint = Float(whiteBalance.tint)
         filter.exposure = Float(recipe.basic.exposure)
-        // 2. Tone, 3. color, 4. LUT, 5. layers and 6. crop follow here as they are built.
-        return filter.outputImage
+        guard let decoded = filter.outputImage else { return nil }
+        // 2. Tone: highlights and shadows first. Contrast, whites, blacks and the curve follow.
+        let toned = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)
+        // 3. Color, 4. LUT, 5. layers and 6. crop follow here as they are built.
+        return toned
     }
 
     public static let pixelFormat = MTLPixelFormat.bgra8Unorm
