@@ -382,6 +382,14 @@ struct AdjustmentsInspector: View {
                     reset: { library.changeEdit { $0.basic.exposure = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
+                    title: "Contrast",
+                    value: Binding(get: { basic.contrast },
+                                   set: { value in library.changeEdit { $0.basic.contrast = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.contrastTrack,
+                    reset: { library.changeEdit { $0.basic.contrast = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
                     title: "Highlights",
                     value: Binding(get: { basic.highlights },
                                    set: { value in library.changeEdit { $0.basic.highlights = value } }),
@@ -397,12 +405,32 @@ struct AdjustmentsInspector: View {
                     showsSign: true, track: Self.shadowsTrack,
                     reset: { library.changeEdit { $0.basic.shadows = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Whites",
+                    value: Binding(get: { basic.whites },
+                                   set: { value in library.changeEdit { $0.basic.whites = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.whitesTrack,
+                    reset: { library.changeEdit { $0.basic.whites = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Blacks",
+                    value: Binding(get: { basic.blacks },
+                                   set: { value in library.changeEdit { $0.basic.blacks = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.blacksTrack,
+                    reset: { library.changeEdit { $0.basic.blacks = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
             } header: {
-                SectionHeader(title: "Light", canReset: basic.exposure != 0 || basic.highlights != 0 || basic.shadows != 0) {
+                SectionHeader(title: "Light", canReset: basic.exposure != 0 || basic.contrast != 0 || basic.highlights != 0
+                              || basic.shadows != 0 || basic.whites != 0 || basic.blacks != 0) {
                     library.changeEdit {
                         $0.basic.exposure = 0
+                        $0.basic.contrast = 0
                         $0.basic.highlights = 0
                         $0.basic.shadows = 0
+                        $0.basic.whites = 0
+                        $0.basic.blacks = 0
                     }
                 }
             }
@@ -436,11 +464,14 @@ struct AdjustmentsInspector: View {
     private static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
     private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
     /// Dark to light, the way exposure moves the photo.
-    private static let exposureTrack = [Color(white: 0.08), Color(white: 0.97)]
-    /// The part of the tonal range each one moves: the bright end for Highlights, the dark end
-    /// for Shadows.
-    private static let highlightsTrack = [Color(white: 0.5), Color(white: 0.97)]
-    private static let shadowsTrack = [Color(white: 0.08), Color(white: 0.5)]
+    /// Starts at pure black because the system slider's own groove, drawn over it, lightens it.
+    private static let exposureTrack = [Color(white: 0), Color(white: 0.97)]
+    /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
+    private static let contrastTrack = exposureTrack
+    private static let highlightsTrack = exposureTrack
+    private static let shadowsTrack = exposureTrack
+    private static let whitesTrack = exposureTrack
+    private static let blacksTrack = exposureTrack
 
     private static func fading(_ start: Color, into end: Color) -> [Color] {
         [start, start.opacity(0.15), end.opacity(0.15), end]

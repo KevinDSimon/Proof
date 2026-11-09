@@ -17,6 +17,7 @@ struct ReferenceRenderTests {
     static let references: [(name: String, recipe: EditRecipe)] = [
         ("neutral", EditRecipe()),
         ("edited", edited),
+        ("contrast-whites-blacks", contrastWhitesBlacks),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -29,6 +30,18 @@ struct ReferenceRenderTests {
         recipe.basic.exposure = 0.7
         recipe.basic.highlights = -60
         recipe.basic.shadows = 40
+        recipe.basic.contrast = 25
+        recipe.basic.whites = 20
+        recipe.basic.blacks = -15
+        return recipe
+    }()
+
+    /// The tone lookup alone, strong enough that a change to its curve shows.
+    static let contrastWhitesBlacks: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.basic.contrast = 50
+        recipe.basic.whites = 40
+        recipe.basic.blacks = -40
         return recipe
     }()
 

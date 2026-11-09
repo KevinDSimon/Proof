@@ -110,6 +110,22 @@ struct EditRecipeTests {
         #expect(recipe.basic.temperature == 1900)
     }
 
+    @Test("A format 2 file's contrast, whites and blacks read and write unchanged")
+    func contrastWhitesBlacksRoundTrip() throws {
+        let json = #"{"formatVersion": 2, "processVersion": 1, "basic": {"contrast": 35, "whites": -20, "blacks": 15.5}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
+        #expect(recipe.basic.contrast == 35)
+        #expect(recipe.basic.whites == -20)
+        #expect(recipe.basic.blacks == 15.5)
+        #expect(recipe.processVersion == 1)
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(recipe)) as? [String: Any]
+        let basic = try #require(written?["basic"] as? [String: Any])
+        #expect(basic["contrast"] as? Double == 35)
+        #expect(basic["whites"] as? Double == -20)
+        #expect(basic["blacks"] as? Double == 15.5)
+        #expect(written?["formatVersion"] as? Int == 2)
+    }
+
     static let asShot = WhiteBalance(temperature: 6112, tint: 10)
 
     @Test("A preset sets its Kelvin with no tint, and As Shot clears both")
