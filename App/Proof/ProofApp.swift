@@ -410,9 +410,15 @@ struct AdjustmentsInspector: View {
     }
 
     /// Blue to yellow and green to magenta, the way each slider shifts the photo. These show the
-    /// photo's colors, so they are the one place the inspector isn't gray.
-    private static let temperatureTrack = [Color(red: 0.25, green: 0.45, blue: 0.95), Color(red: 0.95, green: 0.8, blue: 0.2)]
-    private static let tintTrack = [Color(red: 0.25, green: 0.7, blue: 0.3), Color(red: 0.85, green: 0.3, blue: 0.8)]
+    /// photo's colors, so they are the one place the inspector isn't gray. Each color fades out
+    /// toward the middle rather than blending into the other: opposite colors blend to gray,
+    /// which reads as a dark band. The faded middle takes the panel's color in either appearance.
+    private static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
+    private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
+
+    private static func fading(_ start: Color, into end: Color) -> [Color] {
+        [start, start.opacity(0.15), end.opacity(0.15), end]
+    }
 
     private static func title(of preset: WhiteBalancePreset) -> String {
         switch preset {
