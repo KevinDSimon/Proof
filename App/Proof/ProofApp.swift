@@ -464,7 +464,8 @@ struct AdjustmentsInspector: View {
     private static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
     private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
     /// Dark to light, the way exposure moves the photo.
-    private static let exposureTrack = [Color(white: 0.08), Color(white: 0.97)]
+    /// Starts at pure black because the system slider's own groove, drawn over it, lightens it.
+    private static let exposureTrack = [Color(white: 0), Color(white: 0.97)]
     /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
     private static let contrastTrack = exposureTrack
     private static let highlightsTrack = exposureTrack
