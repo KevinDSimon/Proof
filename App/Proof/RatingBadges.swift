@@ -79,50 +79,24 @@ enum RatingBadges {
         return parts.joined(separator: ", ")
     }
 
-    static let readOnlyHelp = "From other apps. Proof can't change ratings or flags yet."
-}
+    /// The flags in the order Lightroom shows them.
+    static let flags: [PhotoMetadata.Flag] = [.flagged, .unflagged, .rejected]
 
-/// The current photo's stars in the Edit toolbar: filled up to the rating, outlined after.
-/// Read-only until Proof writes XMP.
-struct StarsDisplay: View {
-    let rating: Int
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(1...5, id: \.self) { star in
-                Image(systemName: star <= rating ? "star.fill" : "star")
-                    .foregroundStyle(star <= rating ? .primary : .tertiary)
-            }
+    static func title(of flag: PhotoMetadata.Flag) -> String {
+        switch flag {
+        case .flagged: "Flagged"
+        case .unflagged: "Unflagged"
+        case .rejected: "Rejected"
         }
-        .font(.system(size: 12))
-        .padding(.horizontal, 8)
-        .help(RatingBadges.readOnlyHelp)
-        .accessibilityElement()
-        .accessibilityLabel(rating == 0 ? "No stars" : rating == 1 ? "1 star" : "\(rating) stars")
     }
-}
 
-/// The current photo's flag in the Edit toolbar: Flagged, Unflagged and Rejected side by side,
-/// with the current one inverted. Read-only until Proof writes XMP.
-struct FlagDisplay: View {
-    let flag: PhotoMetadata.Flag
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach([PhotoMetadata.Flag.flagged, .unflagged, .rejected], id: \.self) { option in
-                let isCurrent = option == flag
-                FlagIcon(flag: option, size: 12)
-                    .foregroundStyle(isCurrent ? AnyShapeStyle(.background) : AnyShapeStyle(.secondary))
-                    .frame(width: 24, height: 20)
-                    .background {
-                        if isCurrent { Capsule().fill(.primary) }
-                    }
-            }
+    static func title(ofRating rating: Int) -> String {
+        switch rating {
+        case 0: "No Stars"
+        case 1: "1 Star"
+        default: "\(rating) Stars"
         }
-        .font(.system(size: 12))
-        .padding(.horizontal, 2)
-        .help(RatingBadges.readOnlyHelp)
-        .accessibilityElement()
-        .accessibilityLabel(flag.rawValue.capitalized)
     }
+
+    static let unsavedNote = "Changes aren't saved to the photo yet."
 }

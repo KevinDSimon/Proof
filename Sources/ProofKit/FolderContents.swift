@@ -74,9 +74,10 @@ public struct FolderContents: Equatable, Sendable {
             photos: photos.sorted { finderOrder($0.name, $1.name) })
     }
 
-    /// Stores metadata read from the photos themselves, by photo name.
+    /// Fills in metadata read from the photos themselves, by photo name. A photo that already has
+    /// metadata keeps it, so a rating changed while the folder was being read isn't overwritten.
     public mutating func setMetadata(_ metadata: [String: PhotoMetadata]) {
-        for index in photos.indices {
+        for index in photos.indices where photos[index].metadata == nil {
             if let value = metadata[photos[index].name] { photos[index].metadata = value }
         }
     }
