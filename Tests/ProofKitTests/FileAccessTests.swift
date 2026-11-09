@@ -126,6 +126,56 @@ struct FileAccessTests {
         #expect(url.deletingLastPathComponent().lastPathComponent == "Archive")
     }
 
+    @Test("A folder saved before Proof could write loads as read-only, and granting it again makes it writable")
+    func writeGrant() throws {
+        let photo = try makeFile("Albums/a.DNG")
+        let albums = try makeAccess().add(root.appendingPathComponent("Albums"))
+        // A store written before `canWrite` existed has no such key.
+        var saved = try JSONSerialization.jsonObject(with: Data(contentsOf: storeURL)) as! [[String: Any]]
+        saved[0].removeValue(forKey: "canWrite")
+        try JSONSerialization.data(withJSONObject: saved).write(to: storeURL)
+
+        let old = try makeAccess()
+        #expect(old.locations.map(\.id) == [albums.id])
+        #expect(!old.canWrite(to: photo))
+        #expect(old.resolve(albums.id) != .missing)
+
+        try old.grantWriteAccess(albums.id, with: root.appendingPathComponent("Albums"))
+        #expect(old.canWrite(to: photo))
+        #expect(try makeAccess().canWrite(to: photo))
+        #expect(try makeAccess().url(for: #require(old.reference(for: photo))) != nil)
+    }
+
+    @Test("Granting write access with a different folder is refused and changes nothing")
+    func writeGrantWrongFolder() throws {
+        try makeFile("Albums/2025/a.DNG")
+        try makeFile("Other/b.DNG")
+        let access = try makeAccess()
+        let albums = try access.add(root.appendingPathComponent("Albums"))
+
+        for wrong in ["Other", "Albums/2025"] {
+            #expect(throws: FileAccessError.notTheSavedLocation(name: "Albums")) {
+                try access.grantWriteAccess(albums.id, with: root.appendingPathComponent(wrong))
+            }
+        }
+        #expect(try makeAccess().locations == [albums])
+    }
+
+    @Test("New and relinked folders are writable; photos outside saved folders are not")
+    func newGrantsWritable() throws {
+        let photo = try makeFile("Albums/a.DNG")
+        let outside = try makeFile("Loose/b.DNG")
+        let access = try makeAccess()
+        let albums = try access.add(root.appendingPathComponent("Albums"))
+        #expect(albums.canWrite)
+        #expect(access.canWrite(to: photo))
+        #expect(!access.canWrite(to: outside))
+
+        try makeFile("Restored/a.DNG")
+        try access.relink(albums.id, to: root.appendingPathComponent("Restored"))
+        #expect(access.locations[0].canWrite)
+    }
+
     @Test("A deleted folder is kept and marked missing, and relinking keeps its identifier")
     func missingAndRelink() throws {
         try makeFile("Albums/a.DNG")

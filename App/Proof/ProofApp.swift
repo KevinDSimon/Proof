@@ -122,6 +122,9 @@ struct ContentView: View {
             case .failure(let error): library.errorMessage = error.localizedDescription
             }
         }
+        .fileDialogDefaultDirectory(library.folderPickerDirectory)
+        .fileDialogMessage(Text(library.folderPickerMessage))
+        .fileDialogConfirmationLabel(Text(library.folderPickerConfirmation))
         .alert("Something Went Wrong", isPresented: Binding(
             get: { library.errorMessage != nil },
             set: { if !$0 { library.errorMessage = nil } }
