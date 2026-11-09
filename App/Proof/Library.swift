@@ -30,6 +30,9 @@ struct PhotoEdit {
     var history: EditHistory
     /// The sidecar as last read or written; `nil` when there is none.
     var sidecar: Sidecar?
+    /// ISO, focal length, aperture and shutter speed, shown under the histogram. Read once the
+    /// photo is opened.
+    var captureSettings: CaptureSettings?
     var unsaved: Unsaved?
     /// The camera's white balance, which the white balance controls show for As Shot. `nil`
     /// until it has been read from the photo.
@@ -357,8 +360,11 @@ final class Library {
         }
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.
         Task {
-            let asShot = await Task.detached { WhiteBalance.asShot(of: url) }.value
+            let (asShot, settings) = await Task.detached {
+                (WhiteBalance.asShot(of: url), CaptureSettings.read(from: url))
+            }.value
             edits[photo]?.asShot = asShot
+            edits[photo]?.captureSettings = settings
         }
     }
 

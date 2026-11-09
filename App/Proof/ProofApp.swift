@@ -339,7 +339,8 @@ private struct SelectedHistogram: View {
     let library: Library
 
     var body: some View {
-        HistogramView(histogram: library.selectedHistogram)
+        HistogramView(histogram: library.selectedHistogram, settings: library.selectedEdit?.captureSettings)
+            .equatable()
     }
 }
 
