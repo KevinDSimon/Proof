@@ -28,6 +28,7 @@ struct AdjustmentSlider: View {
 
     @State private var text = ""
     @FocusState private var isEditingText: Bool
+    @State private var resetsOnRelease = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -62,8 +63,13 @@ struct AdjustmentSlider: View {
                 isAdjusting(editing)
                 // The slider tracks the mouse itself, so a tap gesture on it never fires. A
                 // double-click shows up as the click count of the press that starts the drag.
-                if editing, let event = NSApp.currentEvent, event.type == .leftMouseDown, event.clickCount == 2 {
-                    reset()
+                // The reset waits until after the release, because the slider sends its own
+                // position once more as the mouse comes up and would undo it.
+                if editing {
+                    resetsOnRelease = NSApp.currentEvent.map { $0.type == .leftMouseDown && $0.clickCount == 2 } ?? false
+                } else if resetsOnRelease {
+                    resetsOnRelease = false
+                    Task { @MainActor in reset() }
                 }
             }
                 .labelsHidden()
