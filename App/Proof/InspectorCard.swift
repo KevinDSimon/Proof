@@ -37,7 +37,7 @@ struct InspectorCard<Content: View>: View {
     }
 
     private func header(_ title: String) -> some View {
-        HStack {
+        HStack(spacing: 14) {
             Text(title)
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
@@ -46,6 +46,8 @@ struct InspectorCard<Content: View>: View {
                 Button("Reset", action: reset)
                     .buttonStyle(.borderless)
                     .controlSize(.small)
+                    // Primary rather than the accent gray, so it reads as available beside the title.
+                    .foregroundStyle(canReset ? Color.primary : Color.secondary)
                     .disabled(!canReset)
                     .accessibilityLabel("Reset \(title)")
             }

@@ -575,9 +575,8 @@ struct AdjustmentsInspector: View {
                     }
                 }
             }
-            // The cards sit 16 pt from the panel's edges, as the grouped form's did.
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            // The cards sit 16 pt from the panel's edges on every side.
+            .padding(16)
         }
         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
