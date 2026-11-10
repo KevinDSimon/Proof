@@ -65,6 +65,22 @@ public actor LUTLibrary {
         .map { $0.joined(separator: "/") }
     }
 
+    /// The folder the LUT at `path` is in, as a path in the library: "" for one outside any folder.
+    public static func folder(of path: String) -> String {
+        (path as NSString).deletingLastPathComponent
+    }
+
+    /// The folders that hold LUTs themselves, in the order of `names`, which is `names()`.
+    public static func folders(in names: [String]) -> [String] {
+        var seen: Set<String> = []
+        return names.map(folder(of:)).filter { seen.insert($0).inserted }
+    }
+
+    /// The LUTs directly in `folder`, not in its subfolders, in the order of `names`.
+    public static func names(_ names: [String], in folder: String) -> [String] {
+        names.filter { self.folder(of: $0) == folder }
+    }
+
     /// Whether the LUT at path `a` is listed before the one at `b`.
     static func precedes(_ a: [String], _ b: [String]) -> Bool {
         for (index, (x, y)) in zip(a, b).enumerated() where x != y {

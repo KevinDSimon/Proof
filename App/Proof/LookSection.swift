@@ -4,29 +4,36 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension LUTLibrary {
-    /// The person's LUTs, in Application Support. The canvas, thumbnails and the Looks section share
-    /// it, so a LUT is read and prepared once.
+    /// The person's LUTs, in Application Support. The canvas, thumbnails and the Looks section
+    /// share it, so a LUT is read and prepared once.
     static let shared = LUTLibrary()
 }
 
-/// The LUTs in the library and a small preview of the photo in Edit through each. The previews
-/// come from one small render of the edit without its look, so the RAW file is decoded once for
-/// all of them, and they're kept until the photo or the rest of its edit changes.
+/// The LUTs in the library, the folder the Looks section shows, and a small preview of the photo
+/// in Edit through each LUT. The previews come from one small render of the edit without its
+/// look, so the RAW file is decoded once for all of them, and they're kept until the photo or the
+/// rest of its edit changes.
 @Observable @MainActor
 final class LookBrowser {
     /// Long edge of a preview, in pixels: sharp in a row on a Retina display.
     static let previewSize = 96
 
     /// Paths of the LUTs, folders first, each folder followed by its contents.
-    private(set) var names: [String] = []
+    private(set) var names: [String] = LUTLibrary.shared.names()
     private(set) var previews: [String: NSImage] = [:]
-    /// Folders shown open, by path. They stay open across photos.
-    var expandedFolders: Set<String> = []
+    /// The folder whose LUTs are listed, as a path in the library: "" for those outside any folder.
+    var shownFolder = ""
 
     /// Its own renderer, so previews never wait behind the canvas or evict its decode.
     @ObservationIgnored private let renderer = try? RAWRenderer()
     @ObservationIgnored private var previewed: (url: URL, recipe: EditRecipe)?
     @ObservationIgnored private var previewTask: Task<Void, Never>?
+
+    /// The folders that hold LUTs, in the library's order.
+    var folders: [String] { LUTLibrary.folders(in: names) }
+
+    /// The LUTs in the shown folder.
+    var shownNames: [String] { LUTLibrary.names(names, in: shownFolder) }
 
     /// Reads the library's folder again, which the Finder may have changed.
     func reload() {
@@ -34,26 +41,45 @@ final class LookBrowser {
         guard names != self.names else { return }
         self.names = names
         previews = previews.filter { names.contains($0.key) }
+        if !folders.contains(shownFolder) { shownFolder = folders.first ?? "" }
         if let previewed { makePreviews(of: previewed.url, recipe: previewed.recipe, force: true) }
     }
 
-    /// Copies the `.cube` files and folders at `urls` into the library, opens the folders added,
-    /// and returns a message for the files that weren't added.
+    /// Shows the folder that holds the LUT at `path`.
+    func show(folderOf path: String) {
+        shownFolder = LUTLibrary.folder(of: path)
+    }
+
+    /// The LUT `offset` places from `current` in the shown folder, or the first or last when
+    /// `current` isn't in it. `nil` past either end.
+    func look(steppingBy offset: Int, from current: String?) -> String? {
+        let names = shownNames
+        guard !names.isEmpty else { return nil }
+        let index = current.flatMap { names.firstIndex(of: $0) }.map { $0 + offset }
+            ?? (offset > 0 ? 0 : names.count - 1)
+        return names.indices.contains(index) ? names[index] : nil
+    }
+
+    /// Copies the `.cube` files and folders at `urls` into the library, shows the folder of the
+    /// first LUT added, and returns a message for the files that weren't added.
     func importItems(_ urls: [URL]) async -> String? {
         var failures: [String] = []
+        var added: [String] = []
         for url in urls {
             let result = await LUTLibrary.shared.importItem(at: url)
-            for name in result.names { expandedFolders.formUnion(Self.folders(containing: name)) }
+            added += result.names
             failures += result.failures.map { $0.localizedDescription }
         }
         reload()
+        if let first = added.first { show(folderOf: first) }
         return failures.isEmpty ? nil : failures.joined(separator: "\n\n")
     }
 
-    /// The paths of the folders around the LUT at `path`, outermost first.
-    static func folders(containing path: String) -> [String] {
-        let components = path.split(separator: "/").map(String.init).dropLast()
-        return components.indices.map { components[...$0].joined(separator: "/") }
+    /// Opens the library's folder in the Finder, creating it if nothing has been imported yet.
+    func revealInFinder() {
+        let directory = LUTLibrary.shared.directory
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(directory)
     }
 
     /// Makes the previews of `url` with `recipe`, unless they already show it. The previous
@@ -84,25 +110,16 @@ final class LookBrowser {
     }
 }
 
-/// The Looks section of the inspector: the strength of the chosen look, then the library in a
-/// plain outline list, folders first, each look with a small preview of the photo through it. The
-/// list's own selection and keyboard navigation choose looks, so Up and Down Arrow try them in turn,
-/// and Right and Left Arrow move into and out of folders.
-/// Add imports `.cube` files and folders; they can also be dropped on the list. Reset removes the
-/// look, so there is no None row.
+/// The Looks section of the inspector: the strength of the chosen look, a pop-up of the library's
+/// folders, and the shown folder's LUTs in a native list, each with a small preview of the photo
+/// through it. The list's own selection and keyboard navigation choose looks, so Up and Down Arrow
+/// try them in turn. The pop-up also adds `.cube` files and folders, and opens the library in the
+/// Finder; files can be dropped on the list too. Reset removes the look, so there is no None row.
 struct LookSection: View {
     let library: Library
     @State private var isImporting = false
-    /// The list's selection: the chosen look, or a folder while moving through the list by keyboard.
-    @State private var selection: String?
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
-
-    /// A folder, with its contents, or a LUT.
-    private struct Node: Identifiable {
-        let id: String
-        var children: [Node]?
-    }
 
     var body: some View {
         Section {
@@ -110,7 +127,7 @@ struct LookSection: View {
                 ContentUnavailableView {
                     Label("No Looks", systemImage: "camera.filters")
                 } description: {
-                    Text("Drag .cube files or folders of them here, or click Add.")
+                    Text("Drag .cube files or folders of them here, or add them.")
                 } actions: {
                     Button("Add Looks…") { isImporting = true }
                 }
@@ -119,7 +136,7 @@ struct LookSection: View {
                     return true
                 }
             } else {
-                // First, so choosing a look or opening a folder never moves it.
+                // First, so choosing a look or another folder never moves it.
                 AdjustmentSlider(
                     title: "Strength",
                     value: Binding(get: { (look?.strength ?? 1) * 100 },
@@ -136,13 +153,13 @@ struct LookSection: View {
                     Text("“\(Self.title(of: look.lut))” isn’t in the LUT library, so the photo is shown without it.")
                         .foregroundStyle(.secondary)
                 }
+                folderMenu
                 list
             }
         } header: {
             SectionHeader(title: "Looks", canReset: look != nil,
                           isOn: Binding(get: { !library.isLookHidden }, set: { library.isLookHidden = !$0 }),
-                          canToggle: look != nil,
-                          add: ("Add", "Add .cube files, or folders of them", { isImporting = true })) {
+                          canToggle: look != nil) {
                 library.isLookHidden = false
                 library.changeEdit { $0.look = nil }
             }
@@ -157,64 +174,89 @@ struct LookSection: View {
         }
         .onAppear {
             looks.reload()
-            revealChosenLook()
+            showChosenLook()
         }
-        .onChange(of: look?.lut) { revealChosenLook() }
+        .onChange(of: look?.lut) { showChosenLook() }
+        // Coming back from the Finder, where LUTs may have been added, moved or removed.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            looks.reload()
+        }
         .task(id: previewKey) {
             guard let previewKey else { return }
             looks.makePreviews(of: previewKey.url, recipe: previewKey.recipe)
         }
     }
 
-    /// The library as a plain outline list on the section's own background. It scrolls on its
+    /// The folder pop-up. A folder that holds other folders opens as a submenu.
+    private var folderMenu: some View {
+        Menu {
+            folderItems(under: "")
+            Divider()
+            Button("Add Looks…") { isImporting = true }
+            Button("Reveal in Finder") { looks.revealInFinder() }
+        } label: {
+            Text(Self.folderTitle(looks.shownFolder))
+        }
+        .accessibilityLabel("Folder")
+        .accessibilityValue(Self.folderTitle(looks.shownFolder))
+    }
+
+    /// Menu items for the folders directly below `parent`, and for `parent` itself when it holds
+    /// LUTs and has subfolders. LUTs outside any folder come last, as Other.
+    private func folderItems(under parent: String) -> AnyView {
+        let folders = looks.folders
+        let children = Self.childFolders(of: parent, in: folders)
+        return AnyView(Group {
+            ForEach(children, id: \.self) { child in
+                if Self.childFolders(of: child, in: folders).isEmpty {
+                    folderToggle(child, title: Self.folderTitle(child))
+                } else {
+                    Menu(Self.folderTitle(child)) {
+                        if folders.contains(child) {
+                            folderToggle(child, title: Self.folderTitle(child))
+                            Divider()
+                        }
+                        folderItems(under: child)
+                    }
+                }
+            }
+            if parent.isEmpty, folders.contains("") {
+                if !children.isEmpty { Divider() }
+                folderToggle("", title: Self.folderTitle(""))
+            }
+        })
+    }
+
+    /// A menu item that shows `folder`, checked while it is shown.
+    private func folderToggle(_ folder: String, title: String) -> some View {
+        Toggle(title, isOn: Binding(get: { looks.shownFolder == folder }, set: { _ in looks.shownFolder = folder }))
+    }
+
+    /// The shown folder's LUTs, in a plain list on the section's own background. It scrolls on its
     /// own once it is taller than `maxListHeight`, so the inspector doesn't grow without end.
-    /// Folders can be selected so the keyboard can reach them: Right Arrow opens a folder or moves
-    /// into an open one, and Left Arrow closes it or moves from a look out to its folder.
     private var list: some View {
-        List(selection: $selection) {
-            ForEach(tree) { node($0) }
+        List(selection: Binding(get: { look?.lut }, set: { path in
+            if let path { choose(path) }
+        })) {
+            ForEach(looks.shownNames, id: \.self) { path in
+                Label {
+                    Text(Self.title(of: path))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } icon: {
+                    preview(of: path)
+                }
+                .help(path)
+                .tag(path)
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .frame(height: listHeight)
-        .onChange(of: selection) {
-            if let selection, looks.names.contains(selection) { choose(selection) }
-        }
-        .onChange(of: look?.lut, initial: true) { selection = look?.lut }
-        .onKeyPress(.rightArrow) { moveIn() }
-        .onKeyPress(.leftArrow) { moveOut() }
+        .frame(height: min(CGFloat(looks.shownNames.count) * Self.rowHeight + 8, Self.maxListHeight))
         .opacity(library.isLookHidden ? 0.45 : 1)
         .dropDestination(for: URL.self) { urls, _ in
             importItems(urls)
             return true
-        }
-    }
-
-    private func node(_ node: Node) -> AnyView {
-        if let children = node.children {
-            AnyView(
-                DisclosureGroup(isExpanded: Binding(
-                    get: { looks.expandedFolders.contains(node.id) },
-                    set: { if $0 { looks.expandedFolders.insert(node.id) } else { looks.expandedFolders.remove(node.id) } }
-                )) {
-                    ForEach(children) { self.node($0) }
-                } label: {
-                    Label(Self.title(of: node.id), systemImage: "folder")
-                        .tag(node.id)
-                }
-            )
-        } else {
-            AnyView(
-                Label {
-                    Text(Self.title(of: node.id))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                } icon: {
-                    preview(of: node.id)
-                }
-                .help(node.id)
-                .tag(node.id)
-            )
         }
     }
 
@@ -239,44 +281,6 @@ struct LookSection: View {
     private static let rowHeight: CGFloat = 28
     private static let maxListHeight: CGFloat = 320
 
-    /// Tall enough for the rows shown, up to `maxListHeight`.
-    private var listHeight: CGFloat {
-        min(CGFloat(visibleRowCount(tree)) * Self.rowHeight + 8, Self.maxListHeight)
-    }
-
-    private func visibleRowCount(_ nodes: [Node]) -> Int {
-        nodes.reduce(0) { count, node in
-            guard let children = node.children, looks.expandedFolders.contains(node.id) else { return count + 1 }
-            return count + 1 + visibleRowCount(children)
-        }
-    }
-
-    /// The library's paths as folders and LUTs, in the library's order: folders first.
-    private var tree: [Node] {
-        Self.nodes(looks.names.map { $0.split(separator: "/").map(String.init) }, under: [])
-    }
-
-    private static func nodes(_ paths: [[String]], under folder: [String]) -> [Node] {
-        var nodes: [Node] = []
-        var index = 0
-        while index < paths.count {
-            let path = paths[index]
-            if path.count == 1 {
-                nodes.append(Node(id: (folder + path).joined(separator: "/")))
-                index += 1
-            } else {
-                // The library lists each folder's contents together, so they are consecutive.
-                let name = path[0]
-                var end = index
-                while end < paths.count, paths[end].count > 1, paths[end][0] == name { end += 1 }
-                let inside = paths[index..<end].map { Array($0.dropFirst()) }
-                nodes.append(Node(id: (folder + [name]).joined(separator: "/"), children: Self.nodes(inside, under: folder + [name])))
-                index = end
-            }
-        }
-        return nodes
-    }
-
     private var looks: LookBrowser { library.looks }
     private var look: Look? { library.selectedEdit?.recipe.look }
 
@@ -288,43 +292,24 @@ struct LookSection: View {
         }
     }
 
-    /// Right Arrow on a folder: opens it, or if it is open, selects the first thing in it.
-    private func moveIn() -> KeyPress.Result {
-        guard let selection, let children = Self.children(of: selection, in: tree) else { return .ignored }
-        if !looks.expandedFolders.contains(selection) {
-            looks.expandedFolders.insert(selection)
-        } else if let first = children.first {
-            self.selection = first.id
-        }
-        return .handled
+    /// Shows the folder of the chosen look, when it is in the library.
+    private func showChosenLook() {
+        guard let path = look?.lut, looks.names.contains(path) else { return }
+        looks.show(folderOf: path)
     }
 
-    /// Left Arrow: closes an open folder, or selects the folder around a look or a closed folder.
-    private func moveOut() -> KeyPress.Result {
-        guard let selection else { return .ignored }
-        if Self.children(of: selection, in: tree) != nil, looks.expandedFolders.contains(selection) {
-            looks.expandedFolders.remove(selection)
-            return .handled
+    /// The folders, among `folders` and the folders around them, directly below `parent`.
+    private static func childFolders(of parent: String, in folders: [String]) -> [String] {
+        var children: [String] = []
+        for folder in folders where !folder.isEmpty {
+            let components = folder.split(separator: "/").map(String.init)
+            let depth = parent.isEmpty ? 0 : parent.split(separator: "/").count
+            guard components.count > depth,
+                  parent.isEmpty || folder.hasPrefix(parent + "/") else { continue }
+            let child = components[...depth].joined(separator: "/")
+            if !children.contains(child) { children.append(child) }
         }
-        guard let folder = LookBrowser.folders(containing: selection).last else { return .ignored }
-        self.selection = folder
-        return .handled
-    }
-
-    /// The contents of the folder at `path`, or `nil` if `path` isn't a folder.
-    private static func children(of path: String, in nodes: [Node]) -> [Node]? {
-        for node in nodes {
-            if node.id == path { return node.children }
-            if let children = node.children, path.hasPrefix(node.id + "/"),
-               let found = Self.children(of: path, in: children) { return found }
-        }
-        return nil
-    }
-
-    /// Opens the folders around the chosen look, so it can be seen.
-    private func revealChosenLook() {
-        guard let path = look?.lut else { return }
-        looks.expandedFolders.formUnion(LookBrowser.folders(containing: path))
+        return children
     }
 
     private var previewKey: PreviewKey? {
@@ -345,7 +330,12 @@ struct LookSection: View {
         }
     }
 
-    /// A LUT's or folder's name as shown: the last part of its path, without `.cube`.
+    /// A folder's name as the pop-up shows it. LUTs outside any folder are Other.
+    private static func folderTitle(_ folder: String) -> String {
+        folder.isEmpty ? "Other" : (folder as NSString).lastPathComponent
+    }
+
+    /// A LUT's name as shown: the last part of its path, without `.cube`.
     private static func title(of path: String) -> String {
         ((path as NSString).lastPathComponent as NSString).deletingPathExtension
     }

@@ -316,6 +316,21 @@ final class Library {
         }
     }
 
+    /// Photo › Next Look and Previous Look can step through the shown folder's looks.
+    var canStepLook: Bool {
+        isEditing && selectedEdit != nil && !looks.shownNames.isEmpty
+    }
+
+    /// Chooses the look `offset` places from the current one in the folder the Looks section
+    /// shows, keeping its strength. Without a look, starts at the first or last.
+    func stepLook(by offset: Int) {
+        guard canStepLook, let next = looks.look(steppingBy: offset, from: selectedEdit?.recipe.look?.lut) else { return }
+        isLookHidden = false
+        changeEdit { recipe in
+            recipe.look = Look(lut: next, strength: recipe.look?.strength ?? 1)
+        }
+    }
+
     var canUndoEdit: Bool {
         guard let edit = selectedEdit else { return false }
         return edit.history.canUndo || edit.recipe != edit.history.recipe

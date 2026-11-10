@@ -84,6 +84,14 @@ struct ProofApp: App {
                 Button("Flip Vertical") { library.flipVertically() }
                     .disabled(!library.isEditing || library.selectedEdit == nil)
                 Divider()
+                // Steps through the looks in the folder the Looks section shows, to compare them.
+                Button("Next Look") { library.stepLook(by: 1) }
+                    .keyboardShortcut("]", modifiers: [.command, .option])
+                    .disabled(!library.canStepLook)
+                Button("Previous Look") { library.stepLook(by: -1) }
+                    .keyboardShortcut("[", modifiers: [.command, .option])
+                    .disabled(!library.canStepLook)
+                Divider()
                 // Lightroom's keys: 0 to 5 for stars, P, U and X for the flag.
                 Picker("Rating", selection: Binding(get: { library.selectedPhotoMetadata?.rating ?? 0 },
                                                     set: { library.setRating($0) })) {
@@ -643,20 +651,12 @@ struct SectionHeader: View {
     let canReset: Bool
     var isOn: Binding<Bool>?
     var canToggle = true
-    /// Adds items to the section, such as importing looks, from a button before Reset.
-    var add: (title: String, help: String, action: () -> Void)?
     let reset: () -> Void
 
     var body: some View {
         HStack {
             Text(title)
             Spacer()
-            if let add {
-                Button(add.title, action: add.action)
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .help(add.help)
-            }
             Button("Reset", action: reset)
                 .buttonStyle(.borderless)
                 .controlSize(.small)

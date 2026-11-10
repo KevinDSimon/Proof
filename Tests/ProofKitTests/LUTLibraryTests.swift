@@ -135,6 +135,16 @@ struct LUTLibraryTests {
         #expect(library.names() == ["Portra/400.cube", "Agfa.cube", "Zeiss.cube"])
     }
 
+    @Test("Looks are grouped by the folder that holds them, not by their subfolders")
+    func groupedByFolder() {
+        let names = ["Portra/Pushed/1600.cube", "Portra/400.cube", "Portra/800.cube", "Agfa.cube"]
+        #expect(LUTLibrary.folders(in: names) == ["Portra/Pushed", "Portra", ""])
+        #expect(LUTLibrary.names(names, in: "Portra") == ["Portra/400.cube", "Portra/800.cube"])
+        #expect(LUTLibrary.names(names, in: "") == ["Agfa.cube"])
+        #expect(LUTLibrary.folder(of: "Portra/Pushed/1600.cube") == "Portra/Pushed")
+        #expect(LUTLibrary.folder(of: "Agfa.cube") == "")
+    }
+
     @Test("A look saved with a file name only, before folders, still loads; paths can't leave the library")
     func pathsAndPlainNames() async throws {
         _ = try await library.importFile(at: try makeFile("Portra.cube"))
