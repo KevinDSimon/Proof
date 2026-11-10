@@ -1,6 +1,7 @@
 import CoreImage
 import CryptoKit
 import Foundation
+import simd
 import Testing
 @testable import ProofKit
 
@@ -13,14 +14,15 @@ import Testing
 /// `PROOF_SAMPLE_DNG=<photo> PROOF_RECORD_REFERENCES=1 swift test --filter ReferenceRenderTests`
 /// and say in the pull request which renders changed and why.
 struct ReferenceRenderTests {
-    /// Each reference: its file name and the recipe it renders.
-    static let references: [(name: String, recipe: EditRecipe)] = [
-        ("neutral", EditRecipe()),
-        ("edited", edited),
-        ("contrast-whites-blacks", contrastWhitesBlacks),
-        ("color", color),
-        ("crop", crop),
-        ("curve", curve),
+    /// Each reference: its file name, the recipe it renders and the LUT its look names.
+    static let references: [(name: String, recipe: EditRecipe, lut: PreparedLUT?)] = [
+        ("neutral", EditRecipe(), nil),
+        ("edited", edited, nil),
+        ("contrast-whites-blacks", contrastWhitesBlacks, nil),
+        ("color", color, nil),
+        ("crop", crop, nil),
+        ("curve", curve, nil),
+        ("look", look, PreparedLUT(lookTable)),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -66,6 +68,33 @@ struct ReferenceRenderTests {
         return recipe
     }()
 
+    /// A LUT alone, at part strength, so a change to the cube, the color space it is applied
+    /// in or the blend shows.
+    static let look: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.look = Look(lut: "Reference.cube", strength: 0.6)
+        return recipe
+    }()
+
+    /// A film-like grade that moves every channel differently: warmer highlights, teal shadows,
+    /// lifted blacks and less saturation. Written out here so the reference doesn't depend on a file.
+    static let lookTable: CubeLUT = {
+        let size = 33
+        var values = [SIMD3<Float>]()
+        for b in 0..<size {
+            for g in 0..<size {
+                for r in 0..<size {
+                    let c = SIMD3(Float(r), Float(g), Float(b)) / Float(size - 1)
+                    let luma = (c * SIMD3(0.2126, 0.7152, 0.0722)).sum()
+                    let muted = luma + (c - luma) * 0.8
+                    let tint = SIMD3<Float>(0.06, 0.01, -0.05) * luma + SIMD3<Float>(-0.03, 0.01, 0.03) * (1 - luma)
+                    values.append(simd_clamp(0.04 + muted * 0.94 + tint, .zero, .one))
+                }
+            }
+        }
+        return CubeLUT(kind: .threeDimensional, size: size, values: values)
+    }()
+
     /// Vibrance and saturation alone, strong enough that a change to either filter shows.
     static let color: EditRecipe = {
         var recipe = EditRecipe()
@@ -97,7 +126,7 @@ struct ReferenceRenderTests {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))
         for reference in Self.references {
-            let actual = try await image(renderer.render(fitting: Self.size, recipe: reference.recipe))
+            let actual = try await image(renderer.render(fitting: Self.size, recipe: reference.recipe, lut: reference.lut))
             let expected = try #require(CIImage(contentsOf: referencesFolder.appendingPathComponent("\(reference.name).png")))
             #expect(actual.extent == expected.extent, "\(reference.name): size changed")
             guard actual.extent == expected.extent else { continue }
@@ -113,7 +142,7 @@ struct ReferenceRenderTests {
         try await renderer.open(url)
         try FileManager.default.createDirectory(at: referencesFolder, withIntermediateDirectories: true)
         for reference in Self.references {
-            let photo = try await image(renderer.render(fitting: Self.size, recipe: reference.recipe))
+            let photo = try await image(renderer.render(fitting: Self.size, recipe: reference.recipe, lut: reference.lut))
             try CIContext().writePNGRepresentation(of: photo, to: referencesFolder.appendingPathComponent("\(reference.name).png"),
                                                    format: .RGBA8, colorSpace: RAWRenderer.colorSpace)
         }
