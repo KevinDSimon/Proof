@@ -15,6 +15,8 @@ import UniformTypeIdentifiers
 public final class ThumbnailCache: Sendable {
     /// Renders `url` with `edit` at no more than `maxPixelSize` on the long edge.
     public typealias RenderEdit = @Sendable (_ url: URL, _ edit: EditRecipe) async -> CGImage?
+    /// A string that changes whenever the LUT a look names does, or `nil` if it's missing.
+    public typealias LUTVersion = @Sendable (_ lut: String) -> String?
 
     /// Long edge of a stored thumbnail, in pixels: sharp in a Retina grid cell, small on disk.
     public static let maxPixelSize = 512
@@ -22,21 +24,25 @@ public final class ThumbnailCache: Sendable {
     public let directory: URL
     private let maxConcurrentReads: Int
     private let renderEdit: RenderEdit?
+    private let lutVersion: LUTVersion?
 
     /// `directory` is created when the first thumbnail is stored. `maxConcurrentReads` limits how
     /// many photos are read at once when making thumbnails, so a NAS isn't asked for a whole
     /// folder in parallel. Without `renderEdit`, edited photos show their embedded preview.
+    /// With `lutVersion`, a thumbnail is made again when the LUT its look names changes, and a look
+    /// whose LUT is missing is left out, as the canvas leaves it out.
     public init(directory: URL = .applicationSupportDirectory.appendingPathComponent("Proof/Thumbnails"),
-                maxConcurrentReads: Int = 4, renderEdit: RenderEdit? = nil) {
+                maxConcurrentReads: Int = 4, renderEdit: RenderEdit? = nil, lutVersion: LUTVersion? = nil) {
         self.directory = directory
         self.maxConcurrentReads = maxConcurrentReads
         self.renderEdit = renderEdit
+        self.lutVersion = lutVersion
     }
 
     /// The thumbnail of `url` showing `edit`, read from the cache or rendered and stored. With no
     /// edit, or a neutral one, it is the thumbnail of the original. Blocks on file I/O and rendering.
     public func thumbnail(for url: URL, edit: EditRecipe?) async -> CGImage? {
-        guard let edit = Self.shown(edit) else { return thumbnail(for: url) }
+        guard let edit = shown(edit) else { return thumbnail(for: url) }
         guard let entry = entry(for: url, edit: edit) else { return nil }
         if let image = Self.readImage(at: entry.file, embeddedOnly: false) { return image }
         return await makeThumbnail(of: url, edit: edit, storingAs: entry)
@@ -76,7 +82,7 @@ public final class ThumbnailCache: Sendable {
                         next += 1
                         group.addTask {
                             // A sidecar that can't be read shows the original, as Edit does.
-                            let edit = edited.contains(url) ? Self.shown((try? Sidecar.read(for: url))??.recipe) : nil
+                            let edit = edited.contains(url) ? self.shown((try? Sidecar.read(for: url))??.recipe) : nil
                             let entry = self.entry(for: url, edit: edit)
                             return (url, edit, entry, entry.flatMap { Self.readImage(at: $0.file, embeddedOnly: false) })
                         }
@@ -139,8 +145,9 @@ public final class ThumbnailCache: Sendable {
         else { return nil }
         let folder = directory.appendingPathComponent(Self.hash(url.standardizedFileURL.path), isDirectory: true)
         var version = "\(size) \(modified.timeIntervalSinceReferenceDate)"
-        if let edit = Self.shown(edit), let data = try? Self.editEncoder.encode(edit) {
+        if let edit = shown(edit), let data = try? Self.editEncoder.encode(edit) {
             version += " " + String(decoding: data, as: UTF8.self)
+            if let look = edit.look, let lut = lutVersion?(look.lut) { version += " " + lut }
         }
         version = Self.hash(version)
         return Entry(folder: folder, file: folder.appendingPathComponent(version + ".jpg"))
@@ -165,9 +172,12 @@ public final class ThumbnailCache: Sendable {
         return encoder
     }()
 
-    /// The edit a thumbnail shows: `nil` for none or a neutral one.
-    private static func shown(_ edit: EditRecipe?) -> EditRecipe? {
-        edit.flatMap { $0.isNeutral ? nil : $0 }
+    /// The edit a thumbnail shows: without a look whose LUT is missing, and `nil` for none or a
+    /// neutral one.
+    private func shown(_ edit: EditRecipe?) -> EditRecipe? {
+        guard var edit else { return nil }
+        if let look = edit.look, let lutVersion, lutVersion(look.lut) == nil { edit.look = nil }
+        return edit.isNeutral ? nil : edit
     }
 
     private static func hash(_ string: String) -> String {

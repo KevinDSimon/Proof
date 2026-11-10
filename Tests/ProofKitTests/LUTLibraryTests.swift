@@ -155,6 +155,17 @@ struct LUTLibraryTests {
         }
     }
 
+    @Test("A LUT's version changes with its file, and is nil when the file is missing or outside the library")
+    func versions() async throws {
+        #expect(library.version(of: "Portra.cube") == nil)
+        _ = try await library.importFile(at: try makeFile("Portra.cube"))
+        let first = try #require(library.version(of: "Portra.cube"))
+        try Data(Self.cubeText(scale: 0.5).utf8).write(to: library.directory.appendingPathComponent("Portra.cube"))
+        #expect(library.version(of: "Portra.cube") != first)
+        try makeFile("Outside.cube")
+        #expect(library.version(of: "../Outside.cube") == nil)
+    }
+
     @Test("Over the memory limit, the least recently used LUT is let go")
     func evictsLeastRecentlyUsed() async throws {
         // A 2-per-side table prepares to 8 entries of 16 bytes.

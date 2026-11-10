@@ -23,11 +23,25 @@ final class LookBrowser {
     private(set) var previews: [String: NSImage] = [:]
     /// The folder whose LUTs are listed, as a path in the library: "" for those outside any folder.
     var shownFolder = ""
+    /// Counts changes to the library's LUTs, so thumbnails that show looks can be made again.
+    private(set) var generation = 0
+    /// Called after the library's LUTs change.
+    @ObservationIgnored var onChange: (() -> Void)?
 
     /// Its own renderer, so previews never wait behind the canvas or evict its decode.
     @ObservationIgnored private let renderer = try? RAWRenderer()
     @ObservationIgnored private var previewed: (url: URL, recipe: EditRecipe)?
     @ObservationIgnored private var previewTask: Task<Void, Never>?
+    @ObservationIgnored private var activation: NSObjectProtocol?
+
+    init() {
+        // Coming back from the Finder, where LUTs may have been added, moved or removed.
+        activation = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reload() }
+        }
+    }
 
     /// The folders that hold LUTs, in the library's order.
     var folders: [String] { LUTLibrary.folders(in: names) }
@@ -40,6 +54,8 @@ final class LookBrowser {
         let names = LUTLibrary.shared.names()
         guard names != self.names else { return }
         self.names = names
+        generation += 1
+        onChange?()
         previews = previews.filter { names.contains($0.key) }
         if !folders.contains(shownFolder) { shownFolder = folders.first ?? "" }
         if let previewed { makePreviews(of: previewed.url, recipe: previewed.recipe, force: true) }
@@ -169,10 +185,6 @@ struct LookSection: View {
             showChosenLook()
         }
         .onChange(of: look?.lut) { showChosenLook() }
-        // Coming back from the Finder, where LUTs may have been added, moved or removed.
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            looks.reload()
-        }
         .task(id: previewKey) {
             guard let previewKey else { return }
             looks.makePreviews(of: previewKey.url, recipe: previewKey.recipe)

@@ -129,10 +129,16 @@ struct ThumbnailCacheTests {
     final class FakeRenderer: @unchecked Sendable {
         private let lock = NSLock()
         private var _count = 0
+        private var _looks: [Look?] = []
         var count: Int { lock.withLock { _count } }
+        /// The look of each edit rendered, in order.
+        var looks: [Look?] { lock.withLock { _looks } }
 
         func render(_ url: URL, _ edit: EditRecipe) -> CGImage? {
-            lock.withLock { _count += 1 }
+            lock.withLock {
+                _count += 1
+                _looks.append(edit.look)
+            }
             let context = CGContext(data: nil, width: 100, height: 50, bitsPerComponent: 8, bytesPerRow: 0,
                                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                     bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
@@ -174,6 +180,36 @@ struct ThumbnailCacheTests {
         let image = try #require(await cache.thumbnail(for: photo, edit: EditRecipe()))
         #expect(image.width == 512)
         #expect(renderer.count == 0)
+    }
+
+    @Test("A look whose LUT is missing is left out, and the thumbnail is made again when the LUT appears or changes")
+    func lookFollowsItsLUT() async throws {
+        let photo = try makePhoto("A.DNG")
+        let renderer = FakeRenderer()
+        let library = LUTLibrary(directory: root.appendingPathComponent("LUTs"))
+        let cache = ThumbnailCache(directory: root.appendingPathComponent("Cache"),
+                                   renderEdit: { renderer.render($0, $1) },
+                                   lutVersion: { library.version(of: $0) })
+        var looked = edit(exposure: 1)
+        looked.look = Look(lut: "Warm.cube")
+
+        // Missing: rendered without the look, and the same thumbnail as the edit without one.
+        _ = await cache.thumbnail(for: photo, edit: looked)
+        _ = await cache.thumbnail(for: photo, edit: edit(exposure: 1))
+        #expect(renderer.count == 1)
+        #expect(renderer.looks == [nil])
+
+        let lut = root.appendingPathComponent("Warm.cube")
+        try Data(LUTLibraryTests.cubeText().utf8).write(to: lut)
+        _ = try await library.importFile(at: lut)
+        _ = await cache.thumbnail(for: photo, edit: looked)
+        #expect(renderer.count == 2)
+        #expect(renderer.looks.last == Look(lut: "Warm.cube"))
+
+        // The same name with other contents, as when a file is replaced in the Finder.
+        try Data(LUTLibraryTests.cubeText(scale: 0.5).utf8).write(to: library.directory.appendingPathComponent("Warm.cube"))
+        _ = await cache.thumbnail(for: photo, edit: looked)
+        #expect(renderer.count == 3)
     }
 
     @Test("Photos listed as edited show the edit in their sidecar")

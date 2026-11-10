@@ -15,6 +15,8 @@ struct ThumbnailGrid: View {
     /// A photo that was read but couldn't be made into a thumbnail has no entry in `images`.
     @State private var images: [PhotoReference: NSImage] = [:]
     @State private var finished: Set<PhotoReference> = []
+    /// The LUT library's generation the thumbnails were loaded at.
+    @State private var lutGeneration = 0
     @State private var columnCount = 1
     @FocusState private var isFocused: Bool
 
@@ -23,7 +25,7 @@ struct ThumbnailGrid: View {
     nonisolated static let cache = ThumbnailCache(renderEdit: { url, edit in
         let lut = await LUTLibrary.shared.lut(for: edit.look)
         return try? await thumbnailRenderer?.thumbnail(of: url, recipe: edit, lut: lut, maxPixelSize: ThumbnailCache.maxPixelSize)
-    })
+    }, lutVersion: { LUTLibrary.shared.version(of: $0) })
     private static let cellSize: CGFloat = 160
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
@@ -66,7 +68,10 @@ struct ThumbnailGrid: View {
             if let move { library.browse.move(move, in: photos, columns: columnCount) }
         }
         .onAppear { isFocused = true }
-        .task(id: allPhotos.map(\.id)) { await loadThumbnails() }
+        // Loaded again when the LUT library changes, since edited thumbnails show looks.
+        .task(id: ThumbnailLoad(photos: allPhotos.map(\.id), lutGeneration: library.looks.generation)) {
+            await loadThumbnails()
+        }
     }
 
     private func cell(for photo: ListedPhoto) -> some View {
@@ -117,6 +122,10 @@ struct ThumbnailGrid: View {
     }
 
     private func loadThumbnails() async {
+        if lutGeneration != library.looks.generation {
+            lutGeneration = library.looks.generation
+            finished = []
+        }
         await Self.loadThumbnails(of: allPhotos, images: $images, finished: $finished, library: library)
     }
 
@@ -141,4 +150,10 @@ struct ThumbnailGrid: View {
             if let image { images.wrappedValue[id] = NSImage(cgImage: image, size: .zero) }
         }
     }
+}
+
+/// What the grid and the filmstrip load thumbnails for: their photos, at a LUT library generation.
+struct ThumbnailLoad: Hashable {
+    var photos: [PhotoReference]
+    var lutGeneration: Int
 }
