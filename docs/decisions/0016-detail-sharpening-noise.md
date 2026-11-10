@@ -11,7 +11,7 @@ Issue #104 adds a Detail card with sharpening and noise reduction, as in Lightro
 - `contrastAmount` is local contrast, which belongs with Texture and Clarity (#101), not here.
 
 ## Decision
-- The card has Sharpening, Noise Reduction, Detail and Color Noise Reduction, each 0 to 100. Sharpening maps to `sharpnessAmount` 0 to 2, the others to 0 to 1.
+- The Detail card (decision 0015's pattern) has Sharpening, Noise Reduction, Detail and Color Noise Reduction, each 0 to 100. Like Curve and Looks it starts closed unless the edit has changed detail, since it is judged at 100% zoom. Its switch off shows the camera's own values. Sharpening maps to `sharpnessAmount` 0 to 2, the others to 0 to 1.
 - The recipe stores `null` for the camera's default, as white balance does for As Shot. The sliders show the camera's value until moved. Edits saved before the card have no `detail` and keep rendering exactly as before, so `processVersion` stays 1.
 - The renderer reads the defaults when it opens a photo and sets all four amounts on every render, because it reuses one filter.
 - No radius or masking: `CIRAWFilter` has none, and a separate unsharp-mask stage would sharpen on top of the decoder's own.
