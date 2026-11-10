@@ -196,7 +196,7 @@ struct LookSection: View {
     }
 
     /// Menu items for the folders directly below `parent`, and for `parent` itself when it holds
-    /// LUTs and has subfolders. LUTs outside any folder come last, as Other.
+    /// LUTs and has subfolders. LUTs outside any folder come last, as Ungrouped.
     private func folderItems(under parent: String) -> [MenuPopUp.Item] {
         let folders = looks.folders
         let children = Self.childFolders(of: parent, in: folders)
@@ -339,9 +339,9 @@ struct LookSection: View {
         }
     }
 
-    /// A folder's name as the pop-up shows it. LUTs outside any folder are Other.
+    /// A folder's name as the pop-up shows it. LUTs outside any folder are Ungrouped.
     private static func folderTitle(_ folder: String) -> String {
-        folder.isEmpty ? "Other" : (folder as NSString).lastPathComponent
+        folder.isEmpty ? "Ungrouped" : (folder as NSString).lastPathComponent
     }
 
     /// A LUT's name as shown: the last part of its path, without `.cube`.
