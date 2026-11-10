@@ -37,7 +37,7 @@ struct ProofApp: App {
                 .pickerStyle(.inline)
                 .disabled(library.selection == nil || library.isEditing)
                 Divider()
-                Button("Refresh") { library.refresh() }
+                Button("Reload Folders") { library.refresh() }
                     .keyboardShortcut("r")
                     .disabled(library.locations.isEmpty || library.isEditing)
                 Divider()

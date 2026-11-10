@@ -747,7 +747,7 @@ final class Library {
     }
 
     /// Reads every folder already read again, on local disks and network volumes, after checking
-    /// which saved folders are available. For View › Refresh and the toolbar button.
+    /// which saved folders are available. For View › Reload Folders.
     func refresh() {
         recheckLocations()
         reload(contents.keys.filter { isAvailable($0.locationID) })
