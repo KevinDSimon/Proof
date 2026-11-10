@@ -28,15 +28,15 @@ struct Navigator: View {
                         .offset(x: region.minX * size.width, y: region.minY * size.height)
                 }
             }
-            .clipShape(.rect(cornerRadius: 4))
+            .clipped()
             .contentShape(.rect)
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                 zoom.center(on: CGPoint(x: value.location.x / size.width, y: value.location.y / size.height))
             })
-            .padding(6)
-            // Solid and outlined like the inspector's sections, so it reads crisply over the photo.
-            .background(Color(white: backdropGray), in: .rect(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+            // A square edge in the canvas gray, one point (two pixels on a Retina display), so it
+            // separates from the photo underneath without a plate around it.
+            .padding(1)
+            .background(Color(white: backdropGray))
             .help("Click or drag to move around the photo")
             .accessibilityElement()
             .accessibilityLabel("Navigator")
