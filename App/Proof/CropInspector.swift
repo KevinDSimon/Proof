@@ -12,16 +12,22 @@ struct CropInspector: View {
     @State private var customHeight = ""
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Aspect Ratio", selection: Binding(get: { shownChoice }, set: choose)) {
-                    ForEach(AspectChoice.allCases, id: \.self) { choice in
-                        Text(choice.title)
-                        if choice == .freeform || choice == .original { Divider() }
-                    }
-                }
+        InspectorPanel {
+            // One card, without a switch: the tool already shows the whole photo, and Done or
+            // Cancel is the comparison.
+            InspectorCard(title: "Crop", canReset: library.canResetCropRectangle || canResetTurn,
+                          reset: {
+                              library.resetCropRectangle()
+                              library.resetCropTurn()
+                          }) {
+                MenuPopUp(title: shownChoice.title, items: AspectChoice.allCases.flatMap { choice -> [MenuPopUp.Item] in
+                    let item = MenuPopUp.Item.action(choice.title, isChecked: choice == shownChoice) { choose(choice) }
+                    return choice == .freeform || choice == .original ? [item, .separator] : [item]
+                })
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Aspect Ratio")
                 if shownChoice == .custom {
-                    LabeledContent("Ratio") {
+                    row("Ratio") {
                         HStack(spacing: 4) {
                             ratioField("Width", text: $customWidth)
                             Text(":").foregroundStyle(.secondary)
@@ -29,7 +35,7 @@ struct CropInspector: View {
                         }
                     }
                 }
-                LabeledContent("Orientation") {
+                row("Orientation") {
                     Button("Swap", systemImage: "rectangle.portrait.rotate") { library.swapCropOrientation() }
                         .labelStyle(.titleAndIcon)
                         .help("Switch the crop between landscape and portrait (X)")
@@ -44,12 +50,12 @@ struct CropInspector: View {
                         library.isStraightening = adjusting
                         library.isAdjusting = adjusting
                     })
-                LabeledContent {
+                row(library.foundNoHorizon ? "Level · No horizon found" : "Level") {
                     HStack {
                         Toggle(isOn: Binding(get: { library.isDrawingLevelLine }, set: { library.isDrawingLevelLine = $0 })) {
                             Label("Draw Line", systemImage: "ruler")
                                 .labelStyle(.iconOnly)
-                                .frame(width: Self.levelButtonWidth)
+                                .frame(width: Self.levelButtonWidth, height: Self.levelButtonHeight)
                         }
                         .toggleStyle(.button)
                         .help("Drag along something in the photo that should be level or upright")
@@ -57,58 +63,61 @@ struct CropInspector: View {
                             guard let renderer else { return }
                             Task { await library.autoStraighten(with: renderer) }
                         } label: {
-                            Text("Auto").frame(width: Self.levelButtonWidth)
+                            Text("Auto").frame(width: Self.levelButtonWidth, height: Self.levelButtonHeight)
                         }
                         .disabled(renderer == nil || library.isFindingHorizon)
                         .help("Straighten to the horizon found in the photo")
                     }
-                } label: {
-                    Text("Level")
-                    if library.foundNoHorizon {
-                        Text("No horizon found")
-                    }
                 }
-            } header: {
-                SectionHeader(title: "Crop", canReset: library.canResetCropRectangle) {
-                    library.resetCropRectangle()
-                }
-            }
-            Section {
-                HStack {
-                    iconButton("Rotate Left", systemImage: "rotate.left", help: "Turn the photo a quarter turn counterclockwise (⌘[)") {
-                        library.rotate(clockwise: false)
+                // The name above the buttons: beside them it wraps onto two lines.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Rotate and Flip")
+                        .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                    HStack {
+                        iconButton("Rotate Left", systemImage: "rotate.left", help: "Turn the photo a quarter turn counterclockwise (⌘[)") {
+                            library.rotate(clockwise: false)
+                        }
+                        iconButton("Rotate Right", systemImage: "rotate.right", help: "Turn the photo a quarter turn clockwise (⌘])") {
+                            library.rotate(clockwise: true)
+                        }
+                        iconButton("Flip Horizontal", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right",
+                                   help: "Mirror the photo left to right") {
+                            library.flipHorizontally()
+                        }
+                        iconButton("Flip Vertical", systemImage: "arrow.up.and.down.righttriangle.up.righttriangle.down",
+                                   help: "Mirror the photo top to bottom") {
+                            library.flipVertically()
+                        }
                     }
-                    iconButton("Rotate Right", systemImage: "rotate.right", help: "Turn the photo a quarter turn clockwise (⌘])") {
-                        library.rotate(clockwise: true)
-                    }
-                    iconButton("Flip Horizontal", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right",
-                               help: "Mirror the photo left to right") {
-                        library.flipHorizontally()
-                    }
-                    iconButton("Flip Vertical", systemImage: "arrow.up.and.down.righttriangle.up.righttriangle.down",
-                               help: "Mirror the photo top to bottom") {
-                        library.flipVertically()
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            } header: {
-                SectionHeader(title: "Rotate and Flip",
-                              canReset: crop.rotation != 0 || crop.flipHorizontal || crop.flipVertical) {
-                    library.resetCropTurn()
                 }
             }
         }
-        .inspectorForm()
         // The photo's size comes from the file, read when it opens.
         .disabled(library.turnedPhotoSize == nil)
         .onAppear(perform: fillCustomFields)
         .onChange(of: crop.aspect) { fillCustomFields() }
     }
 
+    private var canResetTurn: Bool {
+        crop.rotation != 0 || crop.flipHorizontal || crop.flipVertical
+    }
+
+    /// A control with its name on the left, in the slider names' color.
+    private func row(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+            Spacer()
+            content()
+        }
+    }
+
     private var crop: Crop { library.selectedCrop }
 
-    /// The ruler and Auto buttons share one width, so they read as a pair.
+    /// The ruler and Auto buttons share one size, so they read as a pair: the ruler symbol alone
+    /// would make its button taller than Auto's.
     private static let levelButtonWidth = 36.0
+    private static let levelButtonHeight = 16.0
 
     /// The menu item for the locked ratio, in either orientation.
     private var shownChoice: AspectChoice {
@@ -193,29 +202,5 @@ enum AspectChoice: CaseIterable {
         case .sixteenNine: AspectRatio(16, 9)
         case .freeform, .original, .custom: nil
         }
-    }
-}
-
-extension View {
-    /// The inspector's form: grouped cards on the canvas's own gray, spaced away from the panel's edges.
-    func inspectorForm() -> some View {
-        modifier(InspectorForm())
-    }
-}
-
-private struct InspectorForm: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
-    func body(content: Content) -> some View {
-        content
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            // More room than the grouped form's default, which reads as tight beside the photo.
-            // Sections are spaced apart by their headers' top padding: macOS has no
-            // `listSectionSpacing`.
-            // Added to the grouped form's own 10 pt inset, so the cards sit 16 pt from the panel's edges.
-            .contentMargins(.horizontal, 6, for: .scrollContent)
-            .contentMargins(.vertical, 8, for: .scrollContent)
-            .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 }

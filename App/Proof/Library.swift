@@ -83,9 +83,8 @@ final class Library {
             // Leaving the photo any way but Done or Cancel keeps the crop.
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
-            isCurveHidden = false
-            isLookHidden = false
             openSelectedEdit()
+            offGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
         }
     }
     /// The edits of photos opened in Edit since Proof started.
@@ -93,11 +92,18 @@ final class Library {
     /// Thumbnails of photos edited since Proof started, showing their current edit. The grid and
     /// the filmstrip show these over the thumbnails they loaded.
     private(set) var editedThumbnails: [PhotoReference: NSImage] = [:]
-    /// The canvas shows the photo without its tone curve, to compare. Only the view changes:
-    /// the edit keeps its curve, and opening another photo shows curves again.
-    var isCurveHidden = false
-    /// The canvas shows the photo without its look, to compare, the same way.
-    var isLookHidden = false
+    /// Groups switched off: the canvas shows the photo without their adjustments, to compare, and
+    /// their cards are closed. Only the view changes: the edit keeps the adjustments, and opening
+    /// a photo sets the switches again.
+    var offGroups: Set<AdjustmentGroup> = []
+
+    func isOn(_ group: AdjustmentGroup) -> Bool {
+        !offGroups.contains(group)
+    }
+
+    func setOn(_ group: AdjustmentGroup, _ isOn: Bool) {
+        if isOn { offGroups.remove(group) } else { offGroups.insert(group) }
+    }
     /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
     var isAdjusting = false {
         didSet {
@@ -328,7 +334,7 @@ final class Library {
     /// shows, keeping its strength. Without a look, starts at the first or last.
     func stepLook(by offset: Int) {
         guard canStepLook, let next = looks.look(steppingBy: offset, from: selectedEdit?.recipe.look?.lut) else { return }
-        isLookHidden = false
+        setOn(.look, true)
         changeEdit { recipe in
             recipe.look = Look(lut: next, strength: recipe.look?.strength ?? 1)
         }
@@ -881,3 +887,4 @@ final class Library {
         watchLocalFolders()
     }
 }
+

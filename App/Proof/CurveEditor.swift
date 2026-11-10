@@ -366,7 +366,7 @@ struct CurveEditor: View {
 
     private func set(_ points: [CurvePoint]) {
         let channel = channel
-        library.isCurveHidden = false
+        library.setOn(.curve, true)
         library.changeEdit { $0.curve[channel] = points }
     }
 
@@ -547,7 +547,7 @@ private struct LevelsTrack: View {
         let channel = channel
         let rounded = Levels(black: CurveEditor.rounded(levels.black), midtone: CurveEditor.rounded(levels.midtone),
                              white: CurveEditor.rounded(levels.white))
-        library.isCurveHidden = false
+        library.setOn(.curve, true)
         library.changeEdit { $0.curve[levels: channel] = rounded }
     }
 

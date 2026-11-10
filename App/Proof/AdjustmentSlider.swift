@@ -34,6 +34,7 @@ struct AdjustmentSlider: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(title)
+                    .foregroundStyle(InspectorCard<EmptyView>.labelColor)
                     .onTapGesture(count: 2, perform: reset)
                     .help("Double-click to reset")
                 Spacer()
