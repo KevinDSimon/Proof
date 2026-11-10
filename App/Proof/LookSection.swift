@@ -125,9 +125,9 @@ struct LookSection: View {
         InspectorCard(title: "Looks", isOn: library.isOnBinding(.look), canReset: look != nil,
                       reset: { library.changeEdit { $0.look = nil } }) {
             if looks.names.isEmpty {
-                // Without the large symbol, so the empty card isn't much taller than the others.
+                // One line of description, so the empty card isn't much taller than the others.
                 ContentUnavailableView {
-                    Text("No Looks")
+                    Label("No Looks", systemImage: "camera.filters")
                 } description: {
                     Text("Drag .cube files or folders here.")
                 } actions: {
