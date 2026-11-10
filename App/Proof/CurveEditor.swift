@@ -61,12 +61,14 @@ struct CurveEditor: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            // Small, at its own width, centered. The segmented control sizes every segment to
-            // its longest label once it redraws, and at the regular size that is wider than the
-            // default inspector, which pushed the section sideways. Its width must not follow the
-            // graph's either: the two would feed each other and shift as the graph redraws.
+            // Small, with flexible segments so it spans the row like the slider tracks. The
+            // segmented control sizes every segment to its longest label once it redraws; at the
+            // regular size the four together are wider than the default inspector, which pushed
+            // the section sideways. At the small size they fit, so flexible sizing only ever
+            // widens them. Its width must not be set from the graph's: the two would feed each
+            // other.
             .controlSize(.small)
-            .fixedSize()
+            .buttonSizing(.flexible)
             .frame(maxWidth: .infinity)
             // The other rows' text sits a little below the card's edge; match it.
             .padding(.top, 2)
