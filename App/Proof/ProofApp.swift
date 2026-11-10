@@ -535,13 +535,16 @@ struct AdjustmentsInspector: View {
             }
             // White balance can't be shown until the camera's has been read from the photo.
             .disabled(library.selectedEdit?.asShot == nil)
-            InspectorCard(title: "Light", isOn: library.isOnBinding(.light),
-                          canReset: basic.exposure != 0 || basic.contrast != 0 || basic.highlights != 0
-                              || basic.shadows != 0 || basic.whites != 0 || basic.blacks != 0,
+            InspectorCard(title: "Basic", isOn: library.isOnBinding(.light),
+                          canReset: basic.exposure != 0 || basic.contrast != 0 || basic.texture != 0
+                              || basic.clarity != 0 || basic.highlights != 0 || basic.shadows != 0
+                              || basic.whites != 0 || basic.blacks != 0,
                           reset: {
                               library.changeEdit {
                                   $0.basic.exposure = 0
                                   $0.basic.contrast = 0
+                                  $0.basic.texture = 0
+                                  $0.basic.clarity = 0
                                   $0.basic.highlights = 0
                                   $0.basic.shadows = 0
                                   $0.basic.whites = 0
@@ -563,6 +566,22 @@ struct AdjustmentsInspector: View {
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
                     showsSign: true, track: Self.contrastTrack,
                     reset: { library.changeEdit { $0.basic.contrast = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Texture",
+                    value: Binding(get: { basic.texture },
+                                   set: { value in library.changeEdit { $0.basic.texture = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.textureTrack,
+                    reset: { library.changeEdit { $0.basic.texture = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Clarity",
+                    value: Binding(get: { basic.clarity },
+                                   set: { value in library.changeEdit { $0.basic.clarity = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.clarityTrack,
+                    reset: { library.changeEdit { $0.basic.clarity = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
                     title: "Highlights",
@@ -694,6 +713,10 @@ struct AdjustmentsInspector: View {
     private static let exposureTrack = [Color(white: 0), Color(white: 0.97)]
     /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
     private static let contrastTrack = exposureTrack
+    /// Texture and Clarity change detail rather than brightness, so their tracks are a plain
+    /// neutral gray, as Lightroom draws them.
+    private static let textureTrack = [Color(white: 0.55), Color(white: 0.55)]
+    private static let clarityTrack = textureTrack
     private static let highlightsTrack = exposureTrack
     private static let shadowsTrack = exposureTrack
     private static let whitesTrack = exposureTrack
