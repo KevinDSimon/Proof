@@ -92,6 +92,37 @@ struct CurveSplineTests {
         }
     }
 
+    @Test("Default levels change nothing; black and white clip, and the midtone lands on middle gray")
+    func levels() {
+        #expect(LevelsMap(Levels()).isIdentity)
+        let map = LevelsMap(Levels(black: 0.1, midtone: 0.3, white: 0.8))
+        #expect(map(0.05) == 0 && map(0.1) == 0)
+        #expect(map(0.85) == 1 && map(0.8) == 1)
+        #expect(abs(map(0.1 + 0.3 * 0.7) - 0.5) < 1e-12)
+        // A midtone left of center brightens.
+        #expect(map(0.45) > (0.45 - 0.1) / 0.7)
+        for y in [0.0, 0.2, 0.5, 0.9, 1.0] { #expect(abs(map(map.inverse(y)) - y) < 1e-12) }
+    }
+
+    @Test("Handles from a hand-edited sidecar are kept in order and the midtone off the ends")
+    func sanitizesLevels() {
+        let crossed = LevelsMap(Levels(black: 0.9, midtone: 1.4, white: 0.3))
+        #expect(crossed.white - crossed.black >= LevelsMap.minimumGap - 1e-12)
+        #expect(crossed.midtone == LevelsMap.midtoneRange.upperBound)
+        #expect(LevelsMap(Levels(black: .nan, midtone: .infinity, white: -1)).black == 0)
+    }
+
+    @Test("A channel's levels apply before its points")
+    func levelsBeforePoints() {
+        var curve = ToneCurve()
+        curve.rgb = Self.sCurve
+        curve[levels: .rgb] = Levels(black: 0.05, midtone: 0.45, white: 0.9)
+        #expect(!curve.isIdentity(.rgb))
+        let lookup = ToneLookup(contrast: 0, whites: 0, blacks: 0, curve: curve)
+        let expected = CurveSpline(Self.sCurve)(LevelsMap(curve.levels.rgb)(0.4))
+        for channel in 0..<3 { #expect(abs(lookup.output(0.4, channel: channel) - expected) < 1e-12) }
+    }
+
     /// The GPU kernel against the CPU with a different curve on each channel, so a channel mixed
     /// up in the kernel or in its end slopes shows.
     @Test("Each channel's curve renders on the GPU as on the CPU")
@@ -101,6 +132,7 @@ struct CurveSplineTests {
         curve.red = [CurvePoint(0, 0.05), CurvePoint(0.5, 0.6), CurvePoint(1, 1)]
         curve.green = [CurvePoint(0, 0), CurvePoint(0.4, 0.35), CurvePoint(0.9, 1)]
         curve.blue = [CurvePoint(0.1, 0), CurvePoint(1, 0.9)]
+        curve[levels: .green] = Levels(black: 0.05, midtone: 0.4, white: 0.95)
         let lookup = ToneLookup(contrast: 20, whites: 0, blacks: 0, curve: curve)
 
         let count = 4096

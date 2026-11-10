@@ -27,8 +27,33 @@ extension ToneCurve {
         }
     }
 
+    public subscript(levels channel: Channel) -> Levels {
+        get {
+            switch channel {
+            case .rgb: levels.rgb
+            case .red: levels.red
+            case .green: levels.green
+            case .blue: levels.blue
+            }
+        }
+        set {
+            switch channel {
+            case .rgb: levels.rgb = newValue
+            case .red: levels.red = newValue
+            case .green: levels.green = newValue
+            case .blue: levels.blue = newValue
+            }
+        }
+    }
+
     public func isIdentity(_ channel: Channel) -> Bool {
-        CurveSpline(self[channel]).isIdentity
+        CurveSpline(self[channel]).isIdentity && LevelsMap(self[levels: channel]).isIdentity
+    }
+
+    /// One channel's whole curve: its levels, then its points.
+    public func function(of channel: Channel) -> (Double) -> Double {
+        let levels = LevelsMap(self[levels: channel]), spline = CurveSpline(self[channel])
+        return { spline(levels($0)) }
     }
 
     public var isIdentity: Bool { Channel.allCases.allSatisfy(isIdentity) }
@@ -99,5 +124,42 @@ public struct CurveSpline: Equatable, Sendable {
         m[0] = end(h[0], h[1], d[0], d[1])
         m[n - 1] = end(h[n - 2], h[n - 3], d[n - 2], d[n - 3])
         return m
+    }
+}
+
+/// A channel's black, midtone and white handles as a function on 0…1: a straight stretch from
+/// black to white, bent by a power so the midtone lands on 0.5. The handles are kept in order
+/// and apart, and the midtone away from the ends, so a hand-edited sidecar still gives a curve.
+///
+/// Changing this changes how saved edits render, so it needs a `processVersion` bump.
+public struct LevelsMap: Equatable, Sendable {
+    public static let minimumGap = 0.02
+    public static let midtoneRange: ClosedRange<Double> = 0.05...0.95
+
+    public let black: Double
+    public let white: Double
+    public let midtone: Double
+    let gamma: Double
+
+    public init(_ levels: Levels) {
+        func finite(_ v: Double, or fallback: Double) -> Double { v.isFinite ? v : fallback }
+        black = min(max(finite(levels.black, or: 0), 0), 1 - Self.minimumGap)
+        white = min(max(finite(levels.white, or: 1), black + Self.minimumGap), 1)
+        midtone = min(max(finite(levels.midtone, or: 0.5), Self.midtoneRange.lowerBound), Self.midtoneRange.upperBound)
+        gamma = log(0.5) / log(midtone)
+    }
+
+    public var isIdentity: Bool { black == 0 && white == 1 && midtone == 0.5 }
+
+    public func callAsFunction(_ x: Double) -> Double {
+        let t = min(max((x - black) / (white - black), 0), 1)
+        return gamma == 1 ? t : pow(t, gamma)
+    }
+
+    /// The input that `callAsFunction` maps to `y`, which is where the editor draws a curve
+    /// point whose own input is `y`.
+    public func inverse(_ y: Double) -> Double {
+        let t = min(max(y, 0), 1)
+        return black + (white - black) * (gamma == 1 ? t : pow(t, 1 / gamma))
     }
 }

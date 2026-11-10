@@ -20,7 +20,10 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
     "contrast": 10, "highlights": -40, "shadows": 25,
     "whites": 0, "blacks": -5, "vibrance": 15, "saturation": 0
   },
-  "curve": { "rgb": [[0, 0], [1, 1]], "red": [[0, 0], [1, 1]], "green": [[0, 0], [1, 1]], "blue": [[0, 0], [1, 1]] },
+  "curve": {
+    "rgb": [[0, 0], [1, 1]], "red": [[0, 0], [1, 1]], "green": [[0, 0], [1, 1]], "blue": [[0, 0], [1, 1]],
+    "levels": { "rgb": [0, 0.5, 1], "red": [0, 0.5, 1], "green": [0, 0.5, 1], "blue": [0, 0.5, 1] }
+  },
   "look": { "lut": "Portra.cube", "strength": 0.7 },
   "crop": {
     "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
@@ -37,12 +40,24 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `formatVersion` | Version of this JSON layout. Bumped when fields are renamed or restructured; older files are migrated on read. |
 | `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. |
 | `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
-| `curve` | Control points per channel (`rgb`, `red`, `green`, `blue`), each `[input, output]` from 0 to 1 in sRGB-encoded values, sorted by input, at most 16 per channel. The RGB curve applies after Contrast, Whites and Blacks, then each color channel's curve. The curve passes through every point with monotone cubic interpolation and is flat beyond the first and last points. Values outside 0 to 1 are clamped, and a point at the same input as an earlier one is ignored. |
+| `curve` | Control points per channel (`rgb`, `red`, `green`, `blue`), each `[input, output]` from 0 to 1 in sRGB-encoded values, sorted by input, at most 16 per channel. The RGB curve applies after Contrast, Whites and Blacks, then each color channel's curve. The curve passes through every point with monotone cubic interpolation and is flat beyond the first and last points. Values outside 0 to 1 are clamped, and a point at the same input as an earlier one is ignored. `levels` holds each channel's black, midtone and white handles as `[black, midtone, white]`, described below. |
 | `look` | The LUT's file name in the LUT library and its strength from 0 to 1. `null` for none. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
 
 Missing fields take their default (no adjustment). `look` and `crop` are written as `null` when there is none. Proof writes the file with its keys sorted and indented.
+
+## Levels
+
+Each channel's handles apply before its points, as in Photoshop's Levels followed by Curves.
+
+| Value | Meaning |
+| --- | --- |
+| `black` | From 0 to 1. Tones at or below it become black. Default 0. |
+| `midtone` | Where middle gray lands, as a fraction of the way from `black` to `white`, from 0.05 to 0.95. Below 0.5 brightens the middle tones, above 0.5 darkens them. Default 0.5. |
+| `white` | From 0 to 1. Tones at or above it become white. Default 1. |
+
+Between `black` and `white` the tone is stretched to 0…1 and raised to the power that maps `midtone` to 0.5. `white` is kept at least 0.02 above `black`. A missing channel, or a missing `levels`, means the defaults; files saved before levels existed read that way.
 
 ## White balance
 

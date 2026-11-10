@@ -52,14 +52,17 @@ struct ReferenceRenderTests {
         return recipe
     }()
 
-    /// The tone curve alone: an S-curve on RGB with its ends moved, and a different curve on
-    /// each color channel, so a change to the interpolation, the order or a channel shows.
+    /// The tone curve alone: an S-curve on RGB with its ends moved, a different curve on each
+    /// color channel, and levels on RGB and green, so a change to the interpolation, the levels,
+    /// the order or a channel shows.
     static let curve: EditRecipe = {
         var recipe = EditRecipe()
         recipe.curve.rgb = [CurvePoint(0.04, 0), CurvePoint(0.25, 0.18), CurvePoint(0.75, 0.84), CurvePoint(0.97, 1)]
         recipe.curve.red = [CurvePoint(0, 0), CurvePoint(0.5, 0.55), CurvePoint(1, 1)]
         recipe.curve.green = [CurvePoint(0, 0.03), CurvePoint(1, 1)]
         recipe.curve.blue = [CurvePoint(0, 0), CurvePoint(0.6, 0.55), CurvePoint(1, 0.95)]
+        recipe.curve.levels.rgb = Levels(black: 0.02, midtone: 0.45, white: 0.96)
+        recipe.curve.levels.green = Levels(black: 0, midtone: 0.55, white: 1)
         return recipe
     }()
 

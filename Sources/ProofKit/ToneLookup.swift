@@ -3,7 +3,8 @@ import Foundation
 
 /// The Contrast, Whites and Blacks sliders and the tone curve, baked into one lookup per channel
 /// and applied by a small kernel. The sliders come first, then the RGB curve, then each
-/// channel's own curve.
+/// channel's own curve. Each curve applies its black, midtone and white handles before its
+/// points.
 ///
 /// The lookup is indexed by sRGB-encoded values, which spread its entries evenly across what
 /// the eye sees as dark to light. Inside 0…1 the sliders keep black and white in place; outside,
@@ -18,22 +19,27 @@ struct ToneLookup: Equatable {
     static let contrastStops = 1.0
     /// Each from -1 to 1.
     let contrast: Double, whites: Double, blacks: Double
-    /// The RGB curve, then the red, green and blue curves.
-    let rgb: CurveSpline, red: CurveSpline, green: CurveSpline, blue: CurveSpline
+    let curve: ToneCurve
+    /// The RGB curve, then the red, green and blue curves, each with its levels.
+    private let rgb: (Double) -> Double, red: (Double) -> Double, green: (Double) -> Double, blue: (Double) -> Double
 
     init(contrast: Double, whites: Double, blacks: Double, curve: ToneCurve = ToneCurve()) {
         self.contrast = Self.clamped(contrast) / 100
         self.whites = Self.clamped(whites) / 100
         self.blacks = Self.clamped(blacks) / 100
-        rgb = CurveSpline(curve.rgb)
-        red = CurveSpline(curve.red)
-        green = CurveSpline(curve.green)
-        blue = CurveSpline(curve.blue)
+        self.curve = curve
+        rgb = curve.function(of: .rgb)
+        red = curve.function(of: .red)
+        green = curve.function(of: .green)
+        blue = curve.function(of: .blue)
+    }
+
+    static func == (a: ToneLookup, b: ToneLookup) -> Bool {
+        a.contrast == b.contrast && a.whites == b.whites && a.blacks == b.blacks && a.curve == b.curve
     }
 
     var isNeutral: Bool {
-        contrast == 0 && whites == 0 && blacks == 0
-            && rgb.isIdentity && red.isIdentity && green.isIdentity && blue.isIdentity
+        contrast == 0 && whites == 0 && blacks == 0 && curve.isIdentity
     }
 
     static func clamped(_ value: Double) -> Double {

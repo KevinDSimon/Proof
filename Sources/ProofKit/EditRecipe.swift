@@ -246,7 +246,8 @@ public struct WhiteBalance: Equatable, Sendable {
     }
 }
 
-/// Control points per channel, each (input, output) in 0...1, sorted by input.
+/// Control points per channel, each (input, output) in 0...1, sorted by input, and each
+/// channel's black, midtone and white handles, which apply before its points.
 public struct ToneCurve: Codable, Equatable, Sendable {
     public static let identity: [CurvePoint] = [CurvePoint(0, 0), CurvePoint(1, 1)]
 
@@ -254,6 +255,7 @@ public struct ToneCurve: Codable, Equatable, Sendable {
     public var red: [CurvePoint] = ToneCurve.identity
     public var green: [CurvePoint] = ToneCurve.identity
     public var blue: [CurvePoint] = ToneCurve.identity
+    public var levels = ChannelLevels()
 
     public init() {}
 
@@ -266,6 +268,54 @@ public struct ToneCurve: Codable, Equatable, Sendable {
         red = try points(.red)
         green = try points(.green)
         blue = try points(.blue)
+        levels = try c.decodeIfPresent(ChannelLevels.self, forKey: .levels) ?? ChannelLevels()
+    }
+}
+
+/// The black, midtone and white handles of each channel.
+public struct ChannelLevels: Codable, Equatable, Sendable {
+    public var rgb = Levels()
+    public var red = Levels()
+    public var green = Levels()
+    public var blue = Levels()
+
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rgb = try c.decodeIfPresent(Levels.self, forKey: .rgb) ?? Levels()
+        red = try c.decodeIfPresent(Levels.self, forKey: .red) ?? Levels()
+        green = try c.decodeIfPresent(Levels.self, forKey: .green) ?? Levels()
+        blue = try c.decodeIfPresent(Levels.self, forKey: .blue) ?? Levels()
+    }
+}
+
+/// Input levels, as in Photoshop's Levels: tones at or below `black` become black, tones at or
+/// above `white` become white, and `midtone` is where middle gray lands, as a fraction of the
+/// way from `black` to `white`. Encoded as a three-element array `[black, midtone, white]`.
+public struct Levels: Codable, Equatable, Sendable {
+    public var black: Double
+    public var midtone: Double
+    public var white: Double
+
+    public init(black: Double = 0, midtone: Double = 0.5, white: Double = 1) {
+        self.black = black
+        self.midtone = midtone
+        self.white = white
+    }
+
+    public init(from decoder: Decoder) throws {
+        var c = try decoder.unkeyedContainer()
+        black = try c.decode(Double.self)
+        midtone = try c.decode(Double.self)
+        white = try c.decode(Double.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.unkeyedContainer()
+        try c.encode(black)
+        try c.encode(midtone)
+        try c.encode(white)
     }
 }
 
