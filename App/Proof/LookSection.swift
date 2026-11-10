@@ -187,53 +187,48 @@ struct LookSection: View {
         }
     }
 
-    /// The folder pop-up. A folder that holds other folders opens as a submenu.
+    /// The folder pop-up, titled with the chosen look, or with the shown folder when no look in
+    /// it is chosen. A folder that holds other folders opens as a submenu.
     private var folderMenu: some View {
-        Menu {
-            folderItems(under: "")
-            Divider()
-            Button("Add Looks…") { isImporting = true }
-            Button("Reveal in Finder") { looks.revealInFinder() }
-        } label: {
-            Text(Self.folderTitle(looks.shownFolder))
-        }
-        .accessibilityLabel("Folder")
-        .accessibilityValue(Self.folderTitle(looks.shownFolder))
+        MenuPopUp(title: menuTitle, items: folderItems(under: "") + [
+            .separator,
+            .action("Add Looks…") { isImporting = true },
+            .action("Reveal in Finder") { looks.revealInFinder() },
+        ])
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel("Looks folder")
+    }
+
+    private var menuTitle: String {
+        if let look, looks.shownNames.contains(look.lut) { return Self.title(of: look.lut) }
+        return Self.folderTitle(looks.shownFolder)
     }
 
     /// Menu items for the folders directly below `parent`, and for `parent` itself when it holds
     /// LUTs and has subfolders. LUTs outside any folder come last, as Other.
-    private func folderItems(under parent: String) -> AnyView {
+    private func folderItems(under parent: String) -> [MenuPopUp.Item] {
         let folders = looks.folders
         let children = Self.childFolders(of: parent, in: folders)
-        return AnyView(Group {
-            ForEach(children, id: \.self) { child in
-                if Self.childFolders(of: child, in: folders).isEmpty {
-                    folderToggle(child, title: Self.folderTitle(child))
-                } else {
-                    Menu(Self.folderTitle(child)) {
-                        if folders.contains(child) {
-                            folderToggle(child, title: Self.folderTitle(child))
-                            Divider()
-                        }
-                        folderItems(under: child)
-                    }
-                }
-            }
-            if parent.isEmpty, folders.contains("") {
-                if !children.isEmpty { Divider() }
-                folderToggle("", title: Self.folderTitle(""))
-            }
-        })
+        var items: [MenuPopUp.Item] = children.map { child in
+            let grandchildren = folderItems(under: child)
+            guard !grandchildren.isEmpty else { return folderItem(child) }
+            return .submenu(Self.folderTitle(child),
+                            folders.contains(child) ? [folderItem(child), .separator] + grandchildren : grandchildren)
+        }
+        if parent.isEmpty, folders.contains("") {
+            if !items.isEmpty { items.append(.separator) }
+            items.append(folderItem(""))
+        }
+        return items
     }
 
     /// A menu item that shows `folder`, checked while it is shown.
-    private func folderToggle(_ folder: String, title: String) -> some View {
-        Toggle(title, isOn: Binding(get: { looks.shownFolder == folder }, set: { _ in looks.shownFolder = folder }))
+    private func folderItem(_ folder: String) -> MenuPopUp.Item {
+        .action(Self.folderTitle(folder), isChecked: looks.shownFolder == folder) { looks.shownFolder = folder }
     }
 
-    /// The shown folder's LUTs as a grid of previews, as Pixelmator Pro shows its presets. The
-    /// chosen one has a ring, and its name is under the grid; each tile's name is in its help tag.
+    /// The shown folder's LUTs as a grid of previews of the whole photo. The chosen one has the
+    /// filmstrip's ring, and its name is the pop-up's title; each tile's name is in its help tag.
     /// With the grid focused, the arrow keys move between tiles and choose as they go.
     private var grid: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -245,18 +240,12 @@ struct LookSection: View {
             }
             .opacity(library.isLookHidden ? 0.45 : 1)
             .focusable()
+            .focusEffectDisabled()
             .focused($isGridFocused)
             .onKeyPress(.rightArrow) { step(by: 1) }
             .onKeyPress(.leftArrow) { step(by: -1) }
             .onKeyPress(.downArrow) { step(by: Self.columns) }
             .onKeyPress(.upArrow) { step(by: -Self.columns) }
-            if let look, looks.shownNames.contains(look.lut) {
-                Text(Self.title(of: look.lut))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
         }
         .dropDestination(for: URL.self) { urls, _ in
             importItems(urls)
@@ -298,18 +287,17 @@ struct LookSection: View {
             if let image = looks.previews[path] {
                 Image(nsImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
             } else {
                 Rectangle().fill(.quaternary)
+                    .aspectRatio(3 / 2, contentMode: .fit)
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity)
-        .aspectRatio(3 / 2, contentMode: .fit)
-        .clipped()
     }
 
-    /// Four across, as Pixelmator Pro lays out its presets in a panel this wide.
-    private static let columns = 4
+    /// Three across: large enough to judge a look at a glance in the inspector's width.
+    private static let columns = 3
     private static let tileSpacing: CGFloat = 6
 
     private var looks: LookBrowser { library.looks }
