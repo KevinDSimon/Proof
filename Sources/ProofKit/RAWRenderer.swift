@@ -8,10 +8,14 @@ public enum RAWRendererError: Error, Equatable {
     case renderFailed
 }
 
-/// A photo rendered at screen size. The texture is written once by `RAWRenderer` and only
-/// read afterwards, which is what makes passing it between threads safe.
+/// A photo, or the part of it zoom shows, rendered at screen size. The texture is written once by
+/// `RAWRenderer` and only read afterwards, which is what makes passing it between threads safe.
 public struct RenderedPhoto: @unchecked Sendable {
     public let texture: MTLTexture
+    /// The part of the photo the texture holds, from 0 to 1 on each axis from the top left.
+    public var region = CGRect(x: 0, y: 0, width: 1, height: 1)
+    /// The whole cropped photo's size at full resolution, in pixels.
+    public var photoSize: CGSize = .zero
 }
 
 /// Decodes one RAW file with `CIRAWFilter` and renders it into Metal textures sized for the screen.
@@ -111,14 +115,48 @@ public actor RAWRenderer {
         return oriented(filter.nativeSize, filter.orientation)
     }
 
+    /// Renders `region` of the open photo, from 0 to 1 on each axis from the top left, at `scale`
+    /// of full resolution, at most 1, for zoom. The caller keeps the region small enough at that
+    /// scale to cover about the view, so only the visible part of a large photo is rendered. The
+    /// result's region is `region` grown to whole pixels and kept within the photo.
+    public func render(region: CGRect, scale: CGFloat, recipe: EditRecipe = EditRecipe(),
+                       lut: PreparedLUT? = nil) throws -> RenderedPhoto {
+        try render(scaleFactor: min(max(scale, 0.01), 1), region: region, recipe: recipe, lut: lut)
+    }
+
+    /// The cropped photo's size at full resolution, in whole pixels as `applyGeometry` makes it.
+    static func photoSize(nativeSize: CGSize, orientation: CGImagePropertyOrientation, crop: Crop?) -> CGSize {
+        let oriented = oriented(nativeSize, orientation)
+        guard let crop else { return oriented }
+        let turned = crop.turnedSize(of: oriented)
+        guard crop.hasRectangle else { return turned }
+        return CGSize(width: max((crop.width * turned.width).rounded(.down), 1),
+                      height: max((crop.height * turned.height).rounded(.down), 1))
+    }
+
     /// Renders at an exact `CIRAWFilter.scaleFactor`. Internal so that only export and timing
-    /// tests can ask for full sensor resolution; the app goes through `render(fitting:)`.
-    func render(scaleFactor scale: CGFloat, recipe: EditRecipe, lut: PreparedLUT? = nil) throws -> RenderedPhoto {
+    /// tests can ask for full sensor resolution of the whole photo; the app goes through
+    /// `render(fitting:)` and `render(region:scale:)`.
+    func render(scaleFactor scale: CGFloat, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1),
+                recipe: EditRecipe, lut: PreparedLUT? = nil) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         filter.scaleFactor = Float(scale)
-        guard let image = Self.apply(recipe, to: filter, asShot: asShot, lut: lut) else { throw RAWRendererError.renderFailed }
+        guard let whole = Self.apply(recipe, to: filter, asShot: asShot, lut: lut) else { throw RAWRendererError.renderFailed }
 
-        let extent = image.extent.integral
+        // The region in Core Image's coordinates, whose y axis points up, in whole pixels.
+        let full = whole.extent.integral
+        // Edges within a hair of a whole pixel are taken as on it, so a region given in whole pixels
+        // isn't grown by a pixel of rounding error; others grow outward to whole pixels.
+        func snapped(_ value: CGFloat, _ round: FloatingPointRoundingRule) -> CGFloat {
+            abs(value - value.rounded()) < 0.001 ? value.rounded() : value.rounded(round)
+        }
+        let minX = snapped(full.minX + region.minX * full.width, .down)
+        let maxX = snapped(full.minX + region.maxX * full.width, .up)
+        let minY = snapped(full.minY + (1 - region.maxY) * full.height, .down)
+        let maxY = snapped(full.minY + (1 - region.minY) * full.height, .up)
+        let extent = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY).intersection(full)
+        guard !extent.isNull, extent.width >= 1, extent.height >= 1 else { throw RAWRendererError.renderFailed }
+        let image = whole.cropped(to: extent)
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: Self.pixelFormat,
             width: max(Int(extent.width), 1),
@@ -137,7 +175,11 @@ public actor RAWRenderer {
         destination.colorSpace = Self.colorSpace
         let origin = image.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
         try context.startTask(toRender: origin, to: destination).waitUntilCompleted()
-        return RenderedPhoto(texture: texture)
+        let shown = CGRect(x: (extent.minX - full.minX) / full.width, y: (full.maxY - extent.maxY) / full.height,
+                           width: extent.width / full.width, height: extent.height / full.height)
+        return RenderedPhoto(texture: texture, region: shown,
+                             photoSize: Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                       crop: recipe.crop))
     }
 
     /// A thumbnail of `url` with `recipe` applied, at most `maxPixelSize` on the long edge, for
@@ -178,12 +220,18 @@ public actor RAWRenderer {
         return histogram
     }
 
-    /// Draws a photo from `render(fitting:)` centered in `drawable`, scaled to fit, over
-    /// `background`. Cheap enough to run in a view's draw callback while a new render is pending.
-    /// The crop tool passes `angle`, in degrees clockwise, to straighten the photo around its
-    /// center as it is dragged; the photo is scaled to fit as if upright.
+    /// Draws a photo from `render(fitting:)` into `drawable` over `background`: centered and
+    /// scaled to fit, or filling `frame`, the whole photo's place in the drawable in pixels from
+    /// the top left, as `Viewport` gives it when zoomed. `detail`, from `render(region:scale:)`, is
+    /// drawn over its part of the photo, so a zoomed view shows the sharp region where there is
+    /// one and the screen-size photo, enlarged, everywhere else. Cheap enough to run in a view's
+    /// draw callback while a new render is pending. The crop tool passes `angle`, in degrees
+    /// clockwise, to straighten the photo around its center as it is dragged; the photo is scaled
+    /// to fit as if upright.
     public nonisolated func draw(
         _ photo: RenderedPhoto?,
+        detail: RenderedPhoto? = nil,
+        frame: CGRect? = nil,
         into drawable: MTLTexture,
         commandBuffer: MTLCommandBuffer,
         background: CIColor,
@@ -192,29 +240,45 @@ public actor RAWRenderer {
         let bounds = CGRect(x: 0, y: 0, width: drawable.width, height: drawable.height)
         var composed = CIImage(color: background).cropped(to: bounds)
         if let photo {
-            guard let image = CIImage(mtlTexture: photo.texture, options: [.colorSpace: Self.colorSpace]) else {
-                throw RAWRendererError.renderFailed
+            let frame = frame ?? Viewport().frame(photo: photo.photoSize == .zero ? CGSize(width: photo.texture.width,
+                                                                                          height: photo.texture.height)
+                                                                                : photo.photoSize,
+                                                 view: bounds.size)
+            var placed = try Self.place(photo, in: frame, bounds: bounds)
+            if let detail {
+                placed = try Self.place(detail, in: frame, bounds: bounds).composited(over: placed)
             }
-            let scale = min(bounds.width / image.extent.width, bounds.height / image.extent.height)
-            let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-            var placed = scaled.transformed(by: CGAffineTransform(
-                translationX: ((bounds.width - scaled.extent.width) / 2).rounded(),
-                y: ((bounds.height - scaled.extent.height) / 2).rounded()
-            ))
             if angle != 0 {
                 // Core Image's y axis points up here too, so a clockwise turn is a negative angle.
-                let center = CGPoint(x: placed.extent.midX, y: placed.extent.midY)
+                let center = CGPoint(x: frame.midX, y: bounds.height - frame.midY)
                 placed = placed.transformed(by: CGAffineTransform(translationX: -center.x, y: -center.y)
                     .concatenating(CGAffineTransform(rotationAngle: -angle * .pi / 180))
                     .concatenating(CGAffineTransform(translationX: center.x, y: center.y)))
             }
-            composed = placed.composited(over: composed)
+            composed = placed.composited(over: composed).cropped(to: bounds)
         }
 
         let destination = CIRenderDestination(mtlTexture: drawable, commandBuffer: commandBuffer)
         destination.colorSpace = Self.colorSpace
         destination.isFlipped = true
         try context.startTask(toRender: composed, to: destination)
+    }
+
+    /// `photo`'s texture scaled onto its region of `frame`, in Core Image's coordinates for a
+    /// drawable of `bounds`. Enlarged textures are sampled from the nearest pixel, so pixels stay
+    /// crisp when zoomed past 100%; at exactly 100% nothing is resampled.
+    private static func place(_ photo: RenderedPhoto, in frame: CGRect, bounds: CGRect) throws -> CIImage {
+        guard let image = CIImage(mtlTexture: photo.texture, options: [.colorSpace: colorSpace]) else {
+            throw RAWRendererError.renderFailed
+        }
+        let target = CGRect(x: frame.minX + photo.region.minX * frame.width,
+                            y: frame.minY + photo.region.minY * frame.height,
+                            width: photo.region.width * frame.width, height: photo.region.height * frame.height)
+        let scaleX = target.width / image.extent.width
+        let scaleY = target.height / image.extent.height
+        let sampled = scaleX > 1.01 && photo.region != CGRect(x: 0, y: 0, width: 1, height: 1) ? image.samplingNearest() : image
+        return sampled.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY)
+            .concatenating(CGAffineTransform(translationX: target.minX, y: bounds.height - target.maxY)))
     }
 
     /// Builds the Core Image graph for `recipe` in the order set out in docs/architecture.md. The

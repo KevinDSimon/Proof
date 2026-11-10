@@ -26,13 +26,14 @@ struct ProofApp: App {
                     .keyboardShortcut("o")
             }
             CommandGroup(before: .sidebar) {
+                // In Edit, ⌘1 is Actual Size instead.
                 Picker("Show", selection: $library.filter) {
                     Text("All").tag(PhotoFilter.all)
-                        .keyboardShortcut("1")
+                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("1"))
                     Text("5-Star Photos").tag(PhotoFilter.fiveStars)
-                        .keyboardShortcut("2")
+                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("2"))
                     Text("Edited Photos").tag(PhotoFilter.edited)
-                        .keyboardShortcut("3")
+                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("3"))
                 }
                 .pickerStyle(.inline)
                 .disabled(library.selection == nil || library.isEditing)
@@ -48,6 +49,19 @@ struct ProofApp: App {
                 }
                 .keyboardShortcut("i", modifiers: [.command, .control])
                 .disabled(!library.isEditing)
+                Divider()
+                Button("Zoom In") { library.zoom.zoomIn() }
+                    .keyboardShortcut("+")
+                    .disabled(!library.isEditing || !library.zoom.canZoomIn)
+                Button("Zoom Out") { library.zoom.zoomOut() }
+                    .keyboardShortcut("-")
+                    .disabled(!library.isEditing || !library.zoom.canZoomOut)
+                Button("Zoom to Fit") { library.zoom.zoom(to: nil) }
+                    .keyboardShortcut("0")
+                    .disabled(!library.isEditing || !library.zoom.isEnabled || library.zoom.viewport.isFit)
+                Button("Actual Size") { library.zoom.zoom(to: 1) }
+                    .keyboardShortcut(library.isEditing ? KeyboardShortcut("1") : nil)
+                    .disabled(!library.isEditing || !library.zoom.isEnabled || library.zoom.viewport.scale == 1)
             }
             CommandMenu("Photo") {
                 Button("Edit") { library.browse.edit() }
@@ -240,6 +254,10 @@ struct ContentView: View {
         // Declared on the photo's column rather than the window, so the button sits over the
         // photo and stays put when the inspector opens and closes.
         .toolbar {
+            ToolbarItem {
+                ZoomMenu(zoom: library.zoom)
+            }
+            ToolbarSpacer(.fixed)
             // Stars and flags are separate groups, as in Lightroom, at the trailing end so the
             // title stands on its own.
             ToolbarItem {
@@ -390,7 +408,8 @@ struct EditCanvas: View {
     var body: some View {
         let backdrop = PhotoCanvas.backdropGray(for: colorScheme)
         PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdropGray: backdrop,
-                    angle: library.isCropping ? library.selectedCrop.angle : 0) { error in
+                    angle: library.isCropping ? library.selectedCrop.angle : 0,
+                    viewport: library.zoom.viewport, zoom: library.zoom) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
         } onHistogram: { histogram, url in
             library.showHistogram(histogram, of: url)
@@ -399,6 +418,13 @@ struct EditCanvas: View {
             if library.isCropping, let frame = library.selectedCropFrame {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
             }
+        }
+        // Each photo opens at Fit. The crop tool shows the whole photo, so zoom is off while it's open.
+        .onAppear { library.zoom.reset() }
+        .onChange(of: url) { library.zoom.reset() }
+        .onChange(of: library.isCropping, initial: true) { _, isCropping in
+            library.zoom.isEnabled = !isCropping
+            if isCropping { library.zoom.reset() }
         }
     }
 
@@ -410,6 +436,33 @@ struct EditCanvas: View {
         if library.isCurveHidden { recipe.curve = ToneCurve() }
         if library.isLookHidden { recipe.look = nil }
         return recipe
+    }
+}
+
+/// The toolbar's zoom pop-up: the current zoom as its title, and Fit and the steps to choose from.
+private struct ZoomMenu: View {
+    let zoom: CanvasZoom
+
+    var body: some View {
+        Menu {
+            Picker("Zoom", selection: Binding(get: { zoom.viewport.scale }, set: { zoom.zoom(to: $0) })) {
+                Text("Fit").tag(Double?.none)
+                ForEach(Viewport.steps, id: \.self) { step in
+                    Text(CanvasZoom.title(of: step)).tag(Double?.some(step))
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Text(zoom.title)
+                .monospacedDigit()
+        }
+        .menuIndicator(.visible)
+        .fixedSize()
+        .disabled(!zoom.isEnabled)
+        .help("Zoom (⌘+, ⌘−, ⌘0 to fit, ⌘1 for actual size)")
+        .accessibilityLabel("Zoom")
+        .accessibilityValue(zoom.title)
     }
 }
 
