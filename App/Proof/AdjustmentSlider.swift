@@ -33,7 +33,9 @@ struct AdjustmentSlider: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
+                // Secondary, so the card's title above reads first.
                 Text(title)
+                    .foregroundStyle(.secondary)
                     .onTapGesture(count: 2, perform: reset)
                     .help("Double-click to reset")
                 Spacer()

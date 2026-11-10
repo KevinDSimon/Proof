@@ -122,7 +122,8 @@ struct LookSection: View {
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
     var body: some View {
-        Section {
+        InspectorCard(title: "Looks", isOn: library.isOnBinding(.look), canReset: look != nil,
+                      reset: { library.changeEdit { $0.look = nil } }) {
             if looks.names.isEmpty {
                 ContentUnavailableView {
                     Label("No Looks", systemImage: "camera.filters")
@@ -140,10 +141,7 @@ struct LookSection: View {
                 AdjustmentSlider(
                     title: "Strength",
                     value: Binding(get: { (look?.strength ?? 1) * 100 },
-                                   set: { value in
-                                       library.isLookHidden = false
-                                       library.changeEdit { $0.look?.strength = value / 100 }
-                                   }),
+                                   set: { value in library.changeEdit { $0.look?.strength = value / 100 } }),
                     range: 0...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
                     unit: "percent",
                     reset: { library.changeEdit { $0.look?.strength = 1 } },
@@ -155,13 +153,6 @@ struct LookSection: View {
                 }
                 folderMenu
                 grid
-            }
-        } header: {
-            SectionHeader(title: "Looks", canReset: look != nil,
-                          isOn: Binding(get: { !library.isLookHidden }, set: { library.isLookHidden = !$0 }),
-                          canToggle: look != nil) {
-                library.isLookHidden = false
-                library.changeEdit { $0.look = nil }
             }
         }
         .disabled(library.selectedEdit == nil)
@@ -238,7 +229,6 @@ struct LookSection: View {
                     tile(path)
                 }
             }
-            .opacity(library.isLookHidden ? 0.45 : 1)
             .focusable()
             .focusEffectDisabled()
             .focused($isGridFocused)
@@ -305,7 +295,7 @@ struct LookSection: View {
 
     private func choose(_ path: String) {
         guard path != look?.lut else { return }
-        library.isLookHidden = false
+        library.setOn(.look, true)
         library.changeEdit { recipe in
             recipe.look = Look(lut: path, strength: recipe.look?.strength ?? 1)
         }

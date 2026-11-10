@@ -407,9 +407,7 @@ struct EditCanvas: View {
     private var shownRecipe: EditRecipe {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
-        if library.isCurveHidden { recipe.curve = ToneCurve() }
-        if library.isLookHidden { recipe.look = nil }
-        return recipe
+        return recipe.without(library.offGroups)
     }
 }
 
@@ -427,167 +425,161 @@ private struct SelectedHistogram: View {
 /// plain color as the photo's canvas, so the panel and the photo read as one surface.
 struct AdjustmentsInspector: View {
     let library: Library
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Form {
-            Section {
-                SelectedHistogram(library: library)
-            } header: {
-                SectionTitle("Histogram")
-            } footer: {
-                CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
-            }
-            Section {
-                // A full-width pop-up, as in Finder's settings; Custom is listed only while it is chosen.
-                MenuPopUp(title: Self.title(of: basic.whiteBalance),
-                          items: WhiteBalancePreset.allCases
-                              .filter { $0 != .custom || basic.whiteBalance == .custom }
-                              .map { preset in
-                                  .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
-                                      library.changeEdit { $0.basic.choose(preset) }
+        ScrollView {
+            VStack(spacing: InspectorCard<EmptyView>.spacing) {
+                InspectorCard(title: "Histogram") {
+                    SelectedHistogram(library: library)
+                    CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
+                }
+                InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
+                              canReset: basic.whiteBalance != .asShot,
+                              reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
+                    // A full-width pop-up, as in Finder's settings; Custom is listed only while it is chosen.
+                    MenuPopUp(title: Self.title(of: basic.whiteBalance),
+                              items: WhiteBalancePreset.allCases
+                                  .filter { $0 != .custom || basic.whiteBalance == .custom }
+                                  .map { preset in
+                                      .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
+                                          library.changeEdit { $0.basic.choose(preset) }
+                                      }
+                                  })
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("White Balance Preset")
+                    AdjustmentSlider(
+                        title: "Temperature",
+                        value: Binding(get: { shown.temperature },
+                                       set: { kelvin in library.changeEdit { $0.basic.setTemperature(kelvin) } }),
+                        range: WhiteBalance.temperatureRange, fineStep: 1, step: 10, coarseStep: 100, fractionDigits: 0,
+                        unit: "Kelvin", track: Self.temperatureTrack,
+                        position: WhiteBalance.sliderPosition(forTemperature:),
+                        valueAtPosition: WhiteBalance.temperature(atSliderPosition:),
+                        reset: { library.changeEdit { $0.basic.resetTemperature() } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Tint",
+                        value: Binding(get: { shown.tint },
+                                       set: { tint in library.changeEdit { $0.basic.setTint(tint) } }),
+                        range: WhiteBalance.tintRange, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.tintTrack,
+                        reset: { library.changeEdit { $0.basic.resetTint() } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                }
+                // White balance can't be shown until the camera's has been read from the photo.
+                .disabled(library.selectedEdit?.asShot == nil)
+                InspectorCard(title: "Light", isOn: library.isOnBinding(.light),
+                              canReset: basic.exposure != 0 || basic.contrast != 0 || basic.highlights != 0
+                                  || basic.shadows != 0 || basic.whites != 0 || basic.blacks != 0,
+                              reset: {
+                                  library.changeEdit {
+                                      $0.basic.exposure = 0
+                                      $0.basic.contrast = 0
+                                      $0.basic.highlights = 0
+                                      $0.basic.shadows = 0
+                                      $0.basic.whites = 0
+                                      $0.basic.blacks = 0
                                   }
-                              })
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel("White Balance Preset")
-                AdjustmentSlider(
-                    title: "Temperature",
-                    value: Binding(get: { shown.temperature },
-                                   set: { kelvin in library.changeEdit { $0.basic.setTemperature(kelvin) } }),
-                    range: WhiteBalance.temperatureRange, fineStep: 1, step: 10, coarseStep: 100, fractionDigits: 0,
-                    unit: "Kelvin", track: Self.temperatureTrack,
-                    position: WhiteBalance.sliderPosition(forTemperature:),
-                    valueAtPosition: WhiteBalance.temperature(atSliderPosition:),
-                    reset: { library.changeEdit { $0.basic.resetTemperature() } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Tint",
-                    value: Binding(get: { shown.tint },
-                                   set: { tint in library.changeEdit { $0.basic.setTint(tint) } }),
-                    range: WhiteBalance.tintRange, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.tintTrack,
-                    reset: { library.changeEdit { $0.basic.resetTint() } },
-                    isAdjusting: { library.isAdjusting = $0 })
-            } header: {
-                SectionHeader(title: "White Balance", canReset: basic.whiteBalance != .asShot) {
-                    library.changeEdit { $0.basic.resetWhiteBalance() }
+                              }) {
+                    AdjustmentSlider(
+                        title: "Exposure",
+                        value: Binding(get: { basic.exposure },
+                                       set: { value in library.changeEdit { $0.basic.exposure = value } }),
+                        range: -5...5, fineStep: 0.01, step: 0.1, coarseStep: 1, fractionDigits: 2,
+                        showsSign: true, unit: "stops", track: Self.exposureTrack,
+                        reset: { library.changeEdit { $0.basic.exposure = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Contrast",
+                        value: Binding(get: { basic.contrast },
+                                       set: { value in library.changeEdit { $0.basic.contrast = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.contrastTrack,
+                        reset: { library.changeEdit { $0.basic.contrast = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Highlights",
+                        value: Binding(get: { basic.highlights },
+                                       set: { value in library.changeEdit { $0.basic.highlights = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.highlightsTrack,
+                        reset: { library.changeEdit { $0.basic.highlights = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Shadows",
+                        value: Binding(get: { basic.shadows },
+                                       set: { value in library.changeEdit { $0.basic.shadows = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.shadowsTrack,
+                        reset: { library.changeEdit { $0.basic.shadows = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Whites",
+                        value: Binding(get: { basic.whites },
+                                       set: { value in library.changeEdit { $0.basic.whites = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.whitesTrack,
+                        reset: { library.changeEdit { $0.basic.whites = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Blacks",
+                        value: Binding(get: { basic.blacks },
+                                       set: { value in library.changeEdit { $0.basic.blacks = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.blacksTrack,
+                        reset: { library.changeEdit { $0.basic.blacks = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
                 }
-            }
-            // White balance can't be shown until the camera's has been read from the photo.
-            .disabled(library.selectedEdit?.asShot == nil)
-            Section {
-                AdjustmentSlider(
-                    title: "Exposure",
-                    value: Binding(get: { basic.exposure },
-                                   set: { value in library.changeEdit { $0.basic.exposure = value } }),
-                    range: -5...5, fineStep: 0.01, step: 0.1, coarseStep: 1, fractionDigits: 2,
-                    showsSign: true, unit: "stops", track: Self.exposureTrack,
-                    reset: { library.changeEdit { $0.basic.exposure = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Contrast",
-                    value: Binding(get: { basic.contrast },
-                                   set: { value in library.changeEdit { $0.basic.contrast = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.contrastTrack,
-                    reset: { library.changeEdit { $0.basic.contrast = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Highlights",
-                    value: Binding(get: { basic.highlights },
-                                   set: { value in library.changeEdit { $0.basic.highlights = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.highlightsTrack,
-                    reset: { library.changeEdit { $0.basic.highlights = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Shadows",
-                    value: Binding(get: { basic.shadows },
-                                   set: { value in library.changeEdit { $0.basic.shadows = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.shadowsTrack,
-                    reset: { library.changeEdit { $0.basic.shadows = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Whites",
-                    value: Binding(get: { basic.whites },
-                                   set: { value in library.changeEdit { $0.basic.whites = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.whitesTrack,
-                    reset: { library.changeEdit { $0.basic.whites = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Blacks",
-                    value: Binding(get: { basic.blacks },
-                                   set: { value in library.changeEdit { $0.basic.blacks = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.blacksTrack,
-                    reset: { library.changeEdit { $0.basic.blacks = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-            } header: {
-                SectionHeader(title: "Light", canReset: basic.exposure != 0 || basic.contrast != 0 || basic.highlights != 0
-                              || basic.shadows != 0 || basic.whites != 0 || basic.blacks != 0) {
-                    library.changeEdit {
-                        $0.basic.exposure = 0
-                        $0.basic.contrast = 0
-                        $0.basic.highlights = 0
-                        $0.basic.shadows = 0
-                        $0.basic.whites = 0
-                        $0.basic.blacks = 0
+                .disabled(library.selectedEdit == nil)
+                InspectorCard(title: "Color", isOn: library.isOnBinding(.color),
+                              canReset: basic.vibrance != 0 || basic.saturation != 0,
+                              reset: {
+                                  library.changeEdit {
+                                      $0.basic.vibrance = 0
+                                      $0.basic.saturation = 0
+                                  }
+                              }) {
+                    AdjustmentSlider(
+                        title: "Vibrance",
+                        value: Binding(get: { basic.vibrance },
+                                       set: { value in library.changeEdit { $0.basic.vibrance = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.vibranceTrack,
+                        reset: { library.changeEdit { $0.basic.vibrance = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Saturation",
+                        value: Binding(get: { basic.saturation },
+                                       set: { value in library.changeEdit { $0.basic.saturation = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.saturationTrack,
+                        reset: { library.changeEdit { $0.basic.saturation = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                }
+                .disabled(library.selectedEdit == nil)
+                InspectorCard(title: "Curve", isOn: library.isOnBinding(.curve),
+                              canReset: !(library.selectedEdit?.recipe.curve.isIdentity ?? true),
+                              reset: { library.changeEdit { $0.curve = ToneCurve() } }) {
+                    CurveEditor(library: library)
+                }
+                .disabled(library.selectedEdit == nil)
+                LookSection(library: library)
+                if let unsaved = library.selectedEdit?.unsaved {
+                    InspectorCard {
+                        Text(Self.message(for: unsaved))
+                            .foregroundStyle(.secondary)
+                        if unsaved == .noAccess {
+                            Button("Grant Access…") { library.grantWriteAccessForSelectedPhoto() }
+                        }
                     }
                 }
             }
-            .disabled(library.selectedEdit == nil)
-            Section {
-                AdjustmentSlider(
-                    title: "Vibrance",
-                    value: Binding(get: { basic.vibrance },
-                                   set: { value in library.changeEdit { $0.basic.vibrance = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.vibranceTrack,
-                    reset: { library.changeEdit { $0.basic.vibrance = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Saturation",
-                    value: Binding(get: { basic.saturation },
-                                   set: { value in library.changeEdit { $0.basic.saturation = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.saturationTrack,
-                    reset: { library.changeEdit { $0.basic.saturation = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-            } header: {
-                SectionHeader(title: "Color", canReset: basic.vibrance != 0 || basic.saturation != 0) {
-                    library.changeEdit {
-                        $0.basic.vibrance = 0
-                        $0.basic.saturation = 0
-                    }
-                }
-            }
-            .disabled(library.selectedEdit == nil)
-            Section {
-                CurveEditor(library: library)
-                    .opacity(library.isCurveHidden ? 0.45 : 1)
-            } header: {
-                let hasCurve = !(library.selectedEdit?.recipe.curve.isIdentity ?? true)
-                SectionHeader(title: "Curve", canReset: hasCurve,
-                              isOn: Binding(get: { !library.isCurveHidden }, set: { library.isCurveHidden = !$0 }),
-                              canToggle: hasCurve) {
-                    library.isCurveHidden = false
-                    library.changeEdit { $0.curve = ToneCurve() }
-                }
-            }
-            .disabled(library.selectedEdit == nil)
-            LookSection(library: library)
-            if let unsaved = library.selectedEdit?.unsaved {
-                Section {
-                    Text(Self.message(for: unsaved))
-                        .foregroundStyle(.secondary)
-                    if unsaved == .noAccess {
-                        Button("Grant Access…") { library.grantWriteAccessForSelectedPhoto() }
-                    }
-                }
-            }
+            // The cards sit 16 pt from the panel's edges, as the grouped form's did.
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .inspectorForm()
+        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 
     private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }
@@ -649,13 +641,11 @@ struct AdjustmentsInspector: View {
     }
 }
 
-/// A section title with a Reset button that returns the section's adjustments to none, and
-/// optionally a switch that shows the photo with and without the section's adjustments.
+/// A section title with a Reset button that returns the section's settings to none, for the crop
+/// tool's grouped form. The adjustments use `InspectorCard` instead.
 struct SectionHeader: View {
     let title: String
     let canReset: Bool
-    var isOn: Binding<Bool>?
-    var canToggle = true
     let reset: () -> Void
 
     var body: some View {
@@ -667,18 +657,6 @@ struct SectionHeader: View {
                 .controlSize(.small)
                 .disabled(!canReset)
                 .accessibilityLabel("Reset \(title)")
-            if let isOn {
-                Toggle(title, isOn: isOn)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    // Green, as on iPhone and iPad: without a tint the switch is white either
-                    // way, and on and off are hard to tell apart.
-                    .tint(.green)
-                    .labelsHidden()
-                    .disabled(!canToggle)
-                    .help(isOn.wrappedValue ? "Hide this adjustment to compare" : "Show this adjustment")
-                    .accessibilityLabel("Show \(title)")
-            }
         }
         .padding(.top, SectionTitle.spacing)
     }
