@@ -128,4 +128,14 @@ struct ViewportTests {
         #expect(!viewport.canPan(photo: photo, view: wide))
         #expect(Viewport(scale: 1).canPan(photo: photo, view: view))
     }
+
+    @Test("The navigator centers the view on the point it's given, stopping at the photo's edges")
+    func centering() {
+        let zoomed = Viewport(scale: 1)
+        let middle = zoomed.centered(on: CGPoint(x: 0.4, y: 0.6), photo: photo, view: view)
+        #expect(middle.center == CGPoint(x: 0.4, y: 0.6))
+        let corner = zoomed.centered(on: .zero, photo: photo, view: view)
+        #expect(corner.frame(photo: photo, view: view).origin == .zero)
+        #expect(Viewport().centered(on: .zero, photo: photo, view: view) == Viewport())
+    }
 }

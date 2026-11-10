@@ -331,8 +331,10 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         isMeasuring = true
         Task.detached { [renderer] in
             let histogram = try? renderer.histogram(of: photo)
+            let preview = try? renderer.preview(of: photo, maxPixelSize: 480)
             await MainActor.run {
                 if let histogram, url == self.url { self.onHistogram(histogram, url) }
+                if let preview, url == self.url { self.zoom.preview = preview }
                 self.isMeasuring = false
                 self.measureLatest()
             }

@@ -220,6 +220,20 @@ public actor RAWRenderer {
         return histogram
     }
 
+    /// A small copy of a photo from `render(fitting:)`, at most `maxPixelSize` on the long edge,
+    /// for the navigator. It reads the finished texture and renders nothing again.
+    public nonisolated func preview(of photo: RenderedPhoto, maxPixelSize: Int) throws -> CGImage {
+        guard let image = CIImage(mtlTexture: photo.texture, options: [.colorSpace: Self.colorSpace]) else {
+            throw RAWRendererError.renderFailed
+        }
+        let scale = min(CGFloat(maxPixelSize) / max(image.extent.width, image.extent.height), 1)
+        let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let preview = histogramContext.createCGImage(small, from: small.extent.integral, format: .RGBA8,
+                                                           colorSpace: Self.colorSpace)
+        else { throw RAWRendererError.renderFailed }
+        return preview
+    }
+
     /// Draws a photo from `render(fitting:)` into `drawable` over `background`: centered and
     /// scaled to fit, or filling `frame`, the whole photo's place in the drawable in pixels from
     /// the top left, as `Viewport` gives it when zoomed. `detail`, from `render(region:scale:)`, is

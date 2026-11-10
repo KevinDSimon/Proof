@@ -419,9 +419,21 @@ struct EditCanvas: View {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
             }
         }
+        // A temporary tool, so it may sit on the photo: only while zoomed, and out of the way in a corner.
+        .overlay(alignment: .topLeading) {
+            if let preview = library.zoom.preview, library.zoom.isEnabled, library.zoom.canPan {
+                Navigator(zoom: library.zoom, preview: preview)
+                    .padding(12)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: library.zoom.canPan)
         // Each photo opens at Fit. The crop tool shows the whole photo, so zoom is off while it's open.
         .onAppear { library.zoom.reset() }
-        .onChange(of: url) { library.zoom.reset() }
+        .onChange(of: url) {
+            library.zoom.reset()
+            library.zoom.preview = nil
+        }
         .onChange(of: library.isCropping, initial: true) { _, isCropping in
             library.zoom.isEnabled = !isCropping
             if isCropping { library.zoom.reset() }

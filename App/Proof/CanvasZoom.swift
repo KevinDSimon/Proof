@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import ProofKit
 
@@ -10,6 +11,8 @@ final class CanvasZoom {
     /// sets them; until it has, the commands are disabled.
     var photoSize: CGSize = .zero
     var viewSize: CGSize = .zero
+    /// A small copy of the photo as shown, for the navigator. The canvas sets it after each render.
+    var preview: CGImage?
     /// Off while the crop tool is open, which always shows the whole photo.
     var isEnabled = true
 
@@ -67,6 +70,18 @@ final class CanvasZoom {
     func toggle(at point: CGPoint) {
         guard hasSizes else { return }
         zoom(to: viewport.isFit ? 1 : nil, keeping: point)
+    }
+
+    /// Puts `point`, from 0 to 1 on each axis of the photo, at the view's center, for the navigator.
+    func center(on point: CGPoint) {
+        guard hasSizes else { return }
+        viewport = viewport.centered(on: point, photo: photoSize, view: viewSize)
+    }
+
+    /// The part of the photo in view, from 0 to 1 on each axis, for the navigator's box.
+    var visibleRegion: CGRect {
+        guard hasSizes else { return .null }
+        return viewport.visibleRegion(photo: photoSize, view: viewSize)
     }
 
     func pan(by delta: CGVector) {

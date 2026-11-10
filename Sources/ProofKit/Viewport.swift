@@ -107,6 +107,13 @@ public struct Viewport: Equatable, Sendable {
         return Viewport(scale: newScale, center: center).clamped(photo: photo, view: view)
     }
 
+    /// Moved so `point`, from 0 to 1 on each axis, is at the view's center, as far as the photo's
+    /// edges allow. The navigator moves the view this way.
+    public func centered(on point: CGPoint, photo: CGSize, view: CGSize) -> Viewport {
+        guard let scale else { return self }
+        return Viewport(scale: scale, center: point).clamped(photo: photo, view: view)
+    }
+
     /// Moved so the photo follows a drag of `delta` view pixels, as far as its edges allow.
     public func panned(by delta: CGVector, photo: CGSize, view: CGSize) -> Viewport {
         let scale = effectiveScale(photo: photo, view: view)
