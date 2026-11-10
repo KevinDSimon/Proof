@@ -16,3 +16,6 @@ Issue #14 adds the Highlights and Shadows sliders. Core Image has `CIHighlightSh
 - The kernel compiles on its first use, which adds about 120 ms to that one render. After that, a highlights or shadows change renders a full-window image in about 6 ms on an M2.
 - Compiling at run time needs a GPU that supports dynamic libraries, which every Apple silicon Mac, iPad and iPhone does. Where it isn't supported, the sliders have no effect rather than failing the render.
 - The strengths and the area size were tuned on one photo, by the owner's choice. Photos with other kinds of light may call for different numbers; changing them after a release renders these values needs a new `processVersion`.
+
+## Note, 2026-11-10
+Issue #112: the brightness map's short edge came out a fraction of a pixel wide, and the part pixel along that edge blended with nothing. The blur and the upsample spread it into a band along the top of the photo, up to 8% of its height, where the sliders had no effect. The map is now shrunk from the clamped brightness and cropped to whole pixels, as Texture and Clarity do. This changes how highlights and shadows edits render near that edge. No release had rendered them, so `processVersion` stays 1.
