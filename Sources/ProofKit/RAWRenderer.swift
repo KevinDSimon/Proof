@@ -74,7 +74,9 @@ public actor RAWRenderer {
 
     /// Renders the open photo with `recipe` applied, scaled to fit `targetSize` (in pixels) and
     /// never larger than the sensor. The texture has the cropped photo's aspect ratio, not the target's.
-    public func render(fitting targetSize: CGSize, recipe: EditRecipe = EditRecipe()) throws -> RenderedPhoto {
+    /// `lut` is the loaded LUT that `recipe.look` names; without one the look is skipped.
+    public func render(fitting targetSize: CGSize, recipe: EditRecipe = EditRecipe(),
+                       lut: PreparedLUT? = nil) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         let scale = Self.scaleFactor(
             nativeSize: filter.nativeSize,
@@ -82,19 +84,20 @@ public actor RAWRenderer {
             crop: recipe.crop,
             fitting: targetSize
         )
-        return try render(scaleFactor: scale, recipe: recipe)
+        return try render(scaleFactor: scale, recipe: recipe, lut: lut)
     }
 
     /// The straighten angle that levels the horizon in the open photo, from `Horizon`, or `nil`
     /// when none is found. Vision looks at the photo with `recipe` applied, turned and flipped
     /// but not straightened or cropped, at about `targetSize`.
-    public func horizonCorrection(fitting targetSize: CGSize, recipe: EditRecipe) async throws -> Double? {
+    public func horizonCorrection(fitting targetSize: CGSize, recipe: EditRecipe,
+                                  lut: PreparedLUT? = nil) async throws -> Double? {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         var recipe = recipe
         recipe.crop = recipe.crop?.turnedOnly
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: targetSize))
-        guard let image = Self.apply(recipe, to: filter, asShot: asShot),
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot, lut: lut),
               let cgImage = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
                                                   colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
@@ -110,10 +113,10 @@ public actor RAWRenderer {
 
     /// Renders at an exact `CIRAWFilter.scaleFactor`. Internal so that only export and timing
     /// tests can ask for full sensor resolution; the app goes through `render(fitting:)`.
-    func render(scaleFactor scale: CGFloat, recipe: EditRecipe) throws -> RenderedPhoto {
+    func render(scaleFactor scale: CGFloat, recipe: EditRecipe, lut: PreparedLUT? = nil) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         filter.scaleFactor = Float(scale)
-        guard let image = Self.apply(recipe, to: filter, asShot: asShot) else { throw RAWRendererError.renderFailed }
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot, lut: lut) else { throw RAWRendererError.renderFailed }
 
         let extent = image.extent.integral
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -139,7 +142,7 @@ public actor RAWRenderer {
 
     /// A thumbnail of `url` with `recipe` applied, at most `maxPixelSize` on the long edge, for
     /// the grid and the filmstrip. It doesn't change the open photo or its cached intermediates.
-    public func thumbnail(of url: URL, recipe: EditRecipe, maxPixelSize: Int) throws -> CGImage {
+    public func thumbnail(of url: URL, recipe: EditRecipe, lut: PreparedLUT? = nil, maxPixelSize: Int) throws -> CGImage {
         guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else {
             throw RAWRendererError.unsupportedFile(url)
         }
@@ -147,7 +150,7 @@ public actor RAWRenderer {
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: size))
         let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
-        guard let image = Self.apply(recipe, to: filter, asShot: asShot),
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot, lut: lut),
               let thumbnail = thumbnailContext.createCGImage(image, from: image.extent.integral, format: .RGBA8,
                                                              colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
@@ -206,7 +209,9 @@ public actor RAWRenderer {
     /// canvas, thumbnails and export all go through here, so they can't drift apart. Stages that
     /// have no controls yet pass the image through; each one is filled in by its own issue.
     /// `asShot` is the camera's white balance, which a filter reused across renders has lost.
-    static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance) -> CIImage? {
+    /// `lut` is the loaded LUT that `recipe.look` names; the look is skipped without one.
+    static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance,
+                      lut: PreparedLUT? = nil) -> CIImage? {
         // 1. RAW decode in linear light. White balance is in Kelvin and tint; exposure in stops.
         let whiteBalance = recipe.basic.whiteBalance(asShot: asShot)
         filter.neutralTemperature = Float(whiteBalance.temperature)
@@ -221,10 +226,12 @@ public actor RAWRenderer {
             .apply(to: shaded)
         // 3. Color: vibrance, then saturation.
         let colored = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
-        // 4. LUT and 5. layers follow here as they are built.
+        // 4. LUT, blended by strength.
+        let looked = recipe.look.map { LUTStage.apply(lut, strength: $0.strength, to: colored) } ?? colored
+        // 5. Layers follow here when masks are built.
         // 6. Turn, flip, straighten and crop.
-        guard let crop = recipe.crop else { return colored }
-        return Self.applyGeometry(crop, to: colored)
+        guard let crop = recipe.crop else { return looked }
+        return Self.applyGeometry(crop, to: looked)
     }
 
     /// Turns and flips `image`, then straightens and crops it, as `Crop` describes. The result
