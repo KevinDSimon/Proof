@@ -6,6 +6,8 @@ import SwiftUI
 struct Navigator: View {
     let zoom: CanvasZoom
     let preview: CGImage
+    /// The canvas's gray, which the inspector beside it shares.
+    let backdropGray: Double
     /// The long edge, in points.
     private static let length: CGFloat = 160
 
@@ -32,8 +34,9 @@ struct Navigator: View {
                 zoom.center(on: CGPoint(x: value.location.x / size.width, y: value.location.y / size.height))
             })
             .padding(6)
-            .background(.regularMaterial, in: .rect(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.2), radius: 4, y: 1)
+            // Solid and outlined like the inspector's sections, so it reads crisply over the photo.
+            .background(Color(white: backdropGray), in: .rect(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
             .help("Click or drag to move around the photo")
             .accessibilityElement()
             .accessibilityLabel("Navigator")

@@ -419,10 +419,11 @@ struct EditCanvas: View {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
             }
         }
-        // A temporary tool, so it may sit on the photo: only while zoomed, and out of the way in a corner.
-        .overlay(alignment: .topLeading) {
+        // A temporary tool, so it may sit on the photo: only while zoomed, in the corner under the
+        // toolbar's zoom pop-up.
+        .overlay(alignment: .topTrailing) {
             if let preview = library.zoom.preview, library.zoom.isEnabled, library.zoom.canPan {
-                Navigator(zoom: library.zoom, preview: preview)
+                Navigator(zoom: library.zoom, preview: preview, backdropGray: backdrop)
                     .padding(12)
                     .transition(.opacity)
             }
