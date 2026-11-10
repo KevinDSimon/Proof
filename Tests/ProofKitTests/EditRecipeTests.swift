@@ -55,6 +55,29 @@ struct EditRecipeTests {
         #expect(!recipe.isNeutral)
     }
 
+    @Test("A format 3 curve saved before levels reads with every handle at its default")
+    func migratesCurveWithoutLevels() throws {
+        let json = #"{"formatVersion": 3, "curve": {"rgb": [[0, 0], [0.5, 0.6], [1, 1]]}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
+        #expect(recipe.curve.rgb == [CurvePoint(0, 0), CurvePoint(0.5, 0.6), CurvePoint(1, 1)])
+        #expect(recipe.curve.levels == ChannelLevels())
+        let partial = #"{"curve": {"levels": {"red": [0.1, 0.4, 0.9]}}}"#
+        let decoded = try JSONDecoder().decode(EditRecipe.self, from: Data(partial.utf8))
+        #expect(decoded.curve.levels.red == Levels(black: 0.1, midtone: 0.4, white: 0.9))
+        #expect(decoded.curve.levels.rgb == Levels())
+    }
+
+    @Test("Levels encode as three-element arrays and survive a round trip")
+    func levelsEncoding() throws {
+        let data = try JSONEncoder().encode(Levels(black: 0.05, midtone: 0.5, white: 0.9))
+        #expect(String(decoding: data, as: UTF8.self) == "[0.05,0.5,0.9]")
+        var recipe = EditRecipe()
+        recipe.curve.levels.blue = Levels(black: 0.1, midtone: 0.6, white: 1)
+        #expect(!recipe.isNeutral)
+        let decoded = try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(recipe))
+        #expect(decoded == recipe)
+    }
+
     @Test("Curve points encode as two-element arrays")
     func curvePointEncoding() throws {
         let data = try JSONEncoder().encode(CurvePoint(0.25, 0.5))

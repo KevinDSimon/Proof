@@ -83,6 +83,7 @@ final class Library {
             // Leaving the photo any way but Done or Cancel keeps the crop.
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
+            isCurveHidden = false
             openSelectedEdit()
         }
     }
@@ -91,6 +92,9 @@ final class Library {
     /// Thumbnails of photos edited since Proof started, showing their current edit. The grid and
     /// the filmstrip show these over the thumbnails they loaded.
     private(set) var editedThumbnails: [PhotoReference: NSImage] = [:]
+    /// The canvas shows the photo without its tone curve, to compare. Only the view changes:
+    /// the edit keeps its curve, and opening another photo shows curves again.
+    var isCurveHidden = false
     /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
     var isAdjusting = false {
         didSet {

@@ -86,7 +86,7 @@ struct ToneLookupTests {
             var output = [Float](repeating: 0, count: count * 4)
             context.render(lookup.apply(to: input), toBitmap: &output, rowBytes: count * 16, bounds: input.extent,
                            format: .RGBAf, colorSpace: linear)
-            let table = lookup.table(), slopes = lookup.endSlopes
+            let table = lookup.table(), slopes = lookup.endSlopes(channel: 0)
             let expected = ramp.map { ToneLookup.evaluate($0, table: table, channel: 0, endSlopes: slopes) }
 
             var largestDifference: Float = 0, falls = 0, jumps = 0
@@ -106,7 +106,7 @@ struct ToneLookupTests {
     @Test("The lookup matches the curve it samples")
     func tableMatchesCurve() {
         let lookup = ToneLookup(contrast: 60, whites: -40, blacks: 30)
-        let table = lookup.table(), slopes = lookup.endSlopes
+        let table = lookup.table(), slopes = lookup.endSlopes(channel: 0)
         for i in 0...1000 {
             let v = Double(i) / 1000
             let looked = ToneLookup.encode(Double(ToneLookup.evaluate(ToneLookup.decode(Float(v)), table: table, channel: 0, endSlopes: slopes)))

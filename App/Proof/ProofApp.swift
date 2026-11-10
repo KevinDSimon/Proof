@@ -399,6 +399,7 @@ struct EditCanvas: View {
     private var shownRecipe: EditRecipe {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
+        if library.isCurveHidden { recipe.curve = ToneCurve() }
         return recipe
     }
 }
@@ -548,6 +549,19 @@ struct AdjustmentsInspector: View {
                 }
             }
             .disabled(library.selectedEdit == nil)
+            Section {
+                CurveEditor(library: library)
+                    .opacity(library.isCurveHidden ? 0.45 : 1)
+            } header: {
+                let hasCurve = !(library.selectedEdit?.recipe.curve.isIdentity ?? true)
+                SectionHeader(title: "Curve", canReset: hasCurve,
+                              isOn: Binding(get: { !library.isCurveHidden }, set: { library.isCurveHidden = !$0 }),
+                              canToggle: hasCurve) {
+                    library.isCurveHidden = false
+                    library.changeEdit { $0.curve = ToneCurve() }
+                }
+            }
+            .disabled(library.selectedEdit == nil)
             if let unsaved = library.selectedEdit?.unsaved {
                 Section {
                     Text(Self.message(for: unsaved))
@@ -620,10 +634,13 @@ struct AdjustmentsInspector: View {
     }
 }
 
-/// A section title with a Reset button that returns the section's adjustments to none.
+/// A section title with a Reset button that returns the section's adjustments to none, and
+/// optionally a switch that shows the photo with and without the section's adjustments.
 struct SectionHeader: View {
     let title: String
     let canReset: Bool
+    var isOn: Binding<Bool>?
+    var canToggle = true
     let reset: () -> Void
 
     var body: some View {
@@ -635,6 +652,18 @@ struct SectionHeader: View {
                 .controlSize(.small)
                 .disabled(!canReset)
                 .accessibilityLabel("Reset \(title)")
+            if let isOn {
+                Toggle(title, isOn: isOn)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    // Green, as on iPhone and iPad: without a tint the switch is white either
+                    // way, and on and off are hard to tell apart.
+                    .tint(.green)
+                    .labelsHidden()
+                    .disabled(!canToggle)
+                    .help(isOn.wrappedValue ? "Hide this adjustment to compare" : "Show this adjustment")
+                    .accessibilityLabel("Show \(title)")
+            }
         }
         .padding(.top, SectionTitle.spacing)
     }

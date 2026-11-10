@@ -20,6 +20,7 @@ struct ReferenceRenderTests {
         ("contrast-whites-blacks", contrastWhitesBlacks),
         ("color", color),
         ("crop", crop),
+        ("curve", curve),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -37,6 +38,8 @@ struct ReferenceRenderTests {
         recipe.basic.blacks = -15
         recipe.basic.vibrance = 30
         recipe.basic.saturation = -10
+        recipe.curve.rgb = [CurvePoint(0, 0.03), CurvePoint(0.3, 0.26), CurvePoint(0.7, 0.75), CurvePoint(1, 1)]
+        recipe.curve.blue = [CurvePoint(0, 0), CurvePoint(0.5, 0.47), CurvePoint(1, 1)]
         return recipe
     }()
 
@@ -46,6 +49,20 @@ struct ReferenceRenderTests {
         recipe.basic.contrast = 50
         recipe.basic.whites = 40
         recipe.basic.blacks = -40
+        return recipe
+    }()
+
+    /// The tone curve alone: an S-curve on RGB with its ends moved, a different curve on each
+    /// color channel, and levels on RGB and green, so a change to the interpolation, the levels,
+    /// the order or a channel shows.
+    static let curve: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.curve.rgb = [CurvePoint(0.04, 0), CurvePoint(0.25, 0.18), CurvePoint(0.75, 0.84), CurvePoint(0.97, 1)]
+        recipe.curve.red = [CurvePoint(0, 0), CurvePoint(0.5, 0.55), CurvePoint(1, 1)]
+        recipe.curve.green = [CurvePoint(0, 0.03), CurvePoint(1, 1)]
+        recipe.curve.blue = [CurvePoint(0, 0), CurvePoint(0.6, 0.55), CurvePoint(1, 0.95)]
+        recipe.curve.levels.rgb = Levels(black: 0.02, midtone: 0.45, white: 0.96)
+        recipe.curve.levels.green = Levels(black: 0, midtone: 0.55, white: 1)
         return recipe
     }()
 

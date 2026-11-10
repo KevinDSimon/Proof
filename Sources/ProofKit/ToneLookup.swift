@@ -1,11 +1,13 @@
 import CoreImage
 import Foundation
 
-/// The Contrast, Whites and Blacks sliders, baked into one lookup per channel and applied by a
-/// small kernel. The tone curve will add itself to the same lookup.
+/// The Contrast, Whites and Blacks sliders and the tone curve, baked into one lookup per channel
+/// and applied by a small kernel. The sliders come first, then the RGB curve, then each
+/// channel's own curve. Each curve applies its black, midtone and white handles before its
+/// points.
 ///
 /// The lookup is indexed by sRGB-encoded values, which spread its entries evenly across what
-/// the eye sees as dark to light. Inside 0…1 the curve keeps black and white in place; outside,
+/// the eye sees as dark to light. Inside 0…1 the sliders keep black and white in place; outside,
 /// where an extended-range decode can reach, it continues in a straight line instead of clipping.
 struct ToneLookup: Equatable {
     static let range: ClosedRange<Double> = -100...100
@@ -17,20 +19,45 @@ struct ToneLookup: Equatable {
     static let contrastStops = 1.0
     /// Each from -1 to 1.
     let contrast: Double, whites: Double, blacks: Double
+    let curve: ToneCurve
+    /// The RGB curve, then the red, green and blue curves, each with its levels.
+    private let rgb: (Double) -> Double, red: (Double) -> Double, green: (Double) -> Double, blue: (Double) -> Double
 
-    init(contrast: Double, whites: Double, blacks: Double) {
+    init(contrast: Double, whites: Double, blacks: Double, curve: ToneCurve = ToneCurve()) {
         self.contrast = Self.clamped(contrast) / 100
         self.whites = Self.clamped(whites) / 100
         self.blacks = Self.clamped(blacks) / 100
+        self.curve = curve
+        rgb = curve.function(of: .rgb)
+        red = curve.function(of: .red)
+        green = curve.function(of: .green)
+        blue = curve.function(of: .blue)
     }
 
-    var isNeutral: Bool { contrast == 0 && whites == 0 && blacks == 0 }
+    static func == (a: ToneLookup, b: ToneLookup) -> Bool {
+        a.contrast == b.contrast && a.whites == b.whites && a.blacks == b.blacks && a.curve == b.curve
+    }
+
+    var isNeutral: Bool {
+        contrast == 0 && whites == 0 && blacks == 0 && curve.isIdentity
+    }
 
     static func clamped(_ value: Double) -> Double {
         min(max(value, range.lowerBound), range.upperBound)
     }
 
-    /// The curve on sRGB-encoded values from 0 to 1: Whites and Blacks first, then Contrast.
+    /// The whole lookup for one channel (0 red, 1 green, 2 blue) on sRGB-encoded values from 0
+    /// to 1.
+    func output(_ v: Double, channel: Int) -> Double {
+        let toned = rgb(curve(v))
+        switch channel {
+        case 0: return red(toned)
+        case 1: return green(toned)
+        default: return blue(toned)
+        }
+    }
+
+    /// The sliders' part of the lookup: Whites and Blacks first, then Contrast.
     func curve(_ v: Double) -> Double {
         let lifted = v + Self.bumps(v, whites: whites, blacks: blacks)
         return Self.contrast(min(max(lifted, 0), 1), gain: exp2(contrast * Self.contrastStops))
@@ -55,23 +82,25 @@ struct ToneLookup: Equatable {
         return 1 - (1 - pivot) * half((1 - v) / (1 - pivot))
     }
 
-    /// The curve sampled at `count` evenly spaced encoded values, as red, green, blue and an
+    /// The lookup sampled at `count` evenly spaced encoded values, as red, green, blue and an
     /// unused fourth channel, ready to upload as a one-row float image.
     func table() -> [Float] {
         var values = [Float](repeating: 0, count: Self.count * 4)
         for i in 0..<Self.count {
-            let out = Float(curve(Double(i) / Double(Self.count - 1)))
-            values[i * 4] = out
-            values[i * 4 + 1] = out
-            values[i * 4 + 2] = out
+            let toned = rgb(curve(Double(i) / Double(Self.count - 1)))
+            values[i * 4] = Float(red(toned))
+            values[i * 4 + 1] = Float(green(toned))
+            values[i * 4 + 2] = Float(blue(toned))
         }
         return values
     }
 
-    /// The slope at black and at white, which the straight continuations outside 0…1 follow.
-    var endSlopes: (low: Double, high: Double) {
+    /// One channel's slope at black and at white, which the straight continuations outside 0…1
+    /// follow.
+    func endSlopes(channel: Int) -> (low: Double, high: Double) {
         let h = 1e-6
-        return ((curve(h) - curve(0)) / h, (curve(1) - curve(1 - h)) / h)
+        return ((output(h, channel: channel) - output(0, channel: channel)) / h,
+                (output(1, channel: channel) - output(1 - h, channel: channel)) / h)
     }
 
     /// What the kernel does to one channel, on the CPU: the reference the GPU result is tested
@@ -95,8 +124,8 @@ struct ToneLookup: Equatable {
         return decode(out)
     }
 
-    /// Applies the lookup to `image`, which is in linear light. With all three sliders at 0 the
-    /// image is returned as is.
+    /// Applies the lookup to `image`, which is in linear light. With the sliders at 0 and the
+    /// curves straight the image is returned as is.
     func apply(to image: CIImage) -> CIImage {
         guard !isNeutral, let kernel = Self.kernel else { return image }
         let values = table()
@@ -105,14 +134,14 @@ struct ToneLookup: Equatable {
         let lookup = CIImage(bitmapData: data, bytesPerRow: Self.count * 16,
                              size: CGSize(width: Self.count, height: 1), format: .RGBAf, colorSpace: nil)
             .samplingNearest()
-        let slopes = endSlopes
+        let (r, g, b) = (endSlopes(channel: 0), endSlopes(channel: 1), endSlopes(channel: 2))
         let lookupExtent = lookup.extent
         return kernel.apply(extent: image.extent, roiCallback: { index, rect in
             index == 0 ? rect : lookupExtent
         }, arguments: [
             image, lookup,
-            CIVector(x: slopes.low, y: slopes.low, z: slopes.low),
-            CIVector(x: slopes.high, y: slopes.high, z: slopes.high),
+            CIVector(x: r.low, y: g.low, z: b.low),
+            CIVector(x: r.high, y: g.high, z: b.high),
         ]) ?? image
     }
 
