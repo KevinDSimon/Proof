@@ -11,7 +11,7 @@ Issue #98. The inspector was a grouped SwiftUI `Form`: each section's title and 
 - The switch turns the group's adjustments on or off and opens or closes its card. Off shows the photo without them, to compare; it changes only the view, not the edit, and isn't saved, as the Curve switch worked before. Editing a curve or choosing a look turns its group back on.
 - When a photo opens, White Balance, Light and Color are on. Curve and Looks are off, so their larger controls stay closed, unless the photo already has a curve or a look.
 - The card is a step lighter than the canvas in the dark appearance (18% gray) and darker in the light (95%), neutral like the canvas. Its corners are continuous with a 14 pt radius, about the grouped form's cards, with 16 pt inside and between cards.
-- The card's title is the headline; each slider's name is in the secondary label color and its value in the primary, so the title reads first.
+- The card's title is the headline; each slider's name is the primary label color at 75% and its value the primary, a step between primary and secondary, which macOS has no named color for, so the title reads first.
 - The crop tool's panel keeps its grouped form for now.
 
 ## Consequences

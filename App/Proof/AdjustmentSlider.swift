@@ -33,9 +33,10 @@ struct AdjustmentSlider: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                // Secondary, so the card's title above reads first.
+                // Between the primary and secondary label colors, which macOS has no stop for: dimmer
+                // than the card's title so the title reads first, brighter than secondary text.
                 Text(title)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.primary.opacity(0.75))
                     .onTapGesture(count: 2, perform: reset)
                     .help("Double-click to reset")
                 Spacer()
