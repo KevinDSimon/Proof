@@ -25,7 +25,7 @@ Decision 0002 stores each edit in `<original file name>.proof` next to the origi
 - A sidecar whose photo was deleted is ignored. Proof never shows or deletes it.
 
 ### Changes from another device or app
-- When a photo's sidecar changes on disk while the photo is open, Proof reloads it and shows the new edit. In local folders the FSEvents watching from #10 notices this right away; in network folders it is noticed when Proof becomes the active app or on Refresh.
+- When a photo's sidecar changes on disk while the photo is open, Proof reloads it and shows the new edit. In local folders the FSEvents watching from #10 notices this right away; in network folders it is noticed when Proof becomes the active app or on View › Reload Folders.
 - The reload is one undo step, so undo returns to the edit that was showing before.
 - Proof ignores the change notifications caused by its own writes, by comparing the file on disk with what it last wrote.
 - There is no merging. The most recent write wins.
