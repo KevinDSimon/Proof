@@ -124,10 +124,11 @@ struct LookSection: View {
     var body: some View {
         Section {
             if looks.names.isEmpty {
+                // Without the large symbol, so the empty card isn't much taller than the others.
                 ContentUnavailableView {
-                    Label("No Looks", systemImage: "camera.filters")
+                    Text("No Looks")
                 } description: {
-                    Text("Drag .cube files or folders of them here, or add them.")
+                    Text("Drag .cube files or folders here.")
                 } actions: {
                     Button("Add Looks…") { isImporting = true }
                 }
