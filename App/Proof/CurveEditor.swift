@@ -55,7 +55,7 @@ struct CurveEditor: View {
     private static let minimumGap = 0.01
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             Picker("Channel", selection: $channel) {
                 ForEach(ToneCurve.Channel.allCases, id: \.self) { Text(Self.title(of: $0)) }
             }
@@ -68,6 +68,8 @@ struct CurveEditor: View {
             .controlSize(.small)
             .fixedSize()
             .frame(maxWidth: .infinity)
+            // The other rows' text sits a little below the card's edge; match it.
+            .padding(.top, 2)
             .onChange(of: channel) { selected = nil }
 
             VStack(spacing: 2) {
@@ -95,6 +97,11 @@ struct CurveEditor: View {
                     Color.clear.frame(height: LevelsTrack.height)
                 }
             }
+            // The plot's edges line up with the other rows' content, like the slider tracks;
+            // the margin that keeps corner points and end handles whole hangs into the row's
+            // own padding instead of narrowing the plot.
+            .padding(.horizontal, -Self.inset)
+            .padding(.bottom, 2)
         }
         // Takes the inspector's width rather than asking for one. The inspector grows to fit
         // its content's preferred width, and the picker's preferred width is a little wider than
