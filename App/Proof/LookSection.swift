@@ -15,8 +15,8 @@ extension LUTLibrary {
 /// rest of its edit changes.
 @Observable @MainActor
 final class LookBrowser {
-    /// Long edge of a preview, in pixels: sharp in a row on a Retina display.
-    static let previewSize = 96
+    /// Long edge of a preview, in pixels: sharp in a grid tile on a Retina display.
+    static let previewSize = 160
 
     /// Paths of the LUTs, folders first, each folder followed by its contents.
     private(set) var names: [String] = LUTLibrary.shared.names()
@@ -111,13 +111,13 @@ final class LookBrowser {
 }
 
 /// The Looks section of the inspector: the strength of the chosen look, a pop-up of the library's
-/// folders, and the shown folder's LUTs in a native list, each with a small preview of the photo
-/// through it. The list's own selection and keyboard navigation choose looks, so Up and Down Arrow
-/// try them in turn. The pop-up also adds `.cube` files and folders, and opens the library in the
-/// Finder; files can be dropped on the list too. Reset removes the look, so there is no None row.
+/// folders, and the shown folder's LUTs as a grid of small previews of the photo through each.
+/// The arrow keys move through the grid, choosing as they go. The pop-up also adds `.cube` files
+/// and folders, and opens the library in the Finder; files can be dropped on the grid too. Reset removes the look, so there is no None row.
 struct LookSection: View {
     let library: Library
     @State private var isImporting = false
+    @FocusState private var isGridFocused: Bool
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
@@ -154,7 +154,7 @@ struct LookSection: View {
                         .foregroundStyle(.secondary)
                 }
                 folderMenu
-                list
+                grid
             }
         } header: {
             SectionHeader(title: "Looks", canReset: look != nil,
@@ -232,32 +232,65 @@ struct LookSection: View {
         Toggle(title, isOn: Binding(get: { looks.shownFolder == folder }, set: { _ in looks.shownFolder = folder }))
     }
 
-    /// The shown folder's LUTs, in a plain list on the section's own background. It scrolls on its
-    /// own once it is taller than `maxListHeight`, so the inspector doesn't grow without end.
-    private var list: some View {
-        List(selection: Binding(get: { look?.lut }, set: { path in
-            if let path { choose(path) }
-        })) {
-            ForEach(looks.shownNames, id: \.self) { path in
-                Label {
-                    Text(Self.title(of: path))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                } icon: {
-                    preview(of: path)
+    /// The shown folder's LUTs as a grid of previews, as Pixelmator Pro shows its presets. The
+    /// chosen one has a ring, and its name is under the grid; each tile's name is in its help tag.
+    /// With the grid focused, the arrow keys move between tiles and choose as they go.
+    private var grid: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.tileSpacing), count: Self.columns),
+                      spacing: Self.tileSpacing) {
+                ForEach(looks.shownNames, id: \.self) { path in
+                    tile(path)
                 }
-                .help(path)
-                .tag(path)
+            }
+            .opacity(library.isLookHidden ? 0.45 : 1)
+            .focusable()
+            .focused($isGridFocused)
+            .onKeyPress(.rightArrow) { step(by: 1) }
+            .onKeyPress(.leftArrow) { step(by: -1) }
+            .onKeyPress(.downArrow) { step(by: Self.columns) }
+            .onKeyPress(.upArrow) { step(by: -Self.columns) }
+            if let look, looks.shownNames.contains(look.lut) {
+                Text(Self.title(of: look.lut))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .frame(height: min(CGFloat(looks.shownNames.count) * Self.rowHeight + 8, Self.maxListHeight))
-        .opacity(library.isLookHidden ? 0.45 : 1)
         .dropDestination(for: URL.self) { urls, _ in
             importItems(urls)
             return true
         }
+    }
+
+    private func tile(_ path: String) -> some View {
+        let isSelected = look?.lut == path
+        return preview(of: path)
+            .selectionRing(isSelected, lineWidth: 2, gap: 2)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                isGridFocused = true
+                choose(path)
+            }
+            .help(Self.title(of: path))
+            .accessibilityElement()
+            .accessibilityLabel(Self.title(of: path))
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { choose(path) }
+    }
+
+    /// Chooses the look `offset` tiles from the chosen one, staying put at either end.
+    private func step(by offset: Int) -> KeyPress.Result {
+        let names = looks.shownNames
+        guard !names.isEmpty else { return .ignored }
+        guard let current = look.flatMap({ names.firstIndex(of: $0.lut) }) else {
+            choose(names[0])
+            return .handled
+        }
+        let index = current + offset
+        if names.indices.contains(index) { choose(names[index]) }
+        return .handled
     }
 
     private func preview(of path: String) -> some View {
@@ -270,16 +303,14 @@ struct LookSection: View {
                 Rectangle().fill(.quaternary)
             }
         }
-        .frame(width: Self.previewSide, height: Self.previewSide)
+        .frame(minWidth: 0, maxWidth: .infinity)
+        .aspectRatio(3 / 2, contentMode: .fit)
         .clipped()
-        .accessibilityHidden(true)
     }
 
-    /// Side of a row's preview, in points: the size of a list row's icon.
-    private static let previewSide: CGFloat = 20
-    /// A list row's height on macOS, with its spacing, and the tallest the list grows before it scrolls.
-    private static let rowHeight: CGFloat = 28
-    private static let maxListHeight: CGFloat = 320
+    /// Four across, as Pixelmator Pro lays out its presets in a panel this wide.
+    private static let columns = 4
+    private static let tileSpacing: CGFloat = 6
 
     private var looks: LookBrowser { library.looks }
     private var look: Look? { library.selectedEdit?.recipe.look }
