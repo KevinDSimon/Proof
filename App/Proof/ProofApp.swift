@@ -656,6 +656,9 @@ struct SectionHeader: View {
                 Toggle(title, isOn: isOn)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
+                    // Green, as on iPhone and iPad: without a tint the switch is white either
+                    // way, and on and off are hard to tell apart.
+                    .tint(.green)
                     .labelsHidden()
                     .disabled(!canToggle)
                     .help(isOn.wrappedValue ? "Hide this adjustment to compare" : "Show this adjustment")

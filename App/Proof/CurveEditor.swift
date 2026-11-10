@@ -61,9 +61,10 @@ struct CurveEditor: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .controlSize(.large)
-            // Fit the row: at its own width the picker can be wider than the inspector, which
-            // makes the whole section resize as it redraws.
+            // Pinned to the graph's width. The segmented control sizes every segment to its
+            // longest label after it redraws, which at its own width is wider than the default
+            // inspector and pushed the section sideways.
+            .frame(width: canvasSize.width > 0 ? canvasSize.width : nil)
             .frame(maxWidth: .infinity)
             .onChange(of: channel) { selected = nil }
 
@@ -93,6 +94,10 @@ struct CurveEditor: View {
                 }
             }
         }
+        // Takes the inspector's width rather than asking for one. The inspector grows to fit
+        // its content's preferred width, and the picker's preferred width is a little wider than
+        // the default inspector, so without this the panel widened whenever the curve redrew.
+        .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity)
     }
 
     private var curve: ToneCurve { library.selectedEdit?.recipe.curve ?? ToneCurve() }
