@@ -36,19 +36,19 @@ struct HistogramView: View, Equatable {
         .accessibilityValue(histogram.map(Self.summary) ?? "No photo measured")
     }
 
-    private static let red = Color(red: 0.95, green: 0.3, blue: 0.3)
-    private static let green = Color(red: 0.3, green: 0.85, blue: 0.4)
-    private static let blue = Color(red: 0.35, green: 0.55, blue: 1)
+    static let red = Color(red: 0.95, green: 0.3, blue: 0.3)
+    static let green = Color(red: 0.3, green: 0.85, blue: 0.4)
+    static let blue = Color(red: 0.35, green: 0.55, blue: 1)
 
     /// The tallest bin, leaving out pure black and pure white: a photo with clipped shadows or
     /// highlights has a spike there that would otherwise flatten the rest of the graph.
-    private static func peak(of histogram: Histogram) -> Float {
+    static func peak(of histogram: Histogram) -> Float {
         let inner = 1..<(Histogram.binCount - 1)
         let peak = [histogram.red, histogram.green, histogram.blue].map { $0[inner].max() ?? 0 }.max() ?? 0
         return peak > 0 ? peak : 1
     }
 
-    private static func area(of bins: [Float], peak: Float, in size: CGSize) -> Path {
+    static func area(of bins: [Float], peak: Float, in size: CGSize) -> Path {
         Path { path in
             let step = size.width / CGFloat(bins.count - 1)
             path.move(to: CGPoint(x: 0, y: size.height))

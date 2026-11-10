@@ -213,10 +213,11 @@ public actor RAWRenderer {
         filter.neutralTint = Float(whiteBalance.tint)
         filter.exposure = Float(recipe.basic.exposure)
         guard let decoded = filter.outputImage else { return nil }
-        // 2. Tone: highlights and shadows first, then contrast, whites and blacks as one lookup,
-        // which the tone curve will join.
+        // 2. Tone: highlights and shadows first, then contrast, whites, blacks and the tone
+        // curve as one lookup.
         let shaded = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)
-        let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks)
+        let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks,
+                               curve: recipe.curve)
             .apply(to: shaded)
         // 3. Color: vibrance, then saturation.
         let colored = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)

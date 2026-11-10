@@ -548,6 +548,14 @@ struct AdjustmentsInspector: View {
                 }
             }
             .disabled(library.selectedEdit == nil)
+            Section {
+                CurveEditor(library: library)
+            } header: {
+                SectionHeader(title: "Curve", canReset: !(library.selectedEdit?.recipe.curve.isIdentity ?? true)) {
+                    library.changeEdit { $0.curve = ToneCurve() }
+                }
+            }
+            .disabled(library.selectedEdit == nil)
             if let unsaved = library.selectedEdit?.unsaved {
                 Section {
                     Text(Self.message(for: unsaved))
