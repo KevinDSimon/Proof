@@ -85,13 +85,16 @@ final class LookBrowser {
 }
 
 /// The Looks section of the inspector: the strength of the chosen look, then the library in a
-/// native outline list, folders first, each look with a small preview of the photo through it. The
-/// list's own selection and keyboard navigation choose looks, so Up and Down Arrow try them in turn.
+/// plain outline list, folders first, each look with a small preview of the photo through it. The
+/// list's own selection and keyboard navigation choose looks, so Up and Down Arrow try them in turn,
+/// and Right and Left Arrow move into and out of folders.
 /// Add imports `.cube` files and folders; they can also be dropped on the list. Reset removes the
 /// look, so there is no None row.
 struct LookSection: View {
     let library: Library
     @State private var isImporting = false
+    /// The list's selection: the chosen look, or a folder while moving through the list by keyboard.
+    @State private var selection: String?
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
@@ -163,16 +166,23 @@ struct LookSection: View {
         }
     }
 
-    /// The library as a bordered outline list, like a table in a settings pane. It scrolls on its
+    /// The library as a plain outline list on the section's own background. It scrolls on its
     /// own once it is taller than `maxListHeight`, so the inspector doesn't grow without end.
+    /// Folders can be selected so the keyboard can reach them: Right Arrow opens a folder or moves
+    /// into an open one, and Left Arrow closes it or moves from a look out to its folder.
     private var list: some View {
-        List(selection: Binding(get: { look?.lut }, set: { path in
-            if let path, looks.names.contains(path) { choose(path) }
-        })) {
+        List(selection: $selection) {
             ForEach(tree) { node($0) }
         }
-        .listStyle(.bordered)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .frame(height: listHeight)
+        .onChange(of: selection) {
+            if let selection, looks.names.contains(selection) { choose(selection) }
+        }
+        .onChange(of: look?.lut, initial: true) { selection = look?.lut }
+        .onKeyPress(.rightArrow) { moveIn() }
+        .onKeyPress(.leftArrow) { moveOut() }
         .opacity(library.isLookHidden ? 0.45 : 1)
         .dropDestination(for: URL.self) { urls, _ in
             importItems(urls)
@@ -189,9 +199,8 @@ struct LookSection: View {
                 )) {
                     ForEach(children) { self.node($0) }
                 } label: {
-                    // On the label only: on the group it would also stop the looks inside from being chosen.
                     Label(Self.title(of: node.id), systemImage: "folder")
-                        .selectionDisabled()
+                        .tag(node.id)
                 }
             )
         } else {
@@ -277,6 +286,39 @@ struct LookSection: View {
         library.changeEdit { recipe in
             recipe.look = Look(lut: path, strength: recipe.look?.strength ?? 1)
         }
+    }
+
+    /// Right Arrow on a folder: opens it, or if it is open, selects the first thing in it.
+    private func moveIn() -> KeyPress.Result {
+        guard let selection, let children = Self.children(of: selection, in: tree) else { return .ignored }
+        if !looks.expandedFolders.contains(selection) {
+            looks.expandedFolders.insert(selection)
+        } else if let first = children.first {
+            self.selection = first.id
+        }
+        return .handled
+    }
+
+    /// Left Arrow: closes an open folder, or selects the folder around a look or a closed folder.
+    private func moveOut() -> KeyPress.Result {
+        guard let selection else { return .ignored }
+        if Self.children(of: selection, in: tree) != nil, looks.expandedFolders.contains(selection) {
+            looks.expandedFolders.remove(selection)
+            return .handled
+        }
+        guard let folder = LookBrowser.folders(containing: selection).last else { return .ignored }
+        self.selection = folder
+        return .handled
+    }
+
+    /// The contents of the folder at `path`, or `nil` if `path` isn't a folder.
+    private static func children(of path: String, in nodes: [Node]) -> [Node]? {
+        for node in nodes {
+            if node.id == path { return node.children }
+            if let children = node.children, path.hasPrefix(node.id + "/"),
+               let found = Self.children(of: path, in: children) { return found }
+        }
+        return nil
     }
 
     /// Opens the folders around the chosen look, so it can be seen.
