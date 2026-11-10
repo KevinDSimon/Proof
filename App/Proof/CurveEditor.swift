@@ -22,6 +22,7 @@ struct CurveEditor: View {
     /// The graph's size, which the gesture needs to turn locations into curve values.
     @State private var canvasSize: CGSize = .zero
     @FocusState private var isFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
     /// True while a drag is in progress. It resets when the drag ends and also when the system
     /// cancels it, which `onEnded` doesn't report, so a drag can't be left half finished.
     @GestureState private var isDragging = false
@@ -138,9 +139,12 @@ struct CurveEditor: View {
         context.stroke(path(of: curve.function(of: channel), in: size), with: .color(color), lineWidth: 1.5)
         for (index, point) in points.enumerated() {
             let center = position(of: point, in: size)
-            context.fill(Path(ellipseIn: CGRect(x: center.x - 3.5, y: center.y - 3.5, width: 7, height: 7)), with: .color(color))
+            // As in Lightroom: a light gray dot outlined in the curve's color.
+            let dot = Path(ellipseIn: CGRect(x: center.x - 4.5, y: center.y - 4.5, width: 9, height: 9))
+            context.fill(dot, with: .color(Color(white: colorScheme == .dark ? 0.62 : 0.82)))
+            context.stroke(dot, with: .color(color), lineWidth: 1.5)
             if index == selected, !removing {
-                context.stroke(Path(ellipseIn: CGRect(x: center.x - 6.5, y: center.y - 6.5, width: 13, height: 13)),
+                context.stroke(Path(ellipseIn: CGRect(x: center.x - 7.5, y: center.y - 7.5, width: 15, height: 15)),
                                with: .color(color), lineWidth: 1.5)
             }
         }
@@ -158,7 +162,7 @@ struct CurveEditor: View {
     }
 
     /// Room around the plot so a point at a corner, and its selection ring, isn't cut off.
-    static let inset: CGFloat = 7
+    static let inset: CGFloat = 9
 
     private static func plotSize(_ size: CGSize) -> CGSize {
         CGSize(width: max(size.width - 2 * inset, 0), height: max(size.height - 2 * inset, 0))
