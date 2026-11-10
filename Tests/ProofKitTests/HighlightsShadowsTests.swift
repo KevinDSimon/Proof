@@ -31,6 +31,22 @@ struct HighlightsShadowsTests {
         #expect(average(of: CIColor(red: 0.01, green: 0.012, blue: 0.015), highlights: 0, shadows: -100) < dark)
     }
 
+    @Test("On a flat gray image, Highlights change every row by the same amount, up to the edges (#112)")
+    func noBandAlongEdges() throws {
+        let size = CGSize(width: 1000, height: 667)
+        let image = CIImage(color: CIColor(red: 0.6, green: 0.6, blue: 0.6)).cropped(to: CGRect(origin: .zero, size: size))
+        let adjusted = HighlightsShadows.apply(to: image, highlights: -100, shadows: 0)
+        var pixels = [Float](repeating: 0, count: Int(size.width * size.height) * 4)
+        let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+        CIContext(options: [.workingColorSpace: space])
+            .render(adjusted, toBitmap: &pixels, rowBytes: Int(size.width) * 16, bounds: adjusted.extent,
+                    format: .RGBAf, colorSpace: space)
+        let ratios = (0..<Int(size.height)).map { row in pixels[row * Int(size.width) * 4 + Int(size.width) * 2] / 0.6 }
+        let middle = ratios[ratios.count / 2]
+        #expect(middle < 0.9)
+        #expect(ratios.allSatisfy { abs($0 - middle) < 0.01 })
+    }
+
     @Test("The thumbnail and the canvas render a highlights and shadows edit alike", .enabled(if: sampleDNG != nil))
     func thumbnailMatchesCanvas() async throws {
         let url = try #require(sampleDNG)

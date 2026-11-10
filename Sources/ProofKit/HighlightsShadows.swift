@@ -26,10 +26,16 @@ enum HighlightsShadows {
 
         // The area's brightness: the brightness shrunk to a small map, smoothed, then enlarged
         // again following the photo's edges, so a bright sky doesn't spill onto a dark tree line.
+        // The map is shrunk from the clamped brightness and cropped to whole pixels. Shrunk as is,
+        // its short edge ends in a part pixel that blends with transparent black, and the blur and
+        // upsample spread that into a band along the edge where the sliders have no effect.
         let shrink = min(mapSize / max(extent.width, extent.height), 1)
-        let small = brightness
+        let small = brightness.clampedToExtent()
             .transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY), highQualityDownsample: true)
             .transformed(by: CGAffineTransform(scaleX: shrink, y: shrink), highQualityDownsample: true)
+            .cropped(to: CGRect(x: 0, y: 0,
+                                width: (extent.width * shrink).rounded(.up),
+                                height: (extent.height * shrink).rounded(.up)))
         let smoothed = small.clampedToExtent()
             .applyingGaussianBlur(sigma: 1.5)
             .cropped(to: small.extent)
