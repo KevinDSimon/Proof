@@ -14,6 +14,9 @@ struct InspectorCard<Content: View>: View {
     static var padding: CGFloat { 16 }
     /// About the grouped form's cards on macOS 26, which these replace.
     static var cornerRadius: CGFloat { 14 }
+    /// The names of controls inside a card: between the primary and secondary label colors, which
+    /// macOS has no stop for, so the card's title reads first but the names don't look dull.
+    static var labelColor: Color { Color.primary.opacity(0.75) }
 
     var title: String?
     var isOn: Binding<Bool>?
@@ -77,5 +80,22 @@ extension Library {
     /// A card's switch for `group`.
     func isOnBinding(_ group: AdjustmentGroup) -> Binding<Bool> {
         Binding(get: { self.isOn(group) }, set: { self.setOn(group, $0) })
+    }
+}
+
+/// The inspector's cards in a scrolling column on the canvas's own gray, 16 pt from every edge,
+/// so the panel and the photo read as one surface.
+struct InspectorPanel<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: InspectorCard<EmptyView>.spacing) {
+                content()
+            }
+            .padding(16)
+        }
+        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
     }
 }
