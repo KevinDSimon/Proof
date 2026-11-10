@@ -148,6 +148,7 @@ final class Library {
         if fileAccess == nil { errorMessage = "Proof couldn't load its saved folders." }
         refreshLocations()
         observeSystem()
+        looks.onChange = { [weak self] in self?.refreshEditedThumbnails() }
         // Before All Photos, the selection was saved as a folder reference.
         selection = UserDefaults.standard.data(forKey: Self.selectionKey).flatMap { data in
             (try? JSONDecoder().decode(SidebarItem.self, from: data))
@@ -651,6 +652,14 @@ final class Library {
         }
         // Like a rating change, an edit doesn't make the photo vanish from the Edited filter.
         changedPhotos.insert(photo)
+    }
+
+    /// Renders the thumbnails of photos edited since Proof started again, after the LUT library
+    /// changes: a look whose LUT appeared or went missing shows differently.
+    private func refreshEditedThumbnails() {
+        for photo in editedThumbnails.keys {
+            if let url = url(ofPhoto: photo.name, in: photo.folder) { refreshThumbnail(of: photo, at: url) }
+        }
     }
 
     /// Renders the photo's thumbnail with its current edit off the main thread. A result that

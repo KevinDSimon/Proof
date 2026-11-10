@@ -65,6 +65,18 @@ public actor LUTLibrary {
         .map { $0.joined(separator: "/") }
     }
 
+    /// A string that changes whenever the LUT at path `name` does: its file's size and
+    /// modification date. `nil` if the library has no such file. Blocks on file I/O.
+    public nonisolated func version(of name: String) -> String? {
+        let components = name.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard Self.isInside(components),
+              let attributes = try? FileManager.default.attributesOfItem(
+                  atPath: components.reduce(directory) { $0.appendingPathComponent($1) }.path),
+              let size = attributes[.size] as? Int, let modified = attributes[.modificationDate] as? Date
+        else { return nil }
+        return "\(size) \(modified.timeIntervalSinceReferenceDate)"
+    }
+
     /// The folder the LUT at `path` is in, as a path in the library: "" for one outside any folder.
     public static func folder(of path: String) -> String {
         (path as NSString).deletingLastPathComponent

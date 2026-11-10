@@ -10,6 +10,8 @@ struct Filmstrip: View {
 
     @State private var images: [PhotoReference: NSImage] = [:]
     @State private var finished: Set<PhotoReference> = []
+    /// The LUT library's generation the thumbnails were loaded at.
+    @State private var lutGeneration = 0
     @FocusState private var isFocused: Bool
 
     static let height: CGFloat = 84
@@ -49,7 +51,12 @@ struct Filmstrip: View {
             if let move { library.browse.move(move, in: photos, columns: photos.count) }
         }
         .onAppear { isFocused = true }
-        .task(id: photos.map(\.id)) {
+        // Loaded again when the LUT library changes, since edited thumbnails show looks.
+        .task(id: ThumbnailLoad(photos: photos.map(\.id), lutGeneration: library.looks.generation)) {
+            if lutGeneration != library.looks.generation {
+                lutGeneration = library.looks.generation
+                finished = []
+            }
             await ThumbnailGrid.loadThumbnails(of: photos, images: $images, finished: $finished, library: library)
         }
         .accessibilityElement(children: .contain)

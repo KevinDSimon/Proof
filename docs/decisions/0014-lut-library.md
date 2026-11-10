@@ -19,5 +19,5 @@ Issue #23 lets the person choose a look from LUTs they have imported, with a pre
 
 ## Consequences
 - Removing or renaming LUTs and folders is done in the Finder, through Reveal in Finder. Files added there aren't checked by the parser until they are loaded; one that doesn't parse is skipped like a missing LUT. A LUT removed this way is skipped when an edit that names it renders, and the Looks section says it is missing.
-- An edited thumbnail rendered while its LUT is missing is cached without the look until the edit changes.
+- An edited thumbnail's cache entry is named from the version of the LUT its look names, its file's size and date, as well as from the edit. A look whose LUT is missing is left out of the thumbnail, as the canvas leaves it out, so the thumbnail matches the canvas when a LUT is removed, added back or replaced in the Finder. When Proof notices the library changed, the grid and the filmstrip load their thumbnails again.
 - Previews are 8-bit before the LUT, which can show banding in smooth gradients at preview size. The canvas and export aren't affected.
