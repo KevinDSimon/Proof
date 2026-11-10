@@ -58,16 +58,23 @@ struct CurveEditor: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .controlSize(.large)
+            // Fit the row: at its own width the picker can be wider than the inspector, which
+            // makes the whole section resize as it redraws.
+            .frame(maxWidth: .infinity)
             .onChange(of: channel) { selected = nil }
 
             VStack(spacing: 2) {
                 Canvas { context, size in draw(in: &context, size: size) }
+                    .frame(maxWidth: .infinity)
                     .aspectRatio(1, contentMode: .fit)
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { canvasSize = $0 }
                     .contentShape(Rectangle())
                     .gesture(dragGesture)
                     .onChange(of: isDragging) { if !isDragging { endDrag() } }
-                    .focusable()
+                    // `.edit` lets a click give the graph keyboard focus, so Delete and the arrow
+                    // keys reach it without keyboard navigation turned on in System Settings.
+                    .focusable(interactions: .edit)
                     .focused($isFocused)
                     .focusEffectDisabled()
                     .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow]) { press in
@@ -82,7 +89,6 @@ struct CurveEditor: View {
                 // show their color field instead. The space stays so the graph doesn't jump.
                 if channel == .rgb {
                     LevelsTrack(library: library, channel: .rgb, color: Self.color(of: .rgb))
-                        .padding(.horizontal, Self.inset)
                 } else {
                     Color.clear.frame(height: LevelsTrack.height)
                 }
@@ -309,6 +315,7 @@ struct CurveEditor: View {
 
     private func set(_ points: [CurvePoint]) {
         let channel = channel
+        library.isCurveHidden = false
         library.changeEdit { $0.curve[channel] = points }
     }
 
@@ -403,15 +410,24 @@ private struct LevelsTrack: View {
         }
     }
 
+    /// The track spans the graph's plot, which is inset from the card by `CurveEditor.inset`; the
+    /// handles at the ends hang into that margin rather than being cut off.
+    private var plotWidth: CGFloat { max(width - 2 * CurveEditor.inset, 1) }
+
+    private func pixel(of handle: Handle, map: LevelsMap) -> CGFloat {
+        CurveEditor.inset + x(of: handle, map: map) * plotWidth
+    }
+
     private func draw(in context: inout GraphicsContext, size: CGSize) {
-        let bar = CGRect(x: 0, y: 1, width: size.width, height: 3)
+        let inset = CurveEditor.inset
+        let bar = CGRect(x: inset, y: 1, width: max(size.width - 2 * inset, 0), height: 3)
         context.fill(Path(roundedRect: bar, cornerRadius: 1.5),
                      with: .linearGradient(Gradient(colors: [.black, channel == .rgb ? .white : color]),
-                                           startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: size.width, y: 0)))
+                                           startPoint: CGPoint(x: bar.minX, y: 0), endPoint: CGPoint(x: bar.maxX, y: 0)))
         let map = levels
         let fills: [Handle: Color] = [.black: Color(white: 0.08), .midtone: Color(white: 0.5), .white: Color(white: 0.96)]
         for handle in Handle.allCases {
-            let center = x(of: handle, map: map) * size.width
+            let center = pixel(of: handle, map: map)
             let triangle = Path { p in
                 p.move(to: CGPoint(x: center, y: 5))
                 p.addLine(to: CGPoint(x: center + 5.5, y: 14))
@@ -428,19 +444,22 @@ private struct LevelsTrack: View {
         let map = levels
         if dragged == nil {
             let start = value.startLocation.x
-            // The handle under the pointer; where black and white meet, the one the pointer is
-            // past, so both can still be pulled apart.
-            let nearest = Handle.allCases.min {
-                abs(x(of: $0, map: map) * width - start) < abs(x(of: $1, map: map) * width - start)
+            let hits = Handle.allCases.filter { abs(pixel(of: $0, map: map) - start) <= Self.hitDistance }
+            // Where black and white meet, the one on the side of the click, so both can still be
+            // pulled apart; otherwise the nearest.
+            let nearest: Handle? = if hits.contains(.black), hits.contains(.white) {
+                start > (pixel(of: .black, map: map) + pixel(of: .white, map: map)) / 2 ? .white : .black
+            } else {
+                hits.min { abs(pixel(of: $0, map: map) - start) < abs(pixel(of: $1, map: map) - start) }
             }
-            guard let nearest, abs(x(of: nearest, map: map) * width - start) <= Self.hitDistance else { return }
+            guard let nearest else { return }
             dragged = nearest
             moved = false
             library.isAdjusting = true
         }
         guard let dragged else { return }
         if abs(value.translation.width) > 2 { moved = true }
-        let position = min(max(value.location.x / width, 0), 1)
+        let position = min(max((value.location.x - CurveEditor.inset) / plotWidth, 0), 1)
         var levels = Levels(black: map.black, midtone: map.midtone, white: map.white)
         switch dragged {
         case .black: levels.black = min(position, map.white - LevelsMap.minimumGap)
@@ -476,6 +495,7 @@ private struct LevelsTrack: View {
         let channel = channel
         let rounded = Levels(black: CurveEditor.rounded(levels.black), midtone: CurveEditor.rounded(levels.midtone),
                              white: CurveEditor.rounded(levels.white))
+        library.isCurveHidden = false
         library.changeEdit { $0.curve[levels: channel] = rounded }
     }
 
