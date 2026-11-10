@@ -65,7 +65,9 @@ struct CurveEditor: View {
     // MARK: Drawing
 
     private func draw(in context: inout GraphicsContext, size: CGSize) {
-        let faint = Color.primary.opacity(0.12)
+        context.translateBy(x: Self.inset, y: Self.inset)
+        let size = Self.plotSize(size)
+        let faint = Color.primary.opacity(0.07)
         if let histogram = library.selectedHistogram {
             let bins: [Float] = switch channel {
             case .rgb: (0..<Histogram.binCount).map { (histogram.red[$0] + histogram.green[$0] + histogram.blue[$0]) / 3 }
@@ -74,7 +76,7 @@ struct CurveEditor: View {
             case .blue: histogram.blue
             }
             context.fill(HistogramView.area(of: bins, peak: HistogramView.peak(of: histogram), in: size),
-                         with: .color(Color.primary.opacity(0.08)))
+                         with: .color(Color.primary.opacity(0.1)))
         }
         var grid = Path()
         for i in 1..<4 {
@@ -83,9 +85,8 @@ struct CurveEditor: View {
             grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y))
         }
         context.stroke(grid, with: .color(faint), lineWidth: 0.5)
-        context.stroke(Path(CGRect(origin: .zero, size: size)), with: .color(faint), lineWidth: 1)
         context.stroke(Path { $0.move(to: CGPoint(x: 0, y: size.height)); $0.addLine(to: CGPoint(x: size.width, y: 0)) },
-                       with: .color(faint), lineWidth: 0.5)
+                       with: .color(faint), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
 
         // The other channels' curves, faintly, where they aren't straight.
         for other in ToneCurve.Channel.allCases where other != channel && !curve.isIdentity(other) {
@@ -115,6 +116,18 @@ struct CurveEditor: View {
         }
     }
 
+    /// Room around the plot so a point at a corner, and its selection ring, isn't cut off.
+    /// There's no frame: the plot sits directly on the card.
+    private static let inset: CGFloat = 7
+
+    private static func plotSize(_ size: CGSize) -> CGSize {
+        CGSize(width: max(size.width - 2 * inset, 0), height: max(size.height - 2 * inset, 0))
+    }
+
+    private static func inPlot(_ location: CGPoint) -> CGPoint {
+        CGPoint(x: location.x - inset, y: location.y - inset)
+    }
+
     private func position(of point: CurvePoint, in size: CGSize) -> CGPoint {
         CGPoint(x: point.input * size.width, y: (1 - point.output) * size.height)
     }
@@ -126,11 +139,12 @@ struct CurveEditor: View {
         DragGesture(minimumDistance: 0)
             .updating($isDragging) { _, isDragging, _ in isDragging = true }
             .onChanged { value in
-                let size = canvasSize
+                let size = Self.plotSize(canvasSize)
                 guard size.width > 0 else { return }
-                if drag == nil { drag = startDrag(at: value.startLocation, in: size) }
+                if drag == nil { drag = startDrag(at: Self.inPlot(value.startLocation), in: size) }
                 guard let drag, let index = drag.index else { return }
-                let target = CGPoint(x: value.location.x + drag.offset.width, y: value.location.y + drag.offset.height)
+                let location = Self.inPlot(value.location)
+                let target = CGPoint(x: location.x + drag.offset.width, y: location.y + drag.offset.height)
                 set(moving(index, of: drag.points, to: target, in: size))
             }
     }
