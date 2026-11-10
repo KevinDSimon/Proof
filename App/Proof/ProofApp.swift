@@ -254,10 +254,6 @@ struct ContentView: View {
         // Declared on the photo's column rather than the window, so the button sits over the
         // photo and stays put when the inspector opens and closes.
         .toolbar {
-            ToolbarItem {
-                ZoomMenu(zoom: library.zoom)
-            }
-            ToolbarSpacer(.fixed)
             // Stars and flags are separate groups, as in Lightroom, at the trailing end so the
             // title stands on its own.
             ToolbarItem {
@@ -266,6 +262,11 @@ struct ContentView: View {
             ToolbarSpacer(.fixed)
             ToolbarItem {
                 FlagButtons(flag: library.selectedPhotoMetadata?.flag ?? .unflagged, setFlag: library.setFlag)
+            }
+            ToolbarSpacer(.fixed)
+            // Just left of the crop tool, with the navigator below it while zoomed.
+            ToolbarItem {
+                ZoomMenu(zoom: library.zoom)
             }
             ToolbarSpacer(.fixed)
             if library.isCropping {
