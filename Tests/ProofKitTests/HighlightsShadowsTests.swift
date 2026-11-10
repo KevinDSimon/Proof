@@ -106,7 +106,8 @@ struct HighlightsShadowsTests {
             filter.scaleFactor = Float(RAWRenderer.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                                fitting: CGSize(width: 1600, height: 1600)))
             let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
-            let decoded = try #require(RAWRenderer.apply(EditRecipe(), to: filter, asShot: asShot))
+            let decoded = try #require(RAWRenderer.apply(EditRecipe(), to: filter, asShot: asShot,
+                                                                 cameraDetail: CameraDetail(of: filter)))
             let radius = 0.02 * max(decoded.extent.width, decoded.extent.height)
 
             let proof = settings.map { HighlightsShadows.apply(to: decoded, highlights: $0.highlights, shadows: $0.shadows) }

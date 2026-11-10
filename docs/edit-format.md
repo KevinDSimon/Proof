@@ -17,13 +17,14 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
   "processVersion": 1,
   "basic": {
     "whiteBalance": "custom", "temperature": 4800, "tint": 12, "exposure": 0.3,
-    "contrast": 10, "highlights": -40, "shadows": 25,
+    "contrast": 10, "texture": 20, "clarity": 15, "highlights": -40, "shadows": 25,
     "whites": 0, "blacks": -5, "vibrance": 15, "saturation": 0
   },
   "curve": {
     "rgb": [[0, 0], [1, 1]], "red": [[0, 0], [1, 1]], "green": [[0, 0], [1, 1]], "blue": [[0, 0], [1, 1]],
     "levels": { "rgb": [0, 0.5, 1], "red": [0, 0.5, 1], "green": [0, 0.5, 1], "blue": [0, 0.5, 1] }
   },
+  "detail": { "sharpening": 70, "noiseReduction": null, "noiseReductionDetail": null, "colorNoiseReduction": 40 },
   "look": { "lut": "Portra.cube", "strength": 0.7 },
   "crop": {
     "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
@@ -39,8 +40,9 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | --- | --- |
 | `formatVersion` | Version of this JSON layout. Bumped when fields are renamed or restructured; older files are migrated on read. |
 | `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. |
-| `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
+| `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Texture and clarity raise (positive) or lower (negative) local contrast: texture in fine detail a few pixels across, clarity over larger areas, mostly in the midtones. Both are measured against a share of the photo's size, so they look the same at any render size, and are clamped the same way. Files saved before they existed read both as 0. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
 | `curve` | Control points per channel (`rgb`, `red`, `green`, `blue`), each `[input, output]` from 0 to 1 in sRGB-encoded values, sorted by input, at most 16 per channel. The RGB curve applies after Contrast, Whites and Blacks, then each color channel's curve. The curve passes through every point with monotone cubic interpolation and is flat beyond the first and last points. Values outside 0 to 1 are clamped, and a point at the same input as an earlier one is ignored. `levels` holds each channel's black, midtone and white handles as `[black, midtone, white]`, described below. |
+| `detail` | Sharpening and noise reduction, described below. |
 | `look` | The LUT's path in the LUT library and its strength from 0 to 1. The path is relative to the library, with folders separated by `/`, as in `Portra/400.cube`; a LUT outside any folder is its file name alone, as edits saved before folders have it. A path with an empty, hidden or `..` part is skipped. Strength outside 0 to 1 renders as the nearer end. A LUT that can't be found is skipped. `null` for none. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
@@ -58,6 +60,17 @@ Each channel's handles apply before its points, as in Photoshop's Levels followe
 | `white` | From 0 to 1. Tones at or above it become white. Default 1. |
 
 Between `black` and `white` the tone is stretched to 0…1 and raised to the power that maps `midtone` to 0.5. `white` is kept at least 0.02 above `black`. A missing channel, or a missing `levels`, means the defaults; files saved before levels existed read that way.
+
+## Detail
+
+Each value runs from 0 to 100, and `null` keeps the camera's default, which `CIRAWFilter` chooses for each photo from its camera and ISO. Values outside 0 to 100 render as the nearer end. A missing `detail`, as in files saved before it existed, means all four are `null`, so those edits render as they always did. See decision 0016.
+
+| Field | Meaning |
+| --- | --- |
+| `sharpening` | Edge sharpening, `CIRAWFilter.sharpnessAmount` from 0 to 2 (value ÷ 50). Applies only when the photo is decoded above half size. |
+| `noiseReduction` | Luminance noise reduction, `luminanceNoiseReductionAmount` from 0 to 1 (value ÷ 100). Its effect grows with the photo's ISO. |
+| `noiseReductionDetail` | How much fine detail luminance noise reduction keeps, `detailAmount` from 0 to 1. |
+| `colorNoiseReduction` | Color noise reduction, `colorNoiseReductionAmount` from 0 to 1. |
 
 ## White balance
 

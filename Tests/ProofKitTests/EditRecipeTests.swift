@@ -167,6 +167,26 @@ struct EditRecipeTests {
         #expect(written?["formatVersion"] as? Int == EditRecipe.currentFormatVersion)
     }
 
+    @Test("A file saved before Texture and Clarity reads both as 0 and stays neutral; both survive a round trip")
+    func migratesWithoutTextureClarity() throws {
+        let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"contrast": 0, "highlights": 0}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        #expect(recipe.basic.texture == 0)
+        #expect(recipe.basic.clarity == 0)
+        #expect(recipe.isNeutral)
+        #expect(recipe.processVersion == 1)
+
+        var edited = recipe
+        edited.basic.texture = 35
+        edited.basic.clarity = -20.5
+        #expect(!edited.isNeutral)
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        let basic = try #require(written?["basic"] as? [String: Any])
+        #expect(basic["texture"] as? Double == 35)
+        #expect(basic["clarity"] as? Double == -20.5)
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
+    }
+
     static let asShot = WhiteBalance(temperature: 6112, tint: 10)
 
     @Test("A preset sets its Kelvin with no tint, and As Shot clears both")

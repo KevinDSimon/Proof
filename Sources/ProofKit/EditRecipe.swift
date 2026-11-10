@@ -11,17 +11,19 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var processVersion: Int
     public var basic: BasicAdjustments
     public var curve: ToneCurve
+    public var detail: DetailAdjustments
     public var look: Look?
     public var crop: Crop?
     public var layers: [Layer]
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, look, crop, layers
+        case formatVersion, processVersion, basic, curve, detail, look, crop, layers
     }
 
     public init(
         basic: BasicAdjustments = BasicAdjustments(),
         curve: ToneCurve = ToneCurve(),
+        detail: DetailAdjustments = DetailAdjustments(),
         look: Look? = nil,
         crop: Crop? = nil,
         layers: [Layer] = []
@@ -30,6 +32,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         processVersion = Self.currentProcessVersion
         self.basic = basic
         self.curve = curve
+        self.detail = detail
         self.look = look
         self.crop = crop
         self.layers = layers
@@ -41,6 +44,9 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         processVersion = try c.decodeIfPresent(Int.self, forKey: .processVersion) ?? Self.currentProcessVersion
         basic = try c.decodeIfPresent(BasicAdjustments.self, forKey: .basic) ?? BasicAdjustments()
         curve = try c.decodeIfPresent(ToneCurve.self, forKey: .curve) ?? ToneCurve()
+        // Edits saved before the Detail card have no `detail`, which keeps the camera's sharpening
+        // and noise reduction, as they always rendered.
+        detail = try c.decodeIfPresent(DetailAdjustments.self, forKey: .detail) ?? DetailAdjustments()
         look = try c.decodeIfPresent(Look.self, forKey: .look)
         crop = try c.decodeIfPresent(Crop.self, forKey: .crop)
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
@@ -63,6 +69,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(processVersion, forKey: .processVersion)
         try c.encode(basic, forKey: .basic)
         try c.encode(curve, forKey: .curve)
+        try c.encode(detail, forKey: .detail)
         try c.encode(look, forKey: .look)
         try c.encode(crop, forKey: .crop)
         try c.encode(layers, forKey: .layers)
@@ -70,7 +77,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && look == nil && (crop?.isIdentity ?? true) && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
     /// The sidecar URL for an original photo: the full file name plus `.proof`.
@@ -91,6 +98,8 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
     public var tint: Double?
     public var exposure: Double = 0
     public var contrast: Double = 0
+    public var texture: Double = 0
+    public var clarity: Double = 0
     public var highlights: Double = 0
     public var shadows: Double = 0
     public var whites: Double = 0
@@ -99,7 +108,7 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
     public var saturation: Double = 0
 
     private enum CodingKeys: String, CodingKey {
-        case whiteBalance, temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation
+        case whiteBalance, temperature, tint, exposure, contrast, texture, clarity, highlights, shadows, whites, blacks, vibrance, saturation
     }
 
     public init() {}
@@ -114,6 +123,8 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
         whiteBalance = preset.map { WhiteBalancePreset(rawValue: $0) ?? .custom } ?? (temperature == nil && tint == nil ? .asShot : .custom)
         exposure = try value(.exposure)
         contrast = try value(.contrast)
+        texture = try value(.texture)
+        clarity = try value(.clarity)
         highlights = try value(.highlights)
         shadows = try value(.shadows)
         whites = try value(.whites)
@@ -131,6 +142,8 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
         try c.encode(tint, forKey: .tint)
         try c.encode(exposure, forKey: .exposure)
         try c.encode(contrast, forKey: .contrast)
+        try c.encode(texture, forKey: .texture)
+        try c.encode(clarity, forKey: .clarity)
         try c.encode(highlights, forKey: .highlights)
         try c.encode(shadows, forKey: .shadows)
         try c.encode(whites, forKey: .whites)
