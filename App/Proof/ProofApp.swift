@@ -221,9 +221,10 @@ struct ContentView: View {
         Group {
             if let renderer, let url = library.selectedPhotoURL {
                 VStack(spacing: 0) {
-                    // More margin while cropping, so the handles clear the window's edges.
+                    // The same margin while cropping, so the photo doesn't shrink when the tool opens: the
+                    // handles are drawn inside the crop border, and their 12 pt reach fits in 24.
                     EditCanvas(library: library, url: url, renderer: renderer)
-                        .padding(library.isCropping ? 40 : 24)
+                        .padding(24)
                     Filmstrip(library: library, photos: library.visiblePhotos)
                         .padding(.bottom, 8)
                 }
@@ -407,9 +408,7 @@ struct EditCanvas: View {
     private var shownRecipe: EditRecipe {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
-        if library.isCurveHidden { recipe.curve = ToneCurve() }
-        if library.isLookHidden { recipe.look = nil }
-        return recipe
+        return recipe.without(library.offGroups)
     }
 }
 
@@ -429,15 +428,14 @@ struct AdjustmentsInspector: View {
     let library: Library
 
     var body: some View {
-        Form {
-            Section {
+        InspectorPanel {
+            InspectorCard(title: "Histogram") {
                 SelectedHistogram(library: library)
-            } header: {
-                SectionTitle("Histogram")
-            } footer: {
                 CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
             }
-            Section {
+            InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
+                          canReset: basic.whiteBalance != .asShot,
+                          reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
                 // A full-width pop-up, as in Finder's settings; Custom is listed only while it is chosen.
                 MenuPopUp(title: Self.title(of: basic.whiteBalance),
                           items: WhiteBalancePreset.allCases
@@ -467,14 +465,22 @@ struct AdjustmentsInspector: View {
                     showsSign: true, track: Self.tintTrack,
                     reset: { library.changeEdit { $0.basic.resetTint() } },
                     isAdjusting: { library.isAdjusting = $0 })
-            } header: {
-                SectionHeader(title: "White Balance", canReset: basic.whiteBalance != .asShot) {
-                    library.changeEdit { $0.basic.resetWhiteBalance() }
-                }
             }
             // White balance can't be shown until the camera's has been read from the photo.
             .disabled(library.selectedEdit?.asShot == nil)
-            Section {
+            InspectorCard(title: "Light", isOn: library.isOnBinding(.light),
+                          canReset: basic.exposure != 0 || basic.contrast != 0 || basic.highlights != 0
+                              || basic.shadows != 0 || basic.whites != 0 || basic.blacks != 0,
+                          reset: {
+                              library.changeEdit {
+                                  $0.basic.exposure = 0
+                                  $0.basic.contrast = 0
+                                  $0.basic.highlights = 0
+                                  $0.basic.shadows = 0
+                                  $0.basic.whites = 0
+                                  $0.basic.blacks = 0
+                              }
+                          }) {
                 AdjustmentSlider(
                     title: "Exposure",
                     value: Binding(get: { basic.exposure },
@@ -523,21 +529,16 @@ struct AdjustmentsInspector: View {
                     showsSign: true, track: Self.blacksTrack,
                     reset: { library.changeEdit { $0.basic.blacks = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
-            } header: {
-                SectionHeader(title: "Light", canReset: basic.exposure != 0 || basic.contrast != 0 || basic.highlights != 0
-                              || basic.shadows != 0 || basic.whites != 0 || basic.blacks != 0) {
-                    library.changeEdit {
-                        $0.basic.exposure = 0
-                        $0.basic.contrast = 0
-                        $0.basic.highlights = 0
-                        $0.basic.shadows = 0
-                        $0.basic.whites = 0
-                        $0.basic.blacks = 0
-                    }
-                }
             }
             .disabled(library.selectedEdit == nil)
-            Section {
+            InspectorCard(title: "Color", isOn: library.isOnBinding(.color),
+                          canReset: basic.vibrance != 0 || basic.saturation != 0,
+                          reset: {
+                              library.changeEdit {
+                                  $0.basic.vibrance = 0
+                                  $0.basic.saturation = 0
+                              }
+                          }) {
                 AdjustmentSlider(
                     title: "Vibrance",
                     value: Binding(get: { basic.vibrance },
@@ -554,31 +555,17 @@ struct AdjustmentsInspector: View {
                     showsSign: true, track: Self.saturationTrack,
                     reset: { library.changeEdit { $0.basic.saturation = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
-            } header: {
-                SectionHeader(title: "Color", canReset: basic.vibrance != 0 || basic.saturation != 0) {
-                    library.changeEdit {
-                        $0.basic.vibrance = 0
-                        $0.basic.saturation = 0
-                    }
-                }
             }
             .disabled(library.selectedEdit == nil)
-            Section {
+            InspectorCard(title: "Curve", isOn: library.isOnBinding(.curve),
+                          canReset: !(library.selectedEdit?.recipe.curve.isIdentity ?? true),
+                          reset: { library.changeEdit { $0.curve = ToneCurve() } }) {
                 CurveEditor(library: library)
-                    .opacity(library.isCurveHidden ? 0.45 : 1)
-            } header: {
-                let hasCurve = !(library.selectedEdit?.recipe.curve.isIdentity ?? true)
-                SectionHeader(title: "Curve", canReset: hasCurve,
-                              isOn: Binding(get: { !library.isCurveHidden }, set: { library.isCurveHidden = !$0 }),
-                              canToggle: hasCurve) {
-                    library.isCurveHidden = false
-                    library.changeEdit { $0.curve = ToneCurve() }
-                }
             }
             .disabled(library.selectedEdit == nil)
             LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
-                Section {
+                InspectorCard {
                     Text(Self.message(for: unsaved))
                         .foregroundStyle(.secondary)
                     if unsaved == .noAccess {
@@ -587,7 +574,6 @@ struct AdjustmentsInspector: View {
                 }
             }
         }
-        .inspectorForm()
     }
 
     private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }
@@ -646,56 +632,5 @@ struct AdjustmentsInspector: View {
         case .unreadable: "This photo's edit file couldn't be read, so changes aren't saved."
         case .failed: "The last change couldn't be saved."
         }
-    }
-}
-
-/// A section title with a Reset button that returns the section's adjustments to none, and
-/// optionally a switch that shows the photo with and without the section's adjustments.
-struct SectionHeader: View {
-    let title: String
-    let canReset: Bool
-    var isOn: Binding<Bool>?
-    var canToggle = true
-    let reset: () -> Void
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Button("Reset", action: reset)
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .disabled(!canReset)
-                .accessibilityLabel("Reset \(title)")
-            if let isOn {
-                Toggle(title, isOn: isOn)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    // Green, as on iPhone and iPad: without a tint the switch is white either
-                    // way, and on and off are hard to tell apart.
-                    .tint(.green)
-                    .labelsHidden()
-                    .disabled(!canToggle)
-                    .help(isOn.wrappedValue ? "Hide this adjustment to compare" : "Show this adjustment")
-                    .accessibilityLabel("Show \(title)")
-            }
-        }
-        .padding(.top, SectionTitle.spacing)
-    }
-}
-
-/// A section header with no Reset button, spaced like `SectionHeader`.
-struct SectionTitle: View {
-    /// Extra space above each header, which is what separates the inspector's sections.
-    static let spacing: CGFloat = 14
-    let title: String
-
-    init(_ title: String) {
-        self.title = title
-    }
-
-    var body: some View {
-        Text(title)
-            .padding(.top, Self.spacing)
     }
 }
