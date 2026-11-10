@@ -28,6 +28,8 @@ public actor RAWRenderer {
     private var openURL: URL?
     /// The open photo's camera white balance, read before any render changes the filter's.
     private var asShot = WhiteBalance(temperature: 6500, tint: 0)
+    /// The open photo's default sharpening and noise reduction, read before any render changes the filter's.
+    private var cameraDetail = CameraDetail(sharpness: 0, luminanceNoiseReduction: 0, detail: 0, colorNoiseReduction: 0)
     /// Separate from `context` and without cached intermediates, so thumbnails of many photos
     /// don't fill GPU memory or evict the open photo's decode.
     private lazy var thumbnailContext = CIContext(mtlCommandQueue: commandQueue, options: [
@@ -73,6 +75,7 @@ public actor RAWRenderer {
         context.clearCaches()
         self.filter = filter
         asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
+        cameraDetail = CameraDetail(of: filter)
         openURL = url
     }
 
@@ -101,7 +104,7 @@ public actor RAWRenderer {
         recipe.crop = recipe.crop?.turnedOnly
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: targetSize))
-        guard let image = Self.apply(recipe, to: filter, asShot: asShot, lut: lut),
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail, lut: lut),
               let cgImage = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
                                                   colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
@@ -141,7 +144,7 @@ public actor RAWRenderer {
                 recipe: EditRecipe, lut: PreparedLUT? = nil) throws -> RenderedPhoto {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         filter.scaleFactor = Float(scale)
-        guard let whole = Self.apply(recipe, to: filter, asShot: asShot, lut: lut) else { throw RAWRendererError.renderFailed }
+        guard let whole = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail, lut: lut) else { throw RAWRendererError.renderFailed }
 
         // The region in Core Image's coordinates, whose y axis points up, in whole pixels.
         let full = whole.extent.integral
@@ -192,7 +195,7 @@ public actor RAWRenderer {
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: size))
         let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
-        guard let image = Self.apply(recipe, to: filter, asShot: asShot, lut: lut),
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: CameraDetail(of: filter), lut: lut),
               let thumbnail = thumbnailContext.createCGImage(image, from: image.extent.integral, format: .RGBA8,
                                                              colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
@@ -299,14 +302,17 @@ public actor RAWRenderer {
     /// canvas, thumbnails and export all go through here, so they can't drift apart. Stages that
     /// have no controls yet pass the image through; each one is filled in by its own issue.
     /// `asShot` is the camera's white balance, which a filter reused across renders has lost.
+    /// `cameraDetail` is its default sharpening and noise reduction, which it has lost too.
     /// `lut` is the loaded LUT that `recipe.look` names; the look is skipped without one.
     static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance,
-                      lut: PreparedLUT? = nil) -> CIImage? {
+                      cameraDetail: CameraDetail, lut: PreparedLUT? = nil) -> CIImage? {
         // 1. RAW decode in linear light. White balance is in Kelvin and tint; exposure in stops.
+        // Sharpening and noise reduction are the decoder's own; it sharpens only above half size.
         let whiteBalance = recipe.basic.whiteBalance(asShot: asShot)
         filter.neutralTemperature = Float(whiteBalance.temperature)
         filter.neutralTint = Float(whiteBalance.tint)
         filter.exposure = Float(recipe.basic.exposure)
+        recipe.detail.decoded(camera: cameraDetail).apply(to: filter)
         guard let decoded = filter.outputImage else { return nil }
         // 2. Tone: highlights and shadows first, then contrast, whites, blacks and the tone
         // curve as one lookup.

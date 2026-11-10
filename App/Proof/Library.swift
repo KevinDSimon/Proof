@@ -37,6 +37,9 @@ struct PhotoEdit {
     /// The camera's white balance, which the white balance controls show for As Shot. `nil`
     /// until it has been read from the photo.
     var asShot: WhiteBalance?
+    /// The camera's sharpening and noise reduction, which the Detail sliders show where the edit
+    /// has none. `nil` until it has been read from the photo.
+    var cameraDetail: CameraDetail?
     /// The photo's size in pixels as the camera oriented it, which the crop tool lays out by.
     /// `nil` until it has been read from the photo.
     var size: CGSize?
@@ -398,10 +401,12 @@ final class Library {
         }
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.
         Task {
-            let (asShot, settings, size) = await Task.detached {
-                (WhiteBalance.asShot(of: url), CaptureSettings.read(from: url), RAWRenderer.orientedSize(of: url))
+            let (asShot, cameraDetail, settings, size) = await Task.detached {
+                (WhiteBalance.asShot(of: url), CameraDetail.of(url), CaptureSettings.read(from: url),
+                 RAWRenderer.orientedSize(of: url))
             }.value
             edits[photo]?.asShot = asShot
+            edits[photo]?.cameraDetail = cameraDetail
             edits[photo]?.captureSettings = settings
             edits[photo]?.size = size
         }
