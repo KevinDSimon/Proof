@@ -647,6 +647,11 @@ struct SectionHeader: View {
         HStack {
             Text(title)
             Spacer()
+            Button("Reset", action: reset)
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .disabled(!canReset)
+                .accessibilityLabel("Reset \(title)")
             if let isOn {
                 Toggle(title, isOn: isOn)
                     .toggleStyle(.switch)
@@ -656,11 +661,6 @@ struct SectionHeader: View {
                     .help(isOn.wrappedValue ? "Hide this adjustment to compare" : "Show this adjustment")
                     .accessibilityLabel("Show \(title)")
             }
-            Button("Reset", action: reset)
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .disabled(!canReset)
-                .accessibilityLabel("Reset \(title)")
         }
         .padding(.top, SectionTitle.spacing)
     }

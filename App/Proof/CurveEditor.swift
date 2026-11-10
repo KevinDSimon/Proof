@@ -21,7 +21,10 @@ struct CurveEditor: View {
     @State private var lastClick: Click?
     /// The graph's size, which the gesture needs to turn locations into curve values.
     @State private var canvasSize: CGSize = .zero
-    @FocusState private var isFocused: Bool
+    /// Watches the keyboard, and clicks elsewhere, while a point is selected.
+    @State private var keyMonitor: Any?
+    /// The graph's frame in the window, to tell a click on it from a click elsewhere.
+    @State private var graphFrame: CGRect = .zero
     @Environment(\.colorScheme) private var colorScheme
     /// True while a drag is in progress. It resets when the drag ends and also when the system
     /// cancels it, which `onEnded` doesn't report, so a drag can't be left half finished.
@@ -66,21 +69,17 @@ struct CurveEditor: View {
 
             VStack(spacing: 2) {
                 Canvas { context, size in draw(in: &context, size: size) }
+                    // A fixed height rather than a square: a height that follows the width can
+                    // feed back into the inspector's layout and make the section jump.
                     .frame(maxWidth: .infinity)
-                    .aspectRatio(1, contentMode: .fit)
+                    .frame(height: Self.graphHeight)
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { canvasSize = $0 }
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { graphFrame = $0 }
                     .contentShape(Rectangle())
                     .gesture(dragGesture)
                     .onChange(of: isDragging) { if !isDragging { endDrag() } }
-                    // `.edit` lets a click give the graph keyboard focus, so Delete and the arrow
-                    // keys reach it without keyboard navigation turned on in System Settings.
-                    .focusable(interactions: .edit)
-                    .focused($isFocused)
-                    .focusEffectDisabled()
-                    .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow]) { press in
-                        nudge(press.key, by: press.modifiers.contains(.shift) ? 0.1 : 0.01)
-                    }
-                    .onKeyPress(keys: [.delete, .deleteForward]) { _ in removeSelected() }
+                    .onChange(of: selected) { updateKeyMonitor() }
+                    .onDisappear { selected = nil; updateKeyMonitor() }
                     .accessibilityElement()
                     .accessibilityLabel("Tone curve")
                     .accessibilityValue("\(Self.title(of: channel)), \(points.count) points")
@@ -169,6 +168,7 @@ struct CurveEditor: View {
 
     /// Room around the plot so a point at a corner, and its selection ring, isn't cut off.
     static let inset: CGFloat = 9
+    static let graphHeight: CGFloat = 220
 
     private static func plotSize(_ size: CGSize) -> CGSize {
         CGSize(width: max(size.width - 2 * inset, 0), height: max(size.height - 2 * inset, 0))
@@ -199,7 +199,6 @@ struct CurveEditor: View {
                 let size = Self.plotSize(canvasSize)
                 guard size.width > 0 else { return }
                 if drag == nil {
-                    isFocused = true
                     drag = startDrag(at: Self.inPlot(value.startLocation), in: size)
                 }
                 guard var current = drag, let index = current.index else { return }
@@ -228,7 +227,7 @@ struct CurveEditor: View {
             if let lastClick, lastClick.index == index, Date().timeIntervalSince(lastClick.time) < NSEvent.doubleClickInterval {
                 self.lastClick = nil
                 selected = index
-                _ = removeSelected()
+                removeSelected()
             } else {
                 lastClick = Click(index: index, time: Date())
             }
@@ -289,28 +288,64 @@ struct CurveEditor: View {
         return Self.rounded(CurvePoint(min(max(point.input, low), high), min(max(point.output, 0), 1)))
     }
 
-    private func nudge(_ key: KeyEquivalent, by step: Double) -> KeyPress.Result {
-        guard let selected, points.indices.contains(selected) else { return .ignored }
-        var point = points[selected]
-        switch key {
-        case .upArrow: point.output += step
-        case .downArrow: point.output -= step
-        case .leftArrow: point.input -= step
-        default: point.input += step
+    // MARK: Keyboard
+
+    /// While a point is selected, Delete removes it and the arrow keys nudge it, Shift for larger
+    /// steps. A local event monitor rather than keyboard focus: a custom view on the Mac only
+    /// takes focus by click with keyboard navigation turned on, so focus-based key handling
+    /// doesn't reach the graph for most people. Keys typed into a text field pass through, and
+    /// a click anywhere else deselects the point, so the keys go back to the other controls.
+    private func updateKeyMonitor() {
+        if selected == nil, let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        } else if selected != nil, keyMonitor == nil {
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { event in
+                handle(event)
+            }
         }
+    }
+
+    private func handle(_ event: NSEvent) -> NSEvent? {
+        if event.type == .leftMouseDown {
+            if let content = event.window?.contentView {
+                let location = CGPoint(x: event.locationInWindow.x, y: content.bounds.height - event.locationInWindow.y)
+                if !graphFrame.contains(location) { selected = nil }
+            }
+            return event
+        }
+        guard event.window?.firstResponder as? NSText == nil,
+              event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+        let step = event.modifierFlags.contains(.shift) ? 0.1 : 0.01
+        switch event.keyCode {
+        case 51, 117: return removeSelected() ? nil : event
+        case 123: return nudge(dx: -step, dy: 0) ? nil : event
+        case 124: return nudge(dx: step, dy: 0) ? nil : event
+        case 125: return nudge(dx: 0, dy: -step) ? nil : event
+        case 126: return nudge(dx: 0, dy: step) ? nil : event
+        default: return event
+        }
+    }
+
+    private func nudge(dx: Double, dy: Double) -> Bool {
+        guard let selected, points.indices.contains(selected) else { return false }
+        var point = points[selected]
+        point.input += dx
+        point.output += dy
         var moved = points
         moved[selected] = clamped(point, at: selected, in: points)
         set(moved)
-        return .handled
+        return true
     }
 
-    private func removeSelected() -> KeyPress.Result {
-        guard let selected, selected > 0, selected < points.count - 1 else { return .ignored }
+    @discardableResult
+    private func removeSelected() -> Bool {
+        guard let selected, selected > 0, selected < points.count - 1 else { return false }
         var removed = points
         removed.remove(at: selected)
         self.selected = nil
         set(removed)
-        return .handled
+        return true
     }
 
     private func set(_ points: [CurvePoint]) {
