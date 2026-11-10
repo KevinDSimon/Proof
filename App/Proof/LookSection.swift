@@ -84,22 +84,21 @@ final class LookBrowser {
     }
 }
 
-/// The Looks section of the inspector: the strength of the chosen look, then the library's LUTs as
-/// slim rows with a small preview of the photo through each, in folders that open and close.
-/// Up and Down arrows try the looks in turn. Add imports `.cube` files and folders; they can also be
-/// dropped on the list. Reset removes the look, so there is no None row.
+/// The Looks section of the inspector: the strength of the chosen look, then the library in a
+/// native outline list, folders first, each look with a small preview of the photo through it. The
+/// list's own selection and keyboard navigation choose looks, so Up and Down Arrow try them in turn.
+/// Add imports `.cube` files and folders; they can also be dropped on the list. Reset removes the
+/// look, so there is no None row.
 struct LookSection: View {
     let library: Library
     @State private var isImporting = false
-    @FocusState private var isListFocused: Bool
-    @Environment(\.colorScheme) private var colorScheme
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
-    /// A line in the list: a folder, or a LUT inside the open folders.
-    private enum Row: Hashable {
-        case folder(path: String, depth: Int)
-        case look(path: String, depth: Int)
+    /// A folder, with its contents, or a LUT.
+    private struct Node: Identifiable {
+        let id: String
+        var children: [Node]?
     }
 
     var body: some View {
@@ -164,141 +163,120 @@ struct LookSection: View {
         }
     }
 
-    /// The rows in one focusable list, so the arrow keys step through the looks.
+    /// The library as a bordered outline list, like a table in a settings pane. It scrolls on its
+    /// own once it is taller than `maxListHeight`, so the inspector doesn't grow without end.
     private var list: some View {
-        VStack(spacing: 0) {
-            ForEach(rows, id: \.self) { row in
-                switch row {
-                case .folder(let path, let depth): folderRow(path, depth: depth)
-                case .look(let path, let depth): lookRow(path, depth: depth)
-                }
-            }
+        List(selection: Binding(get: { look?.lut }, set: { path in
+            if let path, looks.names.contains(path) { choose(path) }
+        })) {
+            ForEach(tree) { node($0) }
         }
+        .listStyle(.bordered)
+        .frame(height: listHeight)
         .opacity(library.isLookHidden ? 0.45 : 1)
-        .focusable()
-        .focused($isListFocused)
-        .onKeyPress(.downArrow) { step(by: 1) }
-        .onKeyPress(.upArrow) { step(by: -1) }
         .dropDestination(for: URL.self) { urls, _ in
             importItems(urls)
             return true
         }
     }
 
-    /// Folders and the LUTs in open folders, in the library's order.
-    private var rows: [Row] {
-        var rows: [Row] = []
-        var shownFolders: Set<String> = []
-        for name in looks.names {
-            let folders = LookBrowser.folders(containing: name)
-            var isOpen = true
-            for (depth, folder) in folders.enumerated() where isOpen {
-                if shownFolders.insert(folder).inserted { rows.append(.folder(path: folder, depth: depth)) }
-                isOpen = looks.expandedFolders.contains(folder)
-            }
-            if isOpen { rows.append(.look(path: name, depth: folders.count)) }
-        }
-        return rows
-    }
-
-    private func folderRow(_ path: String, depth: Int) -> some View {
-        let isExpanded = looks.expandedFolders.contains(path)
-        return HStack(spacing: 6) {
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                .frame(width: Self.previewSide)
-            Text(Self.title(of: path))
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, Self.rowPadding)
-        .padding(.leading, CGFloat(depth) * Self.indent)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            isListFocused = true
-            withAnimation(.snappy(duration: 0.2)) {
-                if isExpanded { looks.expandedFolders.remove(path) } else { looks.expandedFolders.insert(path) }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityValue(isExpanded ? "Open" : "Closed")
-        .accessibilityAction { looks.expandedFolders.formSymmetricDifference([path]) }
-    }
-
-    /// One look: a small preview, then its name. The chosen row is inverted, as Proof marks
-    /// selection without color.
-    private func lookRow(_ path: String, depth: Int) -> some View {
-        let isSelected = look?.lut == path
-        let title = Self.title(of: path)
-        return HStack(spacing: 6) {
-            Group {
-                if let image = looks.previews[path] {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Rectangle().fill(.quaternary)
+    private func node(_ node: Node) -> AnyView {
+        if let children = node.children {
+            AnyView(
+                DisclosureGroup(isExpanded: Binding(
+                    get: { looks.expandedFolders.contains(node.id) },
+                    set: { if $0 { looks.expandedFolders.insert(node.id) } else { looks.expandedFolders.remove(node.id) } }
+                )) {
+                    ForEach(children) { self.node($0) }
+                } label: {
+                    // On the label only: on the group it would also stop the looks inside from being chosen.
+                    Label(Self.title(of: node.id), systemImage: "folder")
+                        .selectionDisabled()
                 }
-            }
-            .frame(width: Self.previewSide, height: Self.previewSide)
-            .clipped()
-            Text(title)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 0)
+            )
+        } else {
+            AnyView(
+                Label {
+                    Text(Self.title(of: node.id))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } icon: {
+                    preview(of: node.id)
+                }
+                .help(node.id)
+                .tag(node.id)
+            )
         }
-        .padding(.vertical, Self.rowPadding)
-        .padding(.leading, CGFloat(depth) * Self.indent)
-        .padding(.horizontal, 4)
-        .foregroundStyle(isSelected ? Color(white: colorScheme == .dark ? 0 : 1) : Color.primary)
-        .background {
-            if isSelected {
-                // Plain black or white: the panel's vibrancy blends system label colors toward gray.
-                RoundedRectangle(cornerRadius: 5).fill(Color(white: colorScheme == .dark ? 1 : 0))
-            }
-        }
-        // The highlight reaches the row's edges, inside the Form's own inset.
-        .padding(.horizontal, -4)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            isListFocused = true
-            choose(path)
-        }
-        .help(path)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { choose(path) }
     }
 
-    /// Side of a row's preview, in points.
-    private static let previewSide: CGFloat = 18
-    private static let rowPadding: CGFloat = 3
-    /// How far each folder level is indented: the width of a preview and its gap.
-    private static let indent: CGFloat = 24
+    private func preview(of path: String) -> some View {
+        Group {
+            if let image = looks.previews[path] {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Rectangle().fill(.quaternary)
+            }
+        }
+        .frame(width: Self.previewSide, height: Self.previewSide)
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    /// Side of a row's preview, in points: the size of a list row's icon.
+    private static let previewSide: CGFloat = 20
+    /// A list row's height on macOS, with its spacing, and the tallest the list grows before it scrolls.
+    private static let rowHeight: CGFloat = 28
+    private static let maxListHeight: CGFloat = 320
+
+    /// Tall enough for the rows shown, up to `maxListHeight`.
+    private var listHeight: CGFloat {
+        min(CGFloat(visibleRowCount(tree)) * Self.rowHeight + 8, Self.maxListHeight)
+    }
+
+    private func visibleRowCount(_ nodes: [Node]) -> Int {
+        nodes.reduce(0) { count, node in
+            guard let children = node.children, looks.expandedFolders.contains(node.id) else { return count + 1 }
+            return count + 1 + visibleRowCount(children)
+        }
+    }
+
+    /// The library's paths as folders and LUTs, in the library's order: folders first.
+    private var tree: [Node] {
+        Self.nodes(looks.names.map { $0.split(separator: "/").map(String.init) }, under: [])
+    }
+
+    private static func nodes(_ paths: [[String]], under folder: [String]) -> [Node] {
+        var nodes: [Node] = []
+        var index = 0
+        while index < paths.count {
+            let path = paths[index]
+            if path.count == 1 {
+                nodes.append(Node(id: (folder + path).joined(separator: "/")))
+                index += 1
+            } else {
+                // The library lists each folder's contents together, so they are consecutive.
+                let name = path[0]
+                var end = index
+                while end < paths.count, paths[end].count > 1, paths[end][0] == name { end += 1 }
+                let inside = paths[index..<end].map { Array($0.dropFirst()) }
+                nodes.append(Node(id: (folder + [name]).joined(separator: "/"), children: Self.nodes(inside, under: folder + [name])))
+                index = end
+            }
+        }
+        return nodes
+    }
 
     private var looks: LookBrowser { library.looks }
     private var look: Look? { library.selectedEdit?.recipe.look }
 
     private func choose(_ path: String) {
+        guard path != look?.lut else { return }
         library.isLookHidden = false
         library.changeEdit { recipe in
             recipe.look = Look(lut: path, strength: recipe.look?.strength ?? 1)
         }
-    }
-
-    /// Chooses the look `offset` rows from the chosen one among those shown, or the first.
-    private func step(by offset: Int) -> KeyPress.Result {
-        let shown = rows.compactMap { row -> String? in
-            if case .look(let path, _) = row { path } else { nil }
-        }
-        guard !shown.isEmpty else { return .ignored }
-        let index = look.flatMap { shown.firstIndex(of: $0.lut) }.map { $0 + offset } ?? 0
-        choose(shown[min(max(index, 0), shown.count - 1)])
-        return .handled
     }
 
     /// Opens the folders around the chosen look, so it can be seen.
