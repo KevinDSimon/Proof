@@ -103,6 +103,8 @@ final class Library {
         }
     }
     var isInspectorShown = true
+    /// The LUT library and its previews of the photo in Edit, for the Look section.
+    let looks = LookBrowser()
     var isChoosingFolder = false
     /// Kept apart from `isChoosingFolder`, which SwiftUI clears before the picker's result arrives.
     private(set) var folderRequest: FolderRequest = .add
@@ -486,7 +488,9 @@ final class Library {
         do {
             try await renderer.open(url)
             // About the size of the photo on screen: enough for Vision, quick to render.
-            correction = try await renderer.horizonCorrection(fitting: CGSize(width: 1024, height: 1024), recipe: recipe)
+            let lut = await LUTLibrary.shared.lut(for: recipe.look)
+            correction = try await renderer.horizonCorrection(fitting: CGSize(width: 1024, height: 1024), recipe: recipe,
+                                                              lut: lut)
         } catch {
             isFindingHorizon = false
             errorMessage = "The horizon couldn't be found. (\(error))"

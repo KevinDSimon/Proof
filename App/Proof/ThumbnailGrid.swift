@@ -21,7 +21,8 @@ struct ThumbnailGrid: View {
     /// Its own renderer, so making thumbnails never waits behind, or evicts, the photo in Edit.
     nonisolated private static let thumbnailRenderer = try? RAWRenderer()
     nonisolated static let cache = ThumbnailCache(renderEdit: { url, edit in
-        try? await thumbnailRenderer?.thumbnail(of: url, recipe: edit, maxPixelSize: ThumbnailCache.maxPixelSize)
+        let lut = await LUTLibrary.shared.lut(for: edit.look)
+        return try? await thumbnailRenderer?.thumbnail(of: url, recipe: edit, lut: lut, maxPixelSize: ThumbnailCache.maxPixelSize)
     })
     private static let cellSize: CGFloat = 160
     private static let spacing: CGFloat = 12

@@ -1,0 +1,20 @@
+# 0014. The LUT library
+
+Date: 2026-11-10
+Status: Accepted
+
+## Context
+Issue #23 lets the person choose a look from LUTs they have imported, with a preview of the current photo through each. `look.lut` in the edit recipe names the LUT by file name (see `edit-format.md`). Proof ships with no LUTs. Preparing a large LUT takes seconds in a debug build (see 0013), and the canvas, thumbnails and previews all need the prepared table.
+
+## Decision
+- The library is a folder in Proof's own Application Support, not a folder the person picks. Imported files are copied in, so the original can be moved or deleted and every edit keeps finding its LUT. Because the folder is inside Proof's container, it needs no grant and doesn't go through `FileAccess`; the file being imported is read once, with the access the Open dialog or the drop gives.
+- A file is parsed before it is copied. One that fails isn't added, and the parser's message is shown.
+- File names are never reused for other contents. A second file with a taken name is numbered ("Portra 2.cube"); importing the same file again adds nothing. Edits that name a LUT keep rendering the same way.
+- `LUTLibrary` is an actor that prepares each LUT off the main thread once and keeps it, up to 512 MB, letting the least recently used go first. A 33-per-side LUT takes about 0.6 MB prepared, a 65-per-side one about 4.4 MB, and the largest, 128 per side, 32 MB.
+- Previews render the photo once, small and without its look, and apply each LUT to that image at full strength. A LUT changes each pixel on its own, so this matches a full render with the look at that size, without decoding the RAW file again for every LUT.
+- The Look section lists the library as a grid, with None first. Choosing a look keeps the strength already set; the first look chosen starts at 100%.
+
+## Consequences
+- Removing or renaming LUTs is done in the Finder for now. A LUT removed this way is skipped when an edit that names it renders, and the Look section says it is missing.
+- An edited thumbnail rendered while its LUT is missing is cached without the look until the edit changes.
+- Previews are 8-bit before the LUT, which can show banding in smooth gradients at preview size. The canvas and export aren't affected.

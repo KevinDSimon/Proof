@@ -562,6 +562,7 @@ struct AdjustmentsInspector: View {
                 }
             }
             .disabled(library.selectedEdit == nil)
+            LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
                 Section {
                     Text(Self.message(for: unsaved))
