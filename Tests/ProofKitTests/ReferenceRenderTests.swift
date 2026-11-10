@@ -133,6 +133,17 @@ struct ReferenceRenderTests {
         return recipe
     }()
 
+    /// Sharpening and noise reduction, rendered at 100% on a region at the photo's center, since
+    /// the decoder sharpens only above half size. The camera's own detail is kept as a reference
+    /// too, so a change to the defaults shows. The sample is ISO 64, where the decoder's luminance
+    /// noise reduction does almost nothing, so the noise reduction render mostly shows color.
+    static let detailReferences: [(name: String, recipe: EditRecipe)] = [
+        ("detail-camera", EditRecipe()),
+        ("sharpening", EditRecipe(detail: DetailAdjustments(sharpening: 100))),
+        ("noise-reduction", EditRecipe(detail: DetailAdjustments(sharpening: 0, noiseReduction: 100,
+                                                                 noiseReductionDetail: 0, colorNoiseReduction: 100))),
+    ]
+
     static let size = CGSize(width: 400, height: 400)
     /// Allows for rounding differences between GPUs, in 8-bit steps per channel.
     static let tolerance = 2
@@ -141,8 +152,8 @@ struct ReferenceRenderTests {
     func matchesReferences() async throws {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))
-        for reference in Self.references {
-            let actual = try await image(renderer.render(fitting: Self.size, recipe: reference.recipe, lut: reference.lut))
+        for reference in try await renders(renderer) {
+            let actual = reference.image
             let expected = try #require(CIImage(contentsOf: referencesFolder.appendingPathComponent("\(reference.name).png")))
             #expect(actual.extent == expected.extent, "\(reference.name): size changed")
             guard actual.extent == expected.extent else { continue }
@@ -157,14 +168,29 @@ struct ReferenceRenderTests {
         let renderer = try RAWRenderer()
         try await renderer.open(url)
         try FileManager.default.createDirectory(at: referencesFolder, withIntermediateDirectories: true)
-        for reference in Self.references {
-            let photo = try await image(renderer.render(fitting: Self.size, recipe: reference.recipe, lut: reference.lut))
-            try CIContext().writePNGRepresentation(of: photo, to: referencesFolder.appendingPathComponent("\(reference.name).png"),
+        for reference in try await renders(renderer) {
+            try CIContext().writePNGRepresentation(of: reference.image, to: referencesFolder.appendingPathComponent("\(reference.name).png"),
                                                    format: .RGBA8, colorSpace: RAWRenderer.colorSpace)
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(try SampleFingerprint(of: url)).write(to: SampleFingerprint.file)
+    }
+
+    /// Every reference rendered from the open photo, named as its PNG.
+    private func renders(_ renderer: RAWRenderer) async throws -> [(name: String, image: CIImage)] {
+        var result: [(name: String, image: CIImage)] = []
+        for reference in Self.references {
+            result.append((reference.name, try await image(renderer.render(fitting: Self.size, recipe: reference.recipe,
+                                                                            lut: reference.lut))))
+        }
+        let photo = try await renderer.render(fitting: Self.size).photoSize
+        let region = CGRect(x: 0.5 - Self.size.width / photo.width / 2, y: 0.5 - Self.size.height / photo.height / 2,
+                            width: Self.size.width / photo.width, height: Self.size.height / photo.height)
+        for reference in Self.detailReferences {
+            result.append((reference.name, try await image(renderer.render(region: region, scale: 1, recipe: reference.recipe))))
+        }
+        return result
     }
 
     private func image(_ photo: RenderedPhoto) throws -> CIImage {

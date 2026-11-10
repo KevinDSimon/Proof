@@ -11,17 +11,19 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var processVersion: Int
     public var basic: BasicAdjustments
     public var curve: ToneCurve
+    public var detail: DetailAdjustments
     public var look: Look?
     public var crop: Crop?
     public var layers: [Layer]
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, look, crop, layers
+        case formatVersion, processVersion, basic, curve, detail, look, crop, layers
     }
 
     public init(
         basic: BasicAdjustments = BasicAdjustments(),
         curve: ToneCurve = ToneCurve(),
+        detail: DetailAdjustments = DetailAdjustments(),
         look: Look? = nil,
         crop: Crop? = nil,
         layers: [Layer] = []
@@ -30,6 +32,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         processVersion = Self.currentProcessVersion
         self.basic = basic
         self.curve = curve
+        self.detail = detail
         self.look = look
         self.crop = crop
         self.layers = layers
@@ -41,6 +44,9 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         processVersion = try c.decodeIfPresent(Int.self, forKey: .processVersion) ?? Self.currentProcessVersion
         basic = try c.decodeIfPresent(BasicAdjustments.self, forKey: .basic) ?? BasicAdjustments()
         curve = try c.decodeIfPresent(ToneCurve.self, forKey: .curve) ?? ToneCurve()
+        // Edits saved before the Detail card have no `detail`, which keeps the camera's sharpening
+        // and noise reduction, as they always rendered.
+        detail = try c.decodeIfPresent(DetailAdjustments.self, forKey: .detail) ?? DetailAdjustments()
         look = try c.decodeIfPresent(Look.self, forKey: .look)
         crop = try c.decodeIfPresent(Crop.self, forKey: .crop)
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
@@ -63,6 +69,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(processVersion, forKey: .processVersion)
         try c.encode(basic, forKey: .basic)
         try c.encode(curve, forKey: .curve)
+        try c.encode(detail, forKey: .detail)
         try c.encode(look, forKey: .look)
         try c.encode(crop, forKey: .crop)
         try c.encode(layers, forKey: .layers)
@@ -70,7 +77,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && look == nil && (crop?.isIdentity ?? true) && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
     /// The sidecar URL for an original photo: the full file name plus `.proof`.

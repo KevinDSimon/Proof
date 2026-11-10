@@ -1,4 +1,4 @@
-# 0015. Texture and clarity through a custom kernel
+# 0017. Texture and clarity through a custom kernel
 
 Date: 2026-11-10
 Status: Accepted

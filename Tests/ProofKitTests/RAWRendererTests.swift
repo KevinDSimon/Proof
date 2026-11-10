@@ -184,6 +184,81 @@ struct RAWRendererTests {
         }
     }
 
+    /// 100% must show one photo pixel per screen pixel: a region rendered at full resolution has
+    /// the region's size in pixels and the same pixels as that part of the whole photo.
+    @Test("A region at 100% has the same pixels as that part of the full-resolution photo", .enabled(if: sampleDNG != nil))
+    func regionMatchesFullResolution() async throws {
+        let renderer = try RAWRenderer()
+        try await renderer.open(try #require(sampleDNG))
+        let recipe = EditRecipe.exposure(0.5)
+        let full = try await renderer.render(scaleFactor: 1, recipe: recipe)
+        let size = full.photoSize
+        #expect(size == CGSize(width: full.texture.width, height: full.texture.height))
+
+        let pixelRect = CGRect(x: 3001, y: 2003, width: 400, height: 300)
+        let region = CGRect(x: pixelRect.minX / size.width, y: pixelRect.minY / size.height,
+                            width: pixelRect.width / size.width, height: pixelRect.height / size.height)
+        let part = try await renderer.render(region: region, scale: 1, recipe: recipe)
+        #expect(part.texture.width == 400 && part.texture.height == 300)
+        #expect(abs(part.region.minX * size.width - pixelRect.minX) < 0.001)
+        #expect(abs(part.region.minY * size.height - pixelRect.minY) < 0.001)
+
+        // Both bitmaps hold the top row first.
+        let wholePixels = try pixels(full)
+        let partPixels = try pixels(part)
+        var largest = 0
+        for row in 0..<300 {
+            for column in 0..<400 {
+                let a = ((Int(pixelRect.minY) + row) * full.texture.width + Int(pixelRect.minX) + column) * 4
+                let b = (row * 400 + column) * 4
+                for channel in 0..<3 { largest = max(largest, abs(Int(wholePixels[a + channel]) - Int(partPixels[b + channel]))) }
+            }
+        }
+        #expect(largest <= 1)
+    }
+
+    /// Records how long panning at 100% takes to sharpen on a Retina window: region renders of
+    /// the view alone and with the canvas's margin, moved across the photo as a drag would, then
+    /// an exposure change on one region, as a slider drag while zoomed would.
+    @Test("Region render timings while panning at 100%", .enabled(if: sampleDNG != nil))
+    func panTimings() async throws {
+        let renderer = try RAWRenderer()
+        try await renderer.open(try #require(sampleDNG))
+        let view = CGSize(width: 2560, height: 1600)
+        let size = try await renderer.render(fitting: view).photoSize
+        for margin in [0.0, 0.25] {
+            var times: [Double] = []
+            var rendered = ""
+            for step in 0..<12 {
+                let viewport = Viewport(scale: 1, center: CGPoint(x: 0.2 + Double(step) * 0.05, y: 0.3 + Double(step) * 0.03))
+                    .clamped(photo: size, view: view)
+                let visible = viewport.visibleRegion(photo: size, view: view)
+                let region = visible.insetBy(dx: -visible.width * margin, dy: -visible.height * margin)
+                    .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+                let start = ContinuousClock.now
+                let photo = try await renderer.render(region: region, scale: 1)
+                times.append((ContinuousClock.now - start) / .milliseconds(1))
+                rendered = "\(photo.texture.width)×\(photo.texture.height)"
+            }
+            report("Panned region render at 100% (\(rendered))", times)
+        }
+        let region = CGRect(x: 0.3, y: 0.3, width: view.width / size.width, height: view.height / size.height)
+        _ = try await renderer.render(region: region, scale: 1)
+        var times: [Double] = []
+        for exposure in [0.5, -0.5, 1, -1, 1.5, -1.5, 2] {
+            let start = ContinuousClock.now
+            _ = try await renderer.render(region: region, scale: 1, recipe: .exposure(exposure))
+            times.append((ContinuousClock.now - start) / .milliseconds(1))
+        }
+        report("Exposure change on one region at 100%", times)
+    }
+
+    private func report(_ label: String, _ times: [Double]) {
+        let sorted = times.sorted()
+        print("\(label): median \(String(format: "%.1f", sorted[sorted.count / 2])) ms, "
+            + "range \(String(format: "%.1f", sorted.first!))–\(String(format: "%.1f", sorted.last!)) ms")
+    }
+
     private func pixels(_ photo: RenderedPhoto) throws -> [UInt8] {
         let image = try #require(CIImage(mtlTexture: photo.texture, options: [.colorSpace: RAWRenderer.colorSpace]))
         let rowBytes = photo.texture.width * 4

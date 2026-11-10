@@ -2,7 +2,7 @@ import CoreImage
 
 /// The Texture and Clarity sliders: raise (positive) or lower (negative) local contrast. Texture
 /// works on fine detail a few pixels across; Clarity on larger areas, mostly in the midtones.
-/// See docs/decisions/0015-texture-clarity.md.
+/// See docs/decisions/0017-texture-clarity.md.
 enum TextureClarity {
     static let range: ClosedRange<Double> = -100...100
 
