@@ -23,6 +23,8 @@ struct ReferenceRenderTests {
         ("crop", crop, nil),
         ("curve", curve, nil),
         ("look", look, PreparedLUT(lookTable)),
+        ("texture", texture, nil),
+        ("clarity", clarity, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -51,6 +53,20 @@ struct ReferenceRenderTests {
         recipe.basic.contrast = 50
         recipe.basic.whites = 40
         recipe.basic.blacks = -40
+        return recipe
+    }()
+
+    /// Texture alone, at its strongest, so a change to its radius or strength shows.
+    static let texture: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.basic.texture = 100
+        return recipe
+    }()
+
+    /// Clarity alone, at its strongest, so a change to its area, strength or midtone range shows.
+    static let clarity: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.basic.clarity = 100
         return recipe
     }()
 

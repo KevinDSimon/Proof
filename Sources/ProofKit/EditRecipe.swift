@@ -91,6 +91,8 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
     public var tint: Double?
     public var exposure: Double = 0
     public var contrast: Double = 0
+    public var texture: Double = 0
+    public var clarity: Double = 0
     public var highlights: Double = 0
     public var shadows: Double = 0
     public var whites: Double = 0
@@ -99,7 +101,7 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
     public var saturation: Double = 0
 
     private enum CodingKeys: String, CodingKey {
-        case whiteBalance, temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation
+        case whiteBalance, temperature, tint, exposure, contrast, texture, clarity, highlights, shadows, whites, blacks, vibrance, saturation
     }
 
     public init() {}
@@ -114,6 +116,8 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
         whiteBalance = preset.map { WhiteBalancePreset(rawValue: $0) ?? .custom } ?? (temperature == nil && tint == nil ? .asShot : .custom)
         exposure = try value(.exposure)
         contrast = try value(.contrast)
+        texture = try value(.texture)
+        clarity = try value(.clarity)
         highlights = try value(.highlights)
         shadows = try value(.shadows)
         whites = try value(.whites)
@@ -131,6 +135,8 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
         try c.encode(tint, forKey: .tint)
         try c.encode(exposure, forKey: .exposure)
         try c.encode(contrast, forKey: .contrast)
+        try c.encode(texture, forKey: .texture)
+        try c.encode(clarity, forKey: .clarity)
         try c.encode(highlights, forKey: .highlights)
         try c.encode(shadows, forKey: .shadows)
         try c.encode(whites, forKey: .whites)
