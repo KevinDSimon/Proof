@@ -400,6 +400,7 @@ struct EditCanvas: View {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
         if library.isCurveHidden { recipe.curve = ToneCurve() }
+        if library.isLookHidden { recipe.look = nil }
         return recipe
     }
 }
@@ -642,12 +643,23 @@ struct SectionHeader: View {
     let canReset: Bool
     var isOn: Binding<Bool>?
     var canToggle = true
+    /// Adds items to the section, such as importing looks, from a plus button before Reset.
+    var add: (label: String, action: () -> Void)?
     let reset: () -> Void
 
     var body: some View {
         HStack {
             Text(title)
             Spacer()
+            if let add {
+                Button(action: add.action) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help(add.label)
+                .accessibilityLabel(add.label)
+            }
             Button("Reset", action: reset)
                 .buttonStyle(.borderless)
                 .controlSize(.small)

@@ -84,6 +84,7 @@ final class Library {
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             isCurveHidden = false
+            isLookHidden = false
             openSelectedEdit()
         }
     }
@@ -95,6 +96,8 @@ final class Library {
     /// The canvas shows the photo without its tone curve, to compare. Only the view changes:
     /// the edit keeps its curve, and opening another photo shows curves again.
     var isCurveHidden = false
+    /// The canvas shows the photo without its look, to compare, the same way.
+    var isLookHidden = false
     /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
     var isAdjusting = false {
         didSet {

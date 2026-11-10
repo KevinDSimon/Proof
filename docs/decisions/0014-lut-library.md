@@ -12,7 +12,7 @@ Issue #23 lets the person choose a look from LUTs they have imported, with a pre
 - File names are never reused for other contents. A second file with a taken name is numbered ("Portra 2.cube"); importing the same file again adds nothing. Edits that name a LUT keep rendering the same way.
 - `LUTLibrary` is an actor that prepares each LUT off the main thread once and keeps it, up to 512 MB, letting the least recently used go first. A 33-per-side LUT takes about 0.6 MB prepared, a 65-per-side one about 4.4 MB, and the largest, 128 per side, 32 MB.
 - Previews render the photo once, small and without its look, and apply each LUT to that image at full strength. A LUT changes each pixel on its own, so this matches a full render with the look at that size, without decoding the RAW file again for every LUT.
-- The Look section lists the library as a grid, with None first. Choosing a look keeps the strength already set; the first look chosen starts at 100%.
+- The Look section lists the library as rows, each a small preview beside the LUT's name, with None first; the chosen row is inverted. Strength sits above the rows, so choosing a look or importing more never moves it, and is disabled while None is chosen. A plus button in the section header imports, so it stays in one place however long the list grows. A switch in the header shows the photo without its look to compare, as the Curve switch does. Choosing a look keeps the strength already set; the first look chosen starts at 100%.
 
 ## Consequences
 - Removing or renaming LUTs is done in the Finder for now. A LUT removed this way is skipped when an edit that names it renders, and the Look section says it is missing.

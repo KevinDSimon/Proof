@@ -15,7 +15,7 @@ extension LUTLibrary {
 @Observable @MainActor
 final class LookBrowser {
     /// Long edge of a preview, in pixels: sharp in a tile on a Retina display.
-    static let previewSize = 256
+    static let previewSize = 128
 
     private(set) var names: [String] = []
     /// The photo with no look, for the None tile.
@@ -82,58 +82,64 @@ final class LookBrowser {
     }
 }
 
-/// The Look section of the inspector: a grid of the library's LUTs over the photo, the strength
-/// of the chosen one, and importing more. Files can be dropped anywhere on the section.
+/// The Look section of the inspector: the strength of the chosen look, then the library's LUTs as
+/// rows with a small preview of the photo through each. The plus button imports more; files can
+/// also be dropped on the rows.
 struct LookSection: View {
     let library: Library
     @State private var isImporting = false
-    @State private var isDropTargeted = false
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
     var body: some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
-                if looks.names.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Looks", systemImage: "camera.filters")
-                    } description: {
-                        Text("Drag .cube files here, or import them, to add looks.")
-                    } actions: {
-                        Button("Import…") { isImporting = true }
-                    }
-                } else {
-                    grid
-                    if let look {
-                        if !looks.names.contains(look.lut) {
-                            Text("“\(Self.title(of: look.lut))” isn’t in the LUT library, so the photo is shown without it.")
-                                .foregroundStyle(.secondary)
-                        }
-                        AdjustmentSlider(
-                            title: "Strength",
-                            value: Binding(get: { look.strength * 100 },
-                                           set: { value in library.changeEdit { $0.look?.strength = value / 100 } }),
-                            range: 0...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                            unit: "percent",
-                            reset: { library.changeEdit { $0.look?.strength = 1 } },
-                            isAdjusting: { library.isAdjusting = $0 })
-                    }
+            if looks.names.isEmpty {
+                ContentUnavailableView {
+                    Label("No Looks", systemImage: "camera.filters")
+                } description: {
+                    Text("Drag .cube files here, or import them, to add looks.")
+                } actions: {
                     Button("Import…") { isImporting = true }
                 }
-            }
-            .padding(4)
-            .overlay {
-                if isDropTargeted {
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(.primary, lineWidth: 2)
+                .dropDestination(for: URL.self) { urls, _ in
+                    importFiles(urls)
+                    return true
+                }
+            } else {
+                // First, so choosing a look never moves it.
+                AdjustmentSlider(
+                    title: "Strength",
+                    value: Binding(get: { (look?.strength ?? 1) * 100 },
+                                   set: { value in
+                                       library.isLookHidden = false
+                                       library.changeEdit { $0.look?.strength = value / 100 }
+                                   }),
+                    range: 0...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    unit: "percent",
+                    reset: { library.changeEdit { $0.look?.strength = 1 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                    .disabled(look == nil)
+                if let look, !looks.names.contains(look.lut) {
+                    Text("“\(Self.title(of: look.lut))” isn’t in the LUT library, so the photo is shown without it.")
+                        .foregroundStyle(.secondary)
+                }
+                Group {
+                    row(nil)
+                    ForEach(looks.names, id: \.self) { row($0) }
+                }
+                .opacity(library.isLookHidden ? 0.45 : 1)
+                .dropDestination(for: URL.self) { urls, _ in
+                    importFiles(urls)
+                    return true
                 }
             }
-            .dropDestination(for: URL.self) { urls, _ in
-                importFiles(urls)
-                return true
-            } isTargeted: { isDropTargeted = $0 }
         } header: {
-            SectionHeader(title: "Look", canReset: look != nil) {
+            SectionHeader(title: "Look", canReset: look != nil,
+                          isOn: Binding(get: { !library.isLookHidden }, set: { library.isLookHidden = !$0 }),
+                          canToggle: look != nil,
+                          add: ("Import Looks", { isImporting = true })) {
+                library.isLookHidden = false
                 library.changeEdit { $0.look = nil }
             }
         }
@@ -152,22 +158,18 @@ struct LookSection: View {
         }
     }
 
-    private var grid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 10)], alignment: .leading, spacing: 10) {
-            tile(nil)
-            ForEach(looks.names, id: \.self) { tile($0) }
-        }
-    }
-
-    private func tile(_ name: String?) -> some View {
+    /// One look as a row: a small preview, then its name. The chosen row is inverted, as
+    /// Proof marks selection without color.
+    private func row(_ name: String?) -> some View {
         let isSelected = look?.lut == name
         let title = name.map(Self.title(of:)) ?? "None"
         return Button {
+            library.isLookHidden = false
             library.changeEdit { recipe in
                 recipe.look = name.map { Look(lut: $0, strength: recipe.look?.strength ?? 1) }
             }
         } label: {
-            VStack(spacing: 4) {
+            HStack(spacing: 10) {
                 Group {
                     if let image = name.map({ looks.previews[$0] }) ?? looks.original {
                         Image(nsImage: image)
@@ -177,23 +179,33 @@ struct LookSection: View {
                         Rectangle().fill(.quaternary)
                     }
                 }
-                .frame(minWidth: 0, maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
+                .frame(width: Self.previewSide, height: Self.previewSide)
                 .clipped()
-                .selectionRing(isSelected, lineWidth: 2, gap: 2)
                 Text(title)
-                    .font(.caption)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .foregroundStyle(isSelected ? .primary : .secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(4)
+            .foregroundStyle(isSelected ? Color(white: colorScheme == .dark ? 0 : 1) : Color.primary)
+            .background {
+                if isSelected {
+                    // Plain black or white: the panel's vibrancy blends system label colors toward gray.
+                    RoundedRectangle(cornerRadius: 6).fill(Color(white: colorScheme == .dark ? 1 : 0))
+                }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The highlight reaches the row's edges, inside the Form's own inset.
+        .padding(.horizontal, -4)
         .help(name ?? "No look")
         .accessibilityLabel(title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+
+    /// Side of a row's preview, in points.
+    private static let previewSide: CGFloat = 28
 
     private var looks: LookBrowser { library.looks }
     private var look: Look? { library.selectedEdit?.recipe.look }
