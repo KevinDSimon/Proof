@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// A full-width pull-down button showing `title`, whose menu can hold submenus. SwiftUI's `Menu`
-/// in an inspector form sizes to its title; AppKit's `NSPopUpButton` stretches across the row.
+/// A full-width pop-up button, as in Finder's settings: a filled control with up and down arrows,
+/// showing `title`, whose menu can hold submenus. SwiftUI's pickers and menus in an inspector form
+/// draw as plain text with a chevron instead, so this is AppKit's `NSPopUpButton`.
 struct MenuPopUp: NSViewRepresentable {
     /// An item in the menu: a command, a checked choice, a submenu, or a separator.
     indirect enum Item {
@@ -17,21 +18,23 @@ struct MenuPopUp: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSPopUpButton {
-        let button = NSPopUpButton(frame: .zero, pullsDown: true)
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        // Shows `title` rather than the chosen item, which may be inside a submenu or absent.
+        (button.cell as? NSPopUpButtonCell)?.usesItemFromMenu = false
+        (button.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingMiddle
         // Lets SwiftUI stretch it across the row.
         button.setContentHuggingPriority(.defaultLow, for: .horizontal)
         button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        (button.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingMiddle
         return button
     }
 
     func updateNSView(_ button: NSPopUpButton, context: Context) {
         let menu = NSMenu()
-        // A pull-down's first item is the title it shows, not a choice.
-        menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
         context.coordinator.actions = []
         for item in items { menu.addItem(context.coordinator.menuItem(for: item)) }
         button.menu = menu
+        (button.cell as? NSPopUpButtonCell)?.menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        button.isEnabled = context.environment.isEnabled
         button.setAccessibilityValue(title)
     }
 

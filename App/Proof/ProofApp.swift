@@ -438,12 +438,17 @@ struct AdjustmentsInspector: View {
                 CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
             }
             Section {
-                Picker("Preset", selection: Binding(get: { basic.whiteBalance },
-                                                    set: { preset in library.changeEdit { $0.basic.choose(preset) } })) {
-                    ForEach(WhiteBalancePreset.allCases.filter { $0 != .custom || basic.whiteBalance == .custom }, id: \.self) {
-                        Text(Self.title(of: $0))
-                    }
-                }
+                // A full-width pop-up, as in Finder's settings; Custom is listed only while it is chosen.
+                MenuPopUp(title: Self.title(of: basic.whiteBalance),
+                          items: WhiteBalancePreset.allCases
+                              .filter { $0 != .custom || basic.whiteBalance == .custom }
+                              .map { preset in
+                                  .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
+                                      library.changeEdit { $0.basic.choose(preset) }
+                                  }
+                              })
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("White Balance Preset")
                 AdjustmentSlider(
                     title: "Temperature",
                     value: Binding(get: { shown.temperature },
