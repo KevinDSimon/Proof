@@ -9,7 +9,7 @@ Status: pre-alpha. Nothing to download yet.
 - Folders panel with an All Photos view across every saved folder and its subfolders, and a filmstrip, with a star filter that reads ratings from XMP sidecars (written by Photomator, Lightroom, Capture One and others)
 - Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, vibrance, saturation
 - Tone curve (RGB and per channel) and a histogram
-- `.cube` LUTs with a strength slider
+- `.cube` LUTs imported into a library, with previews of the photo and a strength slider
 - Crop, straighten, rotate and flip, before/after, copy and paste settings, undo
 - Export to JPEG, HEIC and TIFF
 

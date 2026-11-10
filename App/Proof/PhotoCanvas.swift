@@ -151,7 +151,8 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
             let start = ContinuousClock.now
             do {
                 try await renderer.open(request.url)
-                let result = try await renderer.render(fitting: request.size, recipe: request.recipe)
+                let lut = await LUTLibrary.shared.lut(for: request.recipe.look)
+                let result = try await renderer.render(fitting: request.size, recipe: request.recipe, lut: lut)
                 let ms = (ContinuousClock.now - start) / .milliseconds(1)
                 Self.log.debug("Rendered \(result.texture.width)×\(result.texture.height) in \(ms, format: .fixed(precision: 1)) ms")
                 if request.url == url {

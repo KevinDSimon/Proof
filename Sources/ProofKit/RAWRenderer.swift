@@ -157,6 +157,18 @@ public actor RAWRenderer {
         return thumbnail
     }
 
+    /// `lut` applied in full to `thumbnail`, a thumbnail of an edit with no look, for previews of
+    /// looks. A LUT changes each pixel on its own, so applying it after the crop and to an 8-bit
+    /// thumbnail looks the same at this size as step 4 of a full render, without decoding the photo again.
+    public func applying(_ lut: PreparedLUT, to thumbnail: CGImage) throws -> CGImage {
+        let image = CIImage(cgImage: thumbnail)
+        let looked = LUTStage.apply(lut, strength: 1, to: image)
+        guard let result = thumbnailContext.createCGImage(looked, from: image.extent, format: .RGBA8,
+                                                          colorSpace: Self.colorSpace)
+        else { throw RAWRendererError.renderFailed }
+        return result
+    }
+
     /// The histogram of a photo from `render(fitting:)`: what the canvas shows, at screen size,
     /// not the full-resolution photo. It reads the finished texture and renders nothing again.
     public nonisolated func histogram(of photo: RenderedPhoto) throws -> Histogram {

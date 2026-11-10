@@ -84,6 +84,14 @@ struct ProofApp: App {
                 Button("Flip Vertical") { library.flipVertically() }
                     .disabled(!library.isEditing || library.selectedEdit == nil)
                 Divider()
+                // Steps through the looks in the folder the Looks section shows, to compare them.
+                Button("Next Look") { library.stepLook(by: 1) }
+                    .keyboardShortcut("]", modifiers: [.command, .option])
+                    .disabled(!library.canStepLook)
+                Button("Previous Look") { library.stepLook(by: -1) }
+                    .keyboardShortcut("[", modifiers: [.command, .option])
+                    .disabled(!library.canStepLook)
+                Divider()
                 // Lightroom's keys: 0 to 5 for stars, P, U and X for the flag.
                 Picker("Rating", selection: Binding(get: { library.selectedPhotoMetadata?.rating ?? 0 },
                                                     set: { library.setRating($0) })) {
@@ -400,6 +408,7 @@ struct EditCanvas: View {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
         if library.isCurveHidden { recipe.curve = ToneCurve() }
+        if library.isLookHidden { recipe.look = nil }
         return recipe
     }
 }
@@ -429,12 +438,17 @@ struct AdjustmentsInspector: View {
                 CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
             }
             Section {
-                Picker("Preset", selection: Binding(get: { basic.whiteBalance },
-                                                    set: { preset in library.changeEdit { $0.basic.choose(preset) } })) {
-                    ForEach(WhiteBalancePreset.allCases.filter { $0 != .custom || basic.whiteBalance == .custom }, id: \.self) {
-                        Text(Self.title(of: $0))
-                    }
-                }
+                // A full-width pop-up, as in Finder's settings; Custom is listed only while it is chosen.
+                MenuPopUp(title: Self.title(of: basic.whiteBalance),
+                          items: WhiteBalancePreset.allCases
+                              .filter { $0 != .custom || basic.whiteBalance == .custom }
+                              .map { preset in
+                                  .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
+                                      library.changeEdit { $0.basic.choose(preset) }
+                                  }
+                              })
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("White Balance Preset")
                 AdjustmentSlider(
                     title: "Temperature",
                     value: Binding(get: { shown.temperature },
@@ -562,6 +576,7 @@ struct AdjustmentsInspector: View {
                 }
             }
             .disabled(library.selectedEdit == nil)
+            LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
                 Section {
                     Text(Self.message(for: unsaved))

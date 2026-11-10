@@ -84,6 +84,7 @@ final class Library {
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             isCurveHidden = false
+            isLookHidden = false
             openSelectedEdit()
         }
     }
@@ -95,6 +96,8 @@ final class Library {
     /// The canvas shows the photo without its tone curve, to compare. Only the view changes:
     /// the edit keeps its curve, and opening another photo shows curves again.
     var isCurveHidden = false
+    /// The canvas shows the photo without its look, to compare, the same way.
+    var isLookHidden = false
     /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
     var isAdjusting = false {
         didSet {
@@ -103,6 +106,8 @@ final class Library {
         }
     }
     var isInspectorShown = true
+    /// The LUT library and its previews of the photo in Edit, for the Look section.
+    let looks = LookBrowser()
     var isChoosingFolder = false
     /// Kept apart from `isChoosingFolder`, which SwiftUI clears before the picker's result arrives.
     private(set) var folderRequest: FolderRequest = .add
@@ -143,6 +148,7 @@ final class Library {
         if fileAccess == nil { errorMessage = "Proof couldn't load its saved folders." }
         refreshLocations()
         observeSystem()
+        looks.onChange = { [weak self] in self?.refreshEditedThumbnails() }
         // Before All Photos, the selection was saved as a folder reference.
         selection = UserDefaults.standard.data(forKey: Self.selectionKey).flatMap { data in
             (try? JSONDecoder().decode(SidebarItem.self, from: data))
@@ -308,6 +314,21 @@ final class Library {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             commitEdit(of: photo)
+        }
+    }
+
+    /// Photo › Next Look and Previous Look can step through the shown folder's looks.
+    var canStepLook: Bool {
+        isEditing && selectedEdit != nil && !looks.shownNames.isEmpty
+    }
+
+    /// Chooses the look `offset` places from the current one in the folder the Looks section
+    /// shows, keeping its strength. Without a look, starts at the first or last.
+    func stepLook(by offset: Int) {
+        guard canStepLook, let next = looks.look(steppingBy: offset, from: selectedEdit?.recipe.look?.lut) else { return }
+        isLookHidden = false
+        changeEdit { recipe in
+            recipe.look = Look(lut: next, strength: recipe.look?.strength ?? 1)
         }
     }
 
@@ -486,7 +507,9 @@ final class Library {
         do {
             try await renderer.open(url)
             // About the size of the photo on screen: enough for Vision, quick to render.
-            correction = try await renderer.horizonCorrection(fitting: CGSize(width: 1024, height: 1024), recipe: recipe)
+            let lut = await LUTLibrary.shared.lut(for: recipe.look)
+            correction = try await renderer.horizonCorrection(fitting: CGSize(width: 1024, height: 1024), recipe: recipe,
+                                                              lut: lut)
         } catch {
             isFindingHorizon = false
             errorMessage = "The horizon couldn't be found. (\(error))"
@@ -629,6 +652,14 @@ final class Library {
         }
         // Like a rating change, an edit doesn't make the photo vanish from the Edited filter.
         changedPhotos.insert(photo)
+    }
+
+    /// Renders the thumbnails of photos edited since Proof started again, after the LUT library
+    /// changes: a look whose LUT appeared or went missing shows differently.
+    private func refreshEditedThumbnails() {
+        for photo in editedThumbnails.keys {
+            if let url = url(ofPhoto: photo.name, in: photo.folder) { refreshThumbnail(of: photo, at: url) }
+        }
     }
 
     /// Renders the photo's thumbnail with its current edit off the main thread. A result that
