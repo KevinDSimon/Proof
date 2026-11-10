@@ -106,6 +106,8 @@ final class Library {
         }
     }
     var isInspectorShown = true
+    /// How far the photo in Edit is zoomed and where; back to Fit for each photo and for the crop tool.
+    let zoom = CanvasZoom()
     /// The LUT library and its previews of the photo in Edit, for the Look section.
     let looks = LookBrowser()
     var isChoosingFolder = false
