@@ -61,10 +61,12 @@ struct CurveEditor: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            // Pinned to the graph's width. The segmented control sizes every segment to its
-            // longest label after it redraws, which at its own width is wider than the default
-            // inspector and pushed the section sideways.
-            .frame(width: canvasSize.width > 0 ? canvasSize.width : nil)
+            // Small, at its own width, centered. The segmented control sizes every segment to
+            // its longest label once it redraws, and at the regular size that is wider than the
+            // default inspector, which pushed the section sideways. Its width must not follow the
+            // graph's either: the two would feed each other and shift as the graph redraws.
+            .controlSize(.small)
+            .fixedSize()
             .frame(maxWidth: .infinity)
             .onChange(of: channel) { selected = nil }
 
@@ -452,10 +454,11 @@ private struct LevelsTrack: View {
 
     /// The track spans the graph's plot, which is inset from the card by `CurveEditor.inset`; the
     /// handles at the ends hang into that margin rather than being cut off.
-    private var plotWidth: CGFloat { max(width - 2 * CurveEditor.inset, 1) }
+    private func plotWidth(_ width: CGFloat) -> CGFloat { max(width - 2 * CurveEditor.inset, 1) }
 
-    private func pixel(of handle: Handle, map: LevelsMap) -> CGFloat {
-        CurveEditor.inset + x(of: handle, map: map) * plotWidth
+    /// Drawing passes the canvas's own width; the gesture uses the measured one.
+    private func pixel(of handle: Handle, map: LevelsMap, width: CGFloat? = nil) -> CGFloat {
+        CurveEditor.inset + x(of: handle, map: map) * plotWidth(width ?? self.width)
     }
 
     private func draw(in context: inout GraphicsContext, size: CGSize) {
@@ -467,7 +470,7 @@ private struct LevelsTrack: View {
         let map = levels
         let fills: [Handle: Color] = [.black: Color(white: 0.08), .midtone: Color(white: 0.5), .white: Color(white: 0.96)]
         for handle in Handle.allCases {
-            let center = pixel(of: handle, map: map)
+            let center = pixel(of: handle, map: map, width: size.width)
             let triangle = Path { p in
                 p.move(to: CGPoint(x: center, y: 5))
                 p.addLine(to: CGPoint(x: center + 5.5, y: 14))
@@ -499,7 +502,7 @@ private struct LevelsTrack: View {
         }
         guard let dragged else { return }
         if abs(value.translation.width) > 2 { moved = true }
-        let position = min(max((value.location.x - CurveEditor.inset) / plotWidth, 0), 1)
+        let position = min(max((value.location.x - CurveEditor.inset) / plotWidth(width), 0), 1)
         var levels = Levels(black: map.black, midtone: map.midtone, white: map.white)
         switch dragged {
         case .black: levels.black = min(position, map.white - LevelsMap.minimumGap)
