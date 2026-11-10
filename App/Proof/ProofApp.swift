@@ -643,8 +643,8 @@ struct SectionHeader: View {
     let canReset: Bool
     var isOn: Binding<Bool>?
     var canToggle = true
-    /// Adds items to the section, such as importing looks, from a plus button before Reset.
-    var add: (label: String, action: () -> Void)?
+    /// Adds items to the section, such as importing looks, from a button before Reset.
+    var add: (title: String, help: String, action: () -> Void)?
     let reset: () -> Void
 
     var body: some View {
@@ -652,13 +652,10 @@ struct SectionHeader: View {
             Text(title)
             Spacer()
             if let add {
-                Button(action: add.action) {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .help(add.label)
-                .accessibilityLabel(add.label)
+                Button(add.title, action: add.action)
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .help(add.help)
             }
             Button("Reset", action: reset)
                 .buttonStyle(.borderless)

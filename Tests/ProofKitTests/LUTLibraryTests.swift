@@ -94,6 +94,57 @@ struct LUTLibraryTests {
         #expect(await library.lut(named: "../Outside.cube") == nil)
     }
 
+    @Test("Importing a folder keeps its name and subfolders, and leaves out other files")
+    func importFolder() async throws {
+        let portra = root.appendingPathComponent("Portra")
+        try FileManager.default.createDirectory(at: portra.appendingPathComponent("Pushed"), withIntermediateDirectories: true)
+        try makeFile("Portra/400.cube")
+        try makeFile("Portra/800.cube")
+        try makeFile("Portra/Pushed/1600.cube")
+        try makeFile("Portra/Broken.cube", "LUT_3D_SIZE 2\n0 0 0\n")
+        try makeFile("Portra/readme.txt", "Notes")
+
+        let (names, failures) = await library.importItem(at: portra)
+        #expect(Set(names) == ["Portra/400.cube", "Portra/800.cube", "Portra/Pushed/1600.cube"])
+        #expect(failures == [LUTImportError(fileName: "Portra/Broken.cube",
+                                            reason: .invalid(.wrongEntryCount(expected: 8, found: 1)))])
+        #expect(library.names() == ["Portra/Pushed/1600.cube", "Portra/400.cube", "Portra/800.cube"])
+        #expect(await library.lut(named: "Portra/Pushed/1600.cube")?.size == 2)
+        // Importing it again adds nothing.
+        _ = await library.importItem(at: portra)
+        #expect(library.names().count == 3)
+    }
+
+    @Test("A folder without .cube files isn't added")
+    func importEmptyFolder() async throws {
+        let empty = root.appendingPathComponent("Empty")
+        try FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
+        try makeFile("Empty/readme.txt", "Notes")
+        let (names, failures) = await library.importItem(at: empty)
+        #expect(names.isEmpty)
+        #expect(failures == [LUTImportError(fileName: "Empty", reason: .noLUTs)])
+    }
+
+    @Test("Folders are listed before the LUTs beside them, each followed by its contents")
+    func foldersFirst() async throws {
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("Portra"), withIntermediateDirectories: true)
+        try makeFile("Portra/400.cube")
+        _ = await library.importItem(at: root.appendingPathComponent("Portra"))
+        _ = try await library.importFile(at: try makeFile("Agfa.cube"))
+        _ = try await library.importFile(at: try makeFile("Zeiss.cube"))
+        #expect(library.names() == ["Portra/400.cube", "Agfa.cube", "Zeiss.cube"])
+    }
+
+    @Test("A look saved with a file name only, before folders, still loads; paths can't leave the library")
+    func pathsAndPlainNames() async throws {
+        _ = try await library.importFile(at: try makeFile("Portra.cube"))
+        let saved = try JSONDecoder().decode(Look.self, from: Data(#"{"lut": "Portra.cube", "strength": 0.5}"#.utf8))
+        #expect(await library.lut(for: saved)?.size == 2)
+        for name in ["Portra/../../Outside.cube", "/Portra.cube", "Portra//400.cube", ".hidden/Portra.cube"] {
+            #expect(await library.lut(named: name) == nil)
+        }
+    }
+
     @Test("Over the memory limit, the least recently used LUT is let go")
     func evictsLeastRecentlyUsed() async throws {
         // A 2-per-side table prepares to 8 entries of 16 bytes.
