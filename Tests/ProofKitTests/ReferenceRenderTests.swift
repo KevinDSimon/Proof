@@ -26,6 +26,7 @@ struct ReferenceRenderTests {
         ("texture", texture, nil),
         ("clarity", clarity, nil),
         ("dehaze", dehaze, nil),
+        ("vignette", vignette, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -139,6 +140,14 @@ struct ReferenceRenderTests {
             .moved(by: CGVector(dx: 0, dy: -1)).applied(to: crop)
         var recipe = EditRecipe()
         recipe.crop = crop
+        return recipe
+    }()
+
+    /// Vignette -100 on the `crop` reference, so it shows that the vignette centers on the cropped,
+    /// straightened frame rather than on the photo.
+    static let vignette: EditRecipe = {
+        var recipe = crop
+        recipe.vignette = VignetteAdjustments(amount: -100)
         return recipe
     }()
 

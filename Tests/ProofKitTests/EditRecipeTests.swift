@@ -226,6 +226,27 @@ struct EditRecipeTests {
         #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
     }
 
+    @Test("A file saved before Vignette reads it as off and stays neutral; a partial one keeps its other defaults")
+    func migratesWithoutVignette() throws {
+        let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"dehaze": 0}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        #expect(recipe.vignette == VignetteAdjustments(amount: 0, midpoint: 50, roundness: 0, feather: 50))
+        #expect(recipe.isNeutral)
+        #expect(recipe.processVersion == 1)
+
+        let partial = #"{"formatVersion": 3, "vignette": {"amount": -30}}"#
+        let read = try JSONDecoder().decode(EditRecipe.self, from: Data(partial.utf8))
+        #expect(read.vignette == VignetteAdjustments(amount: -30))
+
+        var edited = recipe
+        edited.vignette = VignetteAdjustments(amount: -42.5, midpoint: 30, roundness: -20, feather: 80)
+        #expect(!edited.isNeutral)
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        let vignette = try #require(written?["vignette"] as? [String: Any])
+        #expect(vignette["amount"] as? Double == -42.5 && vignette["feather"] as? Double == 80)
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
+    }
+
     static let asShot = WhiteBalance(temperature: 6112, tint: 10)
 
     @Test("A preset sets its Kelvin with no tint, and As Shot clears both")
