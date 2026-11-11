@@ -53,6 +53,20 @@ struct GuideOverlay: View {
                         library.addGuide(GuideLine(start: start, end: end))
                     })
         }
+        // What to do, on the photo where it happens, until a guide shows it. Material and the
+        // label color keep it gray in either appearance.
+        .overlay(alignment: .top) {
+            if transform.guides.isEmpty {
+                Label("Drag along an edge that should be straight", systemImage: "pencil.line")
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(.top, 12)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: transform.guides.isEmpty)
         .accessibilityElement()
         .accessibilityLabel("Guides")
         .accessibilityValue("\(transform.guides.count) of \(Library.maximumGuides) drawn")

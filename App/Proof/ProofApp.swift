@@ -858,6 +858,12 @@ struct AdjustmentsInspector: View {
             .disabled(renderer == nil || library.isFindingLines)
             .help("Auto balances level and perspective. Guided follows lines you draw. Level turns the photo level, Vertical also makes upright lines parallel, Full also makes level lines parallel. Choose a mode again to undo changes to its sliders")
             uprightStatus(transform)
+            // Under Upright, as in Lightroom Classic: Upright's corrections are the ones that leave
+            // empty edges, and it sets how every slider below comes out.
+            lensSwitch("Constrain Crop", isOn: Binding(
+                get: { transform.constrainCrop },
+                set: { value in library.changeEdit { $0.transform.constrainCrop = value } }),
+                help: "Enlarges the corrected photo so it fills the frame, with no empty edges")
             // The sliders Upright sets, and the ones most often nudged by hand.
             transformSlider("Vertical", \.vertical, range: PerspectiveTransform.tiltRange,
                             help: "Tilts the photo top to bottom. Negative values straighten a building that leans back")
@@ -883,11 +889,6 @@ struct AdjustmentsInspector: View {
                 .padding(.top, 6)
             }
             .foregroundStyle(InspectorCard<EmptyView>.labelColor)
-            // A setting about the result, so it comes last.
-            lensSwitch("Constrain Crop", isOn: Binding(
-                get: { transform.constrainCrop },
-                set: { value in library.changeEdit { $0.transform.constrainCrop = value } }),
-                help: "Enlarges the corrected photo so it fills the frame, with no empty edges")
         }
         .disabled(edit == nil)
         .onChange(of: library.browse.selectedPhoto) { showsMoreTransform = nil }
@@ -923,24 +924,35 @@ struct AdjustmentsInspector: View {
             Text("No straight lines found in this photo.")
                 .foregroundStyle(.secondary)
         } else if transform.upright == .guided {
-            // One line, so the card keeps its shape as guides are drawn.
-            HStack {
-                Text("\(transform.guides.count) of \(Library.maximumGuides) guides")
-                    .foregroundStyle(.secondary)
-                    .help("Drag on the photo along edges that should be upright or level. Two each way set every slider")
-                Spacer()
-                Button("Clear") { library.clearGuides() }
-                    .disabled(transform.guides.isEmpty)
-                    .accessibilityLabel("Clear Guides")
-                if library.isDrawingGuides {
+            if library.isDrawingGuides {
+                // The photo is where the next step happens; it shows how. The card counts and ends.
+                HStack {
+                    Text("\(transform.guides.count) of \(Library.maximumGuides) guides")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Clear") { library.clearGuides() }
+                        .disabled(transform.guides.isEmpty)
+                        .accessibilityLabel("Clear Guides")
                     Button("Done") { library.isDrawingGuides = false }
                         .keyboardShortcut(.cancelAction)
-                } else {
-                    Button("Draw") { library.isDrawingGuides = true }
-                        .accessibilityLabel("Draw Guides")
                 }
+                .controlSize(.small)
+            } else {
+                // Drawing is the next step, so it gets a full-width button.
+                HStack {
+                    Button {
+                        library.isDrawingGuides = true
+                    } label: {
+                        Label(transform.guides.isEmpty ? "Draw Guides" : "Edit Guides", systemImage: "pencil.line")
+                            .frame(maxWidth: .infinity)
+                    }
+                    if !transform.guides.isEmpty {
+                        Button("Clear") { library.clearGuides() }
+                            .accessibilityLabel("Clear Guides")
+                    }
+                }
+                .help("Draw along edges that should be upright or level. Two each way set every slider")
             }
-            .controlSize(.small)
         }
     }
 
