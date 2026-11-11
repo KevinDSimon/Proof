@@ -28,6 +28,7 @@ struct ReferenceRenderTests {
         ("dehaze", dehaze, nil),
         ("vignette", vignette, nil),
         ("chromatic-aberration", chromaticAberration, nil),
+        ("lens-manual", lensManual, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -157,6 +158,15 @@ struct ReferenceRenderTests {
     static let chromaticAberration: EditRecipe = {
         var recipe = EditRecipe()
         recipe.lens.chromaticAberration = ChromaticAberration(red: 1.004, blue: 0.996)
+        return recipe
+    }()
+
+    /// Distortion and lens vignetting far stronger than the sample's lens needs, so a change to
+    /// either model, the fill scale or their place in the pipeline shows.
+    static let lensManual: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.lens.distortion = 40
+        recipe.lens.vignetting = LensVignetting(amount: 60, midpoint: 40)
         return recipe
     }()
 

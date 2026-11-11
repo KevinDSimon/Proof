@@ -119,6 +119,8 @@ final class Library {
             if !isAdjusting, let photo = browse.selectedPhoto { commitEdit(of: photo) }
         }
     }
+    /// The Distortion slider is being dragged, which shows a grid over the photo.
+    var isAdjustingDistortion = false
     var isInspectorShown = true
     /// How far the photo in Edit is zoomed and where; back to Fit for each photo and for the crop tool.
     let zoom = CanvasZoom()

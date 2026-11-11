@@ -158,7 +158,11 @@ public actor RAWRenderer {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         var measured = Self.measuring(recipe)
         measured.crop = nil
+        // Measured on the photo as the lens drew it, since the correction comes before the
+        // manual distortion and vignetting.
         measured.lens.chromaticAberration = nil
+        measured.lens.distortion = nil
+        measured.lens.vignetting = nil
         let size = CGSize(width: ChromaticAberration.measuringSize, height: ChromaticAberration.measuringSize)
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     fitting: size))
@@ -439,7 +443,8 @@ public actor RAWRenderer {
     static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance,
                       cameraDetail: CameraDetail, cameraLens: CameraLens,
                       lut: PreparedLUT? = nil) -> CIImage? {
-        // 1. RAW decode in linear light, with the lens profile, then chromatic aberration. White
+        // 1. RAW decode in linear light, with the lens profile, then chromatic aberration, lens
+        // vignetting and distortion. White
         // balance is in Kelvin and tint; exposure in stops.
         // Sharpening and noise reduction are the decoder's own; it sharpens only above half size.
         let whiteBalance = recipe.basic.whiteBalance(asShot: asShot)
@@ -452,7 +457,11 @@ public actor RAWRenderer {
         if cameraLens.hasProfile { filter.isLensCorrectionEnabled = recipe.lens.appliesProfile(for: cameraLens) }
         guard let raw = filter.outputImage else { return nil }
         // Chromatic aberration next, about the center of the whole photo, where the lens's was.
-        let decoded = ChromaticAberration.apply(recipe.lens.chromaticAberration, to: raw)
+        let aligned = ChromaticAberration.apply(recipe.lens.chromaticAberration, to: raw)
+        // Manual lens vignetting and distortion, for lenses without a profile. Vignetting first,
+        // since the lens's falloff is centered where the sensor recorded it.
+        let decoded = LensDistortion.apply(recipe.lens.distortion,
+                                           to: LensVignetting.apply(recipe.lens.vignetting, to: aligned))
         // 2. Tone: highlights and shadows first, then texture and clarity, then dehaze, then
         // contrast, whites, blacks and the tone curve as one lookup.
         let shaded = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)

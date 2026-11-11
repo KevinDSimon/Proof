@@ -33,11 +33,28 @@ struct AdjustmentGroupTests {
         #expect(AdjustmentGroup.initiallyOff(for: vignetteOnly) == [.curve, .detail, .look])
     }
 
+    @Test("Lens Corrections switched off renders without any lens correction, the profile included, and leaves the rest")
+    func withoutLens() {
+        var recipe = Self.edited
+        recipe.lens = LensCorrections(chromaticAberration: ChromaticAberration(red: 1.001, blue: 0.999),
+                                      distortion: 20, vignetting: LensVignetting(amount: 40))
+        let noLens = recipe.without([.lens])
+        #expect(noLens.lens == LensCorrections(profile: false))
+        #expect(!noLens.lens.appliesProfile(for: CameraLens(hasProfile: true, profileIsOnByDefault: true)))
+        #expect(noLens.basic == recipe.basic && noLens.vignette == recipe.vignette && noLens.crop == recipe.crop)
+        #expect(recipe.without([.vignette]).lens == recipe.lens)
+        // Lens Corrections starts on, so a photo whose profile applies by default opens as before.
+        #expect(!AdjustmentGroup.initiallyOff(for: EditRecipe()).contains(.lens))
+    }
+
     @Test("A group switched off renders as if its adjustments were neutral, and leaves the others")
     func withoutGroups() {
         let recipe = Self.edited
         #expect(recipe.without([]) == recipe)
-        #expect(recipe.without(Set(AdjustmentGroup.allCases)).isNeutral)
+        var none = recipe.without(Set(AdjustmentGroup.allCases))
+        #expect(none.lens == LensCorrections(profile: false))
+        none.lens = LensCorrections()
+        #expect(none.isNeutral)
 
         let noLight = recipe.without([.light])
         #expect(noLight.basic.exposure == 0 && noLight.basic.contrast == 0 && noLight.basic.blacks == 0)
