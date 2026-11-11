@@ -1,13 +1,14 @@
 /// A group of adjustments that the inspector shows on one card with its own switch.
 public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
-    case whiteBalance, light, color, curve, detail, lens, transform, vignette, look
+    case whiteBalance, light, color, selectiveColor, curve, detail, lens, transform, vignette, look
 
-    /// The groups whose switches start off when `recipe` opens: Curve, Detail, Transform, Vignette
-    /// and Looks, so their controls stay closed, unless the recipe has a curve, changed detail, a
-    /// perspective correction, a vignette or a look. Detail is judged at 100% zoom, so most photos
-    /// never need it open.
+    /// The groups whose switches start off when `recipe` opens: Selective Color, Curve, Detail,
+    /// Transform, Vignette and Looks, so their controls stay closed, unless the recipe has a
+    /// selective color adjustment, a curve, changed detail, a perspective correction, a vignette
+    /// or a look. Detail is judged at 100% zoom, so most photos never need it open.
     public static func initiallyOff(for recipe: EditRecipe?) -> Set<AdjustmentGroup> {
         var off: Set<AdjustmentGroup> = []
+        if recipe?.selectiveColor.isNeutral ?? true { off.insert(.selectiveColor) }
         if recipe?.curve.isIdentity ?? true { off.insert(.curve) }
         if recipe?.detail.isNeutral ?? true { off.insert(.detail) }
         if recipe?.transform.isNeutral ?? true { off.insert(.transform) }
@@ -38,6 +39,7 @@ extension EditRecipe {
             recipe.basic.vibrance = 0
             recipe.basic.saturation = 0
         }
+        if groups.contains(.selectiveColor) { recipe.selectiveColor = SelectiveColor() }
         if groups.contains(.curve) { recipe.curve = ToneCurve() }
         if groups.contains(.detail) { recipe.detail = DetailAdjustments() }
         // Off means no lens correction at all, the profile included, even where the decoder

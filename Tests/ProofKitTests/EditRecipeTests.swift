@@ -263,6 +263,34 @@ struct EditRecipeTests {
         #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
     }
 
+    @Test("A file saved before Selective Color reads every range as unadjusted; a partial one keeps the rest at 0")
+    func migratesWithoutSelectiveColor() throws {
+        let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"saturation": 0}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        #expect(recipe.selectiveColor.isNeutral)
+        #expect(ColorRange.allCases.allSatisfy { recipe.selectiveColor[$0] == ColorRangeAdjustment() })
+        #expect(recipe.isNeutral)
+        #expect(recipe.processVersion == 1)
+
+        let partial = #"{"formatVersion": 3, "selectiveColor": {"green": {"saturation": -40}, "teal": {"hue": 10}}}"#
+        let read = try JSONDecoder().decode(EditRecipe.self, from: Data(partial.utf8))
+        #expect(read.selectiveColor[.green] == ColorRangeAdjustment(saturation: -40))
+        #expect(read.selectiveColor[.red].isNeutral)
+
+        var edited = recipe
+        edited.selectiveColor[.orange] = ColorRangeAdjustment(hue: 12.5, saturation: -20, brightness: 30)
+        #expect(!edited.isNeutral)
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        let ranges = try #require(written?["selectiveColor"] as? [String: [String: Double]])
+        #expect(Set(ranges.keys) == Set(ColorRange.allCases.map(\.rawValue)))
+        #expect(ranges["orange"] == ["hue": 12.5, "saturation": -20, "brightness": 30])
+        #expect(ranges["red"] == ["hue": 0, "saturation": 0, "brightness": 0])
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
+
+        edited.selectiveColor[.orange] = ColorRangeAdjustment()
+        #expect(edited.isNeutral)
+    }
+
     static let asShot = WhiteBalance(temperature: 6112, tint: 10)
 
     @Test("A preset sets its Kelvin with no tint, and As Shot clears both")

@@ -709,6 +709,7 @@ struct AdjustmentsInspector: View {
                     isAdjusting: { library.isAdjusting = $0 })
             }
             .disabled(library.selectedEdit == nil)
+            SelectiveColorCard(library: library)
             InspectorCard(title: "Curve", isOn: library.isOnBinding(.curve),
                           canReset: !(library.selectedEdit?.recipe.curve.isIdentity ?? true),
                           reset: { library.changeEdit { $0.curve = ToneCurve() } }) {

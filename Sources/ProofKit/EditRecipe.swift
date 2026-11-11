@@ -11,6 +11,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var processVersion: Int
     public var basic: BasicAdjustments
     public var curve: ToneCurve
+    public var selectiveColor: SelectiveColor
     public var detail: DetailAdjustments
     public var look: Look?
     public var vignette: VignetteAdjustments
@@ -20,12 +21,13 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var layers: [Layer]
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, detail, look, vignette, lens, transform, crop, layers
+        case formatVersion, processVersion, basic, curve, selectiveColor, detail, look, vignette, lens, transform, crop, layers
     }
 
     public init(
         basic: BasicAdjustments = BasicAdjustments(),
         curve: ToneCurve = ToneCurve(),
+        selectiveColor: SelectiveColor = SelectiveColor(),
         detail: DetailAdjustments = DetailAdjustments(),
         look: Look? = nil,
         vignette: VignetteAdjustments = VignetteAdjustments(),
@@ -38,6 +40,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         processVersion = Self.currentProcessVersion
         self.basic = basic
         self.curve = curve
+        self.selectiveColor = selectiveColor
         self.detail = detail
         self.look = look
         self.vignette = vignette
@@ -53,6 +56,8 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         processVersion = try c.decodeIfPresent(Int.self, forKey: .processVersion) ?? Self.currentProcessVersion
         basic = try c.decodeIfPresent(BasicAdjustments.self, forKey: .basic) ?? BasicAdjustments()
         curve = try c.decodeIfPresent(ToneCurve.self, forKey: .curve) ?? ToneCurve()
+        // Edits saved before Selective Color have none.
+        selectiveColor = try c.decodeIfPresent(SelectiveColor.self, forKey: .selectiveColor) ?? SelectiveColor()
         // Edits saved before the Detail card have no `detail`, which keeps the camera's sharpening
         // and noise reduction, as they always rendered.
         detail = try c.decodeIfPresent(DetailAdjustments.self, forKey: .detail) ?? DetailAdjustments()
@@ -84,6 +89,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(processVersion, forKey: .processVersion)
         try c.encode(basic, forKey: .basic)
         try c.encode(curve, forKey: .curve)
+        try c.encode(selectiveColor, forKey: .selectiveColor)
         try c.encode(detail, forKey: .detail)
         try c.encode(look, forKey: .look)
         try c.encode(vignette, forKey: .vignette)
@@ -95,7 +101,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && vignette.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
     /// The photo without its adjustments, for Show Original: lens corrections, the perspective
