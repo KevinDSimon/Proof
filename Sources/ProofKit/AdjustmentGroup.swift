@@ -1,6 +1,6 @@
 /// A group of adjustments that the inspector shows on one card with its own switch.
 public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
-    case whiteBalance, light, color, curve, detail, vignette, look
+    case whiteBalance, light, color, curve, detail, lens, vignette, look
 
     /// The groups whose switches start off when `recipe` opens: Curve, Detail, Vignette and Looks,
     /// so their controls stay closed, unless the recipe has a curve, changed detail, a vignette or
@@ -38,6 +38,9 @@ extension EditRecipe {
         }
         if groups.contains(.curve) { recipe.curve = ToneCurve() }
         if groups.contains(.detail) { recipe.detail = DetailAdjustments() }
+        // Off means no lens correction at all, the profile included, even where the decoder
+        // applies it by default, so the switch shows the lens as it drew the photo.
+        if groups.contains(.lens) { recipe.lens = LensCorrections(profile: false) }
         if groups.contains(.vignette) { recipe.vignette = VignetteAdjustments() }
         if groups.contains(.look) { recipe.look = nil }
         return recipe

@@ -765,7 +765,7 @@ struct AdjustmentsInspector: View {
         let edit = library.selectedEdit
         let lens = edit?.cameraLens
         let corrections = edit?.recipe.lens ?? LensCorrections()
-        return InspectorCard(title: "Lens Corrections", canReset: !corrections.isNeutral,
+        return InspectorCard(title: "Lens Corrections", isOn: library.isOnBinding(.lens), canReset: !corrections.isNeutral,
                              reset: { library.changeEdit { $0.lens = LensCorrections() } }) {
             if let lens {
                 lensRow("Lens", value: lens.name ?? "Not recorded")

@@ -7,8 +7,9 @@ import SwiftUI
 struct DistortionGrid: View {
     let zoom: CanvasZoom
 
-    /// About this many squares along the photo's long edge.
-    static let squares = 16.0
+    /// Squares along the photo's short edge: an even number, so the middle lines run through the
+    /// center and the edges land on lines. A 3:2 or 4:3 photo then fits whole squares both ways.
+    static let squares = 12.0
 
     var body: some View {
         Canvas { context, size in
@@ -22,7 +23,7 @@ struct DistortionGrid: View {
             guard !shown.isEmpty else { return }
             // Centered on the photo, so the middle lines run through its center, where the
             // correction moves nothing.
-            let step = max(photo.width, photo.height) / Self.squares
+            let step = min(photo.width, photo.height) / Self.squares
             var grid = Path()
             var x = photo.midX - (((photo.midX - shown.minX) / step).rounded(.down)) * step
             while x <= shown.maxX {
