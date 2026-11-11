@@ -438,6 +438,8 @@ struct EditCanvas: View {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
+            } else if library.isAdjustingDistortion {
+                DistortionGrid(zoom: library.zoom)
             }
         }
         // A temporary tool, so it may sit on the photo: only while zoomed, in the corner under the
@@ -798,6 +800,7 @@ struct AdjustmentsInspector: View {
             lensSlider("Amount", spoken: "Distortion Amount", range: LensCorrections.distortionRange,
                        value: corrections.distortion ?? 0,
                        set: { value, lens in lens.distortion = value == 0 ? nil : value },
+                       showsGrid: true,
                        help: "Straightens lines that bow outward, or inward with negative values. The photo fills the frame")
             sectionHeading("Vignetting")
                 .padding(.top, 6)
@@ -825,7 +828,8 @@ struct AdjustmentsInspector: View {
 
     private func lensSlider(_ title: String, spoken: String, range: ClosedRange<Double>, value: Double,
                             showsSign: Bool = true, track: [Color] = [], defaultValue: Double = 0,
-                            set: @escaping (Double, inout LensCorrections) -> Void, help: String) -> some View {
+                            set: @escaping (Double, inout LensCorrections) -> Void, showsGrid: Bool = false,
+                            help: String) -> some View {
         AdjustmentSlider(
             title: title,
             spokenTitle: spoken,
@@ -833,7 +837,10 @@ struct AdjustmentsInspector: View {
             range: range, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
             showsSign: showsSign, track: track,
             reset: { library.changeEdit { set(defaultValue, &$0.lens) } },
-            isAdjusting: { library.isAdjusting = $0 })
+            isAdjusting: { adjusting in
+                library.isAdjusting = adjusting
+                if showsGrid { library.isAdjustingDistortion = adjusting }
+            })
             .help(help)
     }
 
