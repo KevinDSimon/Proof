@@ -836,24 +836,22 @@ struct AdjustmentsInspector: View {
                                  library.isDrawingGuides = false
                                  library.changeEdit { $0.transform = PerspectiveTransform() }
                              }) {
-            sectionHeading("Upright")
-            Picker("Upright", selection: Binding(
-                get: { transform.upright },
-                set: { mode in
-                    guard let renderer else { return }
-                    Task { await library.setUpright(mode, with: renderer) }
-                })) {
-                Text("Off").tag(UprightMode?.none)
-                Text("Auto").tag(UprightMode?.some(.auto))
-                Text("Guided").tag(UprightMode?.some(.guided))
-                Text("Level").tag(UprightMode?.some(.level))
-                Text("Vertical").tag(UprightMode?.some(.vertical))
-                Text("Full").tag(UprightMode?.some(.full))
+            // A pop-up, as Lightroom's Geometry panel has it and as White Balance's presets are.
+            HStack {
+                Text("Upright")
+                    .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                    .accessibilityHidden(true)
+                MenuPopUp(title: Self.title(of: transform.upright), items: Array(Self.uprightGroups.map { group in
+                    group.map { mode -> MenuPopUp.Item in
+                        .action(Self.title(of: mode), isChecked: mode == transform.upright) {
+                            guard let renderer else { return }
+                            Task { await library.setUpright(mode, with: renderer) }
+                        }
+                    }
+                }.joined(separator: [.separator])))
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Upright")
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            // Six modes, as in Lightroom: mini keeps them within the inspector's width.
-            .controlSize(.mini)
             .disabled(renderer == nil || library.isFindingLines)
             .help("Auto balances level and perspective. Guided follows lines you draw. Level turns the photo level, Vertical also makes upright lines parallel, Full also makes level lines parallel")
             uprightStatus(transform)
@@ -881,7 +879,22 @@ struct AdjustmentsInspector: View {
         .disabled(edit == nil)
     }
 
-    /// What Upright is doing below its buttons: looking for lines, finding none, or Guided's
+    /// Upright's menu, grouped as in Lightroom: Off, then Auto and Guided, then the fixed
+    /// corrections from least to most.
+    private static let uprightGroups: [[UprightMode?]] = [[nil], [.auto, .guided], [.level, .vertical, .full]]
+
+    private static func title(of mode: UprightMode?) -> String {
+        switch mode {
+        case nil: "Off"
+        case .auto: "Auto"
+        case .guided: "Guided"
+        case .level: "Level"
+        case .vertical: "Vertical"
+        case .full: "Full"
+        }
+    }
+
+    /// What Upright is doing below its menu: looking for lines, finding none, or Guided's
     /// instructions and buttons.
     @ViewBuilder
     private func uprightStatus(_ transform: PerspectiveTransform) -> some View {
