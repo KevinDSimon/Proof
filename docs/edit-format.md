@@ -26,6 +26,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
   },
   "detail": { "sharpening": 70, "noiseReduction": null, "noiseReductionDetail": null, "colorNoiseReduction": 40 },
   "look": { "lut": "Portra.cube", "strength": 0.7 },
+  "vignette": { "amount": -30, "midpoint": 50, "roundness": 0, "feather": 50 },
   "crop": {
     "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
     "rotation": 90, "flipHorizontal": false, "flipVertical": false, "aspect": [4, 5]
@@ -44,6 +45,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `curve` | Control points per channel (`rgb`, `red`, `green`, `blue`), each `[input, output]` from 0 to 1 in sRGB-encoded values, sorted by input, at most 16 per channel. The RGB curve applies after Contrast, Whites and Blacks, then each color channel's curve. The curve passes through every point with monotone cubic interpolation and is flat beyond the first and last points. Values outside 0 to 1 are clamped, and a point at the same input as an earlier one is ignored. `levels` holds each channel's black, midtone and white handles as `[black, midtone, white]`, described below. |
 | `detail` | Sharpening and noise reduction, described below. |
 | `look` | The LUT's path in the LUT library and its strength from 0 to 1. The path is relative to the library, with folders separated by `/`, as in `Portra/400.cube`; a LUT outside any folder is its file name alone, as edits saved before folders have it. A path with an empty, hidden or `..` part is skipped. Strength outside 0 to 1 renders as the nearer end. A LUT that can't be found is skipped. `null` for none. |
+| `vignette` | Darkened or lightened edges, centered on the cropped frame, described below. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
 
@@ -71,6 +73,17 @@ Each value runs from 0 to 100, and `null` keeps the camera's default, which `CIR
 | `noiseReduction` | Luminance noise reduction, `luminanceNoiseReductionAmount` from 0 to 1 (value ÷ 100). Its effect grows with the photo's ISO. |
 | `noiseReductionDetail` | How much fine detail luminance noise reduction keeps, `detailAmount` from 0 to 1. |
 | `colorNoiseReduction` | Color noise reduction, `colorNoiseReductionAmount` from 0 to 1. |
+
+## Vignette
+
+Lightroom's post-crop vignetting. It applies after the crop, so it centers on the cropped and straightened frame. Values outside their ranges render as the nearer end. With `amount` at 0 nothing changes, whatever the other three hold. A missing `vignette`, as in files saved before it existed, means no vignette; a missing field inside it takes the default below. See decision 0021.
+
+| Field | Meaning |
+| --- | --- |
+| `amount` | −100 to +100, default 0. Negative darkens the edges like exposure, by up to 3 stops at −100. Positive lightens them by up to 3 stops, easing each channel toward white so highlights don't clip. |
+| `midpoint` | 0 to 100, default 50. Where the effect is half, from close to the center (0) to near the corners (100). |
+| `roundness` | −100 to +100, default 0. 0 is an oval matching the frame, +100 a circle of the same area, −100 a rounded rectangle following the frame's corners. |
+| `feather` | 0 to 100, default 50. How gradually the effect fades in; 0 is a hard edge. |
 
 ## White balance
 

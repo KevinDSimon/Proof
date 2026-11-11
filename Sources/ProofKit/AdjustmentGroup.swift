@@ -1,14 +1,15 @@
 /// A group of adjustments that the inspector shows on one card with its own switch.
 public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
-    case whiteBalance, light, color, curve, detail, look
+    case whiteBalance, light, color, curve, detail, vignette, look
 
-    /// The groups whose switches start off when `recipe` opens: Curve, Detail and Looks, so their
-    /// controls stay closed, unless the recipe has a curve, changed detail or a look. Detail is
-    /// judged at 100% zoom, so most photos never need it open.
+    /// The groups whose switches start off when `recipe` opens: Curve, Detail, Vignette and Looks,
+    /// so their controls stay closed, unless the recipe has a curve, changed detail, a vignette or
+    /// a look. Detail is judged at 100% zoom, so most photos never need it open.
     public static func initiallyOff(for recipe: EditRecipe?) -> Set<AdjustmentGroup> {
         var off: Set<AdjustmentGroup> = []
         if recipe?.curve.isIdentity ?? true { off.insert(.curve) }
         if recipe?.detail.isNeutral ?? true { off.insert(.detail) }
+        if recipe?.vignette.isNeutral ?? true { off.insert(.vignette) }
         if recipe?.look == nil { off.insert(.look) }
         return off
     }
@@ -37,6 +38,7 @@ extension EditRecipe {
         }
         if groups.contains(.curve) { recipe.curve = ToneCurve() }
         if groups.contains(.detail) { recipe.detail = DetailAdjustments() }
+        if groups.contains(.vignette) { recipe.vignette = VignetteAdjustments() }
         if groups.contains(.look) { recipe.look = nil }
         return recipe
     }

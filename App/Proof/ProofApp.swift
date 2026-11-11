@@ -698,6 +698,7 @@ struct AdjustmentsInspector: View {
             }
             .disabled(library.selectedEdit == nil)
             detailCard
+            vignetteCard
             LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
                 InspectorCard {
@@ -738,6 +739,43 @@ struct AdjustmentsInspector: View {
         }
         // The sliders can't show the camera's values until they have been read from the photo.
         .disabled(shown == nil)
+    }
+
+    /// Lightroom's post-crop vignette: it centers on the cropped frame and follows any crop.
+    private var vignetteCard: some View {
+        let vignette = library.selectedEdit?.recipe.vignette ?? VignetteAdjustments()
+        return InspectorCard(title: "Vignette", isOn: library.isOnBinding(.vignette), canReset: !vignette.isNeutral,
+                             reset: { library.changeEdit { $0.vignette = VignetteAdjustments() } }) {
+            vignetteSlider("Amount", spoken: "Vignette Amount", \.amount, range: VignetteAdjustments.amountRange,
+                           showsSign: true, track: Self.vignetteAmountTrack,
+                           help: "Darkens the edges of the photo, or lightens them")
+            // The shape does nothing without an amount, as in Lightroom.
+            Group {
+                vignetteSlider("Midpoint", spoken: "Vignette Midpoint", \.midpoint, range: VignetteAdjustments.midpointRange,
+                               help: "How far toward the center the vignette reaches")
+                vignetteSlider("Roundness", spoken: "Vignette Roundness", \.roundness, range: VignetteAdjustments.roundnessRange,
+                               showsSign: true, help: "From the frame's rectangle to a circle")
+                vignetteSlider("Feather", spoken: "Vignette Feather", \.feather, range: VignetteAdjustments.featherRange,
+                               help: "How gradually the vignette fades in. At 0 it has a hard edge")
+            }
+            .disabled(vignette.amount == 0)
+        }
+        .disabled(library.selectedEdit == nil)
+    }
+
+    private func vignetteSlider(_ title: String, spoken: String, _ keyPath: WritableKeyPath<VignetteAdjustments, Double>,
+                                range: ClosedRange<Double>, showsSign: Bool = false, track: [Color] = [],
+                                help: String) -> some View {
+        AdjustmentSlider(
+            title: title,
+            spokenTitle: spoken,
+            value: Binding(get: { library.selectedEdit?.recipe.vignette[keyPath: keyPath] ?? VignetteAdjustments()[keyPath: keyPath] },
+                           set: { value in library.changeEdit { $0.vignette[keyPath: keyPath] = value } }),
+            range: range, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+            showsSign: showsSign, track: track,
+            reset: { library.changeEdit { $0.vignette[keyPath: keyPath] = VignetteAdjustments()[keyPath: keyPath] } },
+            isAdjusting: { library.isAdjusting = $0 })
+            .help(help)
     }
 
     /// A heading over a group of sliders inside a card, as in Lightroom's panels.
@@ -790,6 +828,8 @@ struct AdjustmentsInspector: View {
     private static let textureTrack = Array(exposureTrack.reversed())
     private static let clarityTrack = textureTrack
     private static let dehazeTrack = textureTrack
+    /// Dark to light, the way the edges move, as Lightroom draws Vignette's Amount.
+    private static let vignetteAmountTrack = exposureTrack
     private static let highlightsTrack = exposureTrack
     private static let shadowsTrack = exposureTrack
     private static let whitesTrack = exposureTrack

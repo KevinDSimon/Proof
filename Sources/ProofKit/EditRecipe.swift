@@ -13,11 +13,12 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var curve: ToneCurve
     public var detail: DetailAdjustments
     public var look: Look?
+    public var vignette: VignetteAdjustments
     public var crop: Crop?
     public var layers: [Layer]
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, detail, look, crop, layers
+        case formatVersion, processVersion, basic, curve, detail, look, vignette, crop, layers
     }
 
     public init(
@@ -25,6 +26,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         curve: ToneCurve = ToneCurve(),
         detail: DetailAdjustments = DetailAdjustments(),
         look: Look? = nil,
+        vignette: VignetteAdjustments = VignetteAdjustments(),
         crop: Crop? = nil,
         layers: [Layer] = []
     ) {
@@ -34,6 +36,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         self.curve = curve
         self.detail = detail
         self.look = look
+        self.vignette = vignette
         self.crop = crop
         self.layers = layers
     }
@@ -48,6 +51,8 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         // and noise reduction, as they always rendered.
         detail = try c.decodeIfPresent(DetailAdjustments.self, forKey: .detail) ?? DetailAdjustments()
         look = try c.decodeIfPresent(Look.self, forKey: .look)
+        // Edits saved before the Vignette card have none.
+        vignette = try c.decodeIfPresent(VignetteAdjustments.self, forKey: .vignette) ?? VignetteAdjustments()
         crop = try c.decodeIfPresent(Crop.self, forKey: .crop)
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
         // Format 1 held temperature and tint as −100 to 100 offsets. Nothing rendered them, so
@@ -71,13 +76,14 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(curve, forKey: .curve)
         try c.encode(detail, forKey: .detail)
         try c.encode(look, forKey: .look)
+        try c.encode(vignette, forKey: .vignette)
         try c.encode(crop, forKey: .crop)
         try c.encode(layers, forKey: .layers)
     }
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && (crop?.isIdentity ?? true) && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && vignette.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
     /// The sidecar URL for an original photo: the full file name plus `.proof`.

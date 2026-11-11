@@ -102,6 +102,8 @@ public actor RAWRenderer {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         var recipe = recipe
         recipe.crop = recipe.crop?.turnedOnly
+        // Its darkened edges could read as lines; they aren't part of the scene.
+        recipe.vignette = VignetteAdjustments()
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: targetSize))
         guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail, lut: lut),
@@ -426,8 +428,9 @@ public actor RAWRenderer {
         let looked = recipe.look.map { LUTStage.apply(lut, strength: $0.strength, to: colored) } ?? colored
         // 5. Layers follow here when masks are built.
         // 6. Turn, flip, straighten and crop.
-        guard let crop = recipe.crop else { return looked }
-        return Self.applyGeometry(crop, to: looked)
+        let framed = recipe.crop.map { Self.applyGeometry($0, to: looked) } ?? looked
+        // 7. Vignette, on the cropped frame so it follows the crop.
+        return Vignette.apply(recipe.vignette, to: framed)
     }
 
     /// Turns and flips `image`, then straightens and crops it, as `Crop` describes. The result
