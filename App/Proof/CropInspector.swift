@@ -20,14 +20,15 @@ struct CropInspector: View {
                               library.resetCropRectangle()
                               library.resetCropTurn()
                           }) {
-                MenuPopUp(title: shownChoice.title, items: AspectChoice.allCases.flatMap { choice -> [MenuPopUp.Item] in
-                    let item = MenuPopUp.Item.action(choice.title, isChecked: choice == shownChoice) { choose(choice) }
-                    return choice == .freeform || choice == .original ? [item, .separator] : [item]
-                })
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("Aspect Ratio")
-                if shownChoice == .custom {
-                    row("Ratio") {
+                // Each control's name above it, as the sliders have theirs.
+                InspectorField("Aspect Ratio") {
+                    MenuPopUp(title: shownChoice.title, items: AspectChoice.allCases.flatMap { choice -> [MenuPopUp.Item] in
+                        let item = MenuPopUp.Item.action(choice.title, isChecked: choice == shownChoice) { choose(choice) }
+                        return choice == .freeform || choice == .original ? [item, .separator] : [item]
+                    })
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Aspect Ratio")
+                    if shownChoice == .custom {
                         HStack(spacing: 4) {
                             ratioField("Width", text: $customWidth)
                             Text(":").foregroundStyle(.secondary)
@@ -35,10 +36,14 @@ struct CropInspector: View {
                         }
                     }
                 }
-                row("Orientation") {
-                    Button("Swap", systemImage: "rectangle.portrait.rotate") { library.swapCropOrientation() }
-                        .labelStyle(.titleAndIcon)
-                        .help("Switch the crop between landscape and portrait (X)")
+                InspectorField("Orientation") {
+                    Button {
+                        library.swapCropOrientation()
+                    } label: {
+                        Label("Swap", systemImage: "rectangle.portrait.rotate")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .help("Switch the crop between landscape and portrait (X)")
                 }
                 AdjustmentSlider(
                     title: "Straighten",
@@ -50,12 +55,13 @@ struct CropInspector: View {
                         library.isStraightening = adjusting
                         library.isAdjusting = adjusting
                     })
-                row(library.foundNoHorizon ? "Level · No horizon found" : "Level") {
+                InspectorField("Level") {
+                    if library.foundNoHorizon { Text("No horizon found") }
+                } content: {
                     HStack {
                         Toggle(isOn: Binding(get: { library.isDrawingLevelLine }, set: { library.isDrawingLevelLine = $0 })) {
                             Label("Draw Line", systemImage: "ruler")
-                                .labelStyle(.iconOnly)
-                                .frame(width: Self.levelButtonWidth, height: Self.levelButtonHeight)
+                                .frame(maxWidth: .infinity, maxHeight: Self.levelButtonHeight)
                         }
                         .toggleStyle(.button)
                         .help("Drag along something in the photo that should be level or upright")
@@ -63,16 +69,13 @@ struct CropInspector: View {
                             guard let renderer else { return }
                             Task { await library.autoStraighten(with: renderer) }
                         } label: {
-                            Text("Auto").frame(width: Self.levelButtonWidth, height: Self.levelButtonHeight)
+                            Text("Auto").frame(maxWidth: .infinity, maxHeight: Self.levelButtonHeight)
                         }
                         .disabled(renderer == nil || library.isFindingHorizon)
                         .help("Straighten to the horizon found in the photo")
                     }
                 }
-                // The name above the buttons: beside them it wraps onto two lines.
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Rotate and Flip")
-                        .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                InspectorField("Rotate and Flip") {
                     HStack {
                         iconButton("Rotate Left", systemImage: "rotate.left", help: "Turn the photo a quarter turn counterclockwise (⌘[)") {
                             library.rotate(clockwise: false)
@@ -102,21 +105,10 @@ struct CropInspector: View {
         crop.rotation != 0 || crop.flipHorizontal || crop.flipVertical
     }
 
-    /// A control with its name on the left, in the slider names' color.
-    private func row(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
-            Spacer()
-            content()
-        }
-    }
-
     private var crop: Crop { library.selectedCrop }
 
-    /// The ruler and Auto buttons share one size, so they read as a pair: the ruler symbol alone
-    /// would make its button taller than Auto's.
-    private static let levelButtonWidth = 36.0
+    /// The ruler and Auto buttons share one height, so they read as a pair: the ruler symbol
+    /// alone would make its button taller than Auto's.
     private static let levelButtonHeight = 16.0
 
     /// The menu item for the locked ratio, in either orientation.

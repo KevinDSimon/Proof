@@ -105,6 +105,46 @@ public struct Crop: Codable, Equatable, Sendable {
         Crop(rotation: rotation, flipHorizontal: flipHorizontal, flipVertical: flipVertical)
     }
 
+    // MARK: Points
+
+    /// Where `point` of the result, from 0 to 1 on each axis from the top left, lies on the photo
+    /// as the camera oriented it, also from 0 to 1: through the rectangle, the straighten angle,
+    /// the flips and the turn, undone in that order. `size` is the photo's size as the camera
+    /// oriented it. Points outside the result map outside the rectangle.
+    public func photoPoint(of point: CGPoint, photoSize size: CGSize) -> CGPoint {
+        let turned = turnedSize(of: size)
+        guard turned.width > 0, turned.height > 0 else { return point }
+        // In pixels of the turned photo, about the rectangle's center. A positive angle turns
+        // the photo clockwise, so the result's axes are the photo's turned clockwise as well.
+        let (w, h) = (Double(turned.width), Double(turned.height))
+        let local = SIMD2((point.x - 0.5) * width * w, (point.y - 0.5) * height * h)
+        let radians = angle * .pi / 180
+        let unturned = SIMD2(local.x * cos(radians) + local.y * sin(radians), -local.x * sin(radians) + local.y * cos(radians))
+        var p = SIMD2((x + width / 2) + unturned.x / w, (y + height / 2) + unturned.y / h)
+        if flipVertical { p.y = 1 - p.y }
+        if flipHorizontal { p.x = 1 - p.x }
+        // Back a quarter turn counterclockwise for each clockwise one: (x, y) came from (y, 1 − x).
+        for _ in 0..<(Self.normalized(rotation) / 90) { p = SIMD2(p.y, 1 - p.x) }
+        return CGPoint(x: p.x, y: p.y)
+    }
+
+    /// Where `point` of the photo as the camera oriented it, from 0 to 1, shows in the result,
+    /// from 0 to 1: the reverse of `photoPoint(of:photoSize:)`.
+    public func resultPoint(of point: CGPoint, photoSize size: CGSize) -> CGPoint {
+        let turned = turnedSize(of: size)
+        guard turned.width > 0, turned.height > 0 else { return point }
+        var p = SIMD2(Double(point.x), Double(point.y))
+        // A quarter turn clockwise takes (x, y) to (1 − y, x).
+        for _ in 0..<(Self.normalized(rotation) / 90) { p = SIMD2(1 - p.y, p.x) }
+        if flipHorizontal { p.x = 1 - p.x }
+        if flipVertical { p.y = 1 - p.y }
+        let (w, h) = (Double(turned.width), Double(turned.height))
+        let offset = SIMD2((p.x - (x + width / 2)) * w, (p.y - (y + height / 2)) * h)
+        let radians = angle * .pi / 180
+        let local = SIMD2(offset.x * cos(radians) - offset.y * sin(radians), offset.x * sin(radians) + offset.y * cos(radians))
+        return CGPoint(x: local.x / (width * w) + 0.5, y: local.y / (height * h) + 0.5)
+    }
+
     // MARK: Turning and flipping, as seen on screen
 
     /// Turns the result a quarter turn clockwise, or counterclockwise. The rectangle and the

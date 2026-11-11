@@ -29,6 +29,7 @@ struct ReferenceRenderTests {
         ("vignette", vignette, nil),
         ("chromatic-aberration", chromaticAberration, nil),
         ("lens-manual", lensManual, nil),
+        ("perspective", perspective, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -167,6 +168,16 @@ struct ReferenceRenderTests {
         var recipe = EditRecipe()
         recipe.lens.distortion = 40
         recipe.lens.vignetting = LensVignetting(amount: 60, midpoint: 40)
+        return recipe
+    }()
+
+    /// Every Transform slider, with Constrain Crop, and a turn, so the correction shows it
+    /// comes before the crop's turns.
+    static let perspective: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.transform = PerspectiveTransform(vertical: -25, horizontal: 10, rotate: 1.5, aspect: 10,
+                                                scale: 105, xOffset: 4, yOffset: -3)
+        recipe.crop = Crop(rotation: 90)
         return recipe
     }()
 

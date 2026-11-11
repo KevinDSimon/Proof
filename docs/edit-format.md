@@ -31,6 +31,10 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
     "profile": null, "chromaticAberration": { "red": 1.00012, "blue": 0.99994 },
     "distortion": 6, "vignetting": { "amount": 35, "midpoint": 50 }
   },
+  "transform": {
+    "vertical": -22, "horizontal": 0, "rotate": -0.8, "aspect": 6, "scale": 100, "xOffset": 0, "yOffset": 0,
+    "constrainCrop": true, "upright": "guided", "guides": [[0.21, 0.12, 0.18, 0.9], [0.78, 0.1, 0.82, 0.88]]
+  },
   "crop": {
     "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
     "rotation": 90, "flipHorizontal": false, "flipVertical": false, "aspect": [4, 5]
@@ -51,6 +55,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `look` | The LUT's path in the LUT library and its strength from 0 to 1. The path is relative to the library, with folders separated by `/`, as in `Portra/400.cube`; a LUT outside any folder is its file name alone, as edits saved before folders have it. A path with an empty, hidden or `..` part is skipped. Strength outside 0 to 1 renders as the nearer end. A LUT that can't be found is skipped. `null` for none. |
 | `vignette` | Darkened or lightened edges, centered on the cropped frame, described below. |
 | `lens` | Lens corrections, described below. |
+| `transform` | Perspective correction, described below. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
 
@@ -100,6 +105,24 @@ Corrections for the lens, applied as the photo is decoded, before every other ad
 | `chromaticAberration` | Remove Chromatic Aberration: `red` and `blue` are the scales, about the center of the uncropped photo, at which those channels are read to line up with green. 1 leaves a channel in place; values outside 0.99 to 1.01 render as the nearer end. Proof measures them when the switch is turned on and doesn't measure again on read (decision 0023). `null` while it is off. |
 | `distortion` | -100 to 100. Positive values straighten lines that bow outward (barrel distortion), negative values lines that bow inward (pincushion). The photo is scaled so it fills the frame, with no empty edges. Values outside the range render as the nearer end. `null` at 0 (decision 0024). |
 | `vignetting` | Lens vignetting, about the center of the uncropped photo. `amount`, -100 to 100, brightens (positive) or darkens (negative) the corners, by up to 2 stops; `midpoint`, 0 to 100, default 50, keeps the correction closer to the corners as it rises. `null` at the defaults (decision 0024). |
+
+## Transform
+
+Perspective correction, as in Lightroom's Transform panel, applied right after the lens corrections to the whole photo as the camera oriented it, before the crop's turns (decision 0025). Show Original keeps it, as it keeps the crop. A missing `transform`, as in files saved before it existed, means no correction, and so does a missing field.
+
+| Field | Meaning |
+| --- | --- |
+| `vertical` | -100 to 100, default 0. Tilts the photo top to bottom, by up to 45°; negative values widen the top, which straightens a building that leans back. |
+| `horizontal` | -100 to 100, default 0. Tilts the photo side to side, by up to 45°; negative values widen the left side. |
+| `rotate` | -10 to 10 degrees clockwise, default 0. |
+| `aspect` | -100 to 100, default 0. Stretches the photo across (positive) or upward (negative), up to a factor of √2. |
+| `scale` | 50 to 150 percent about the center, default 100. |
+| `xOffset`, `yOffset` | -100 to 100, default 0. Move the photo right and up, by up to a quarter of its width or height. |
+| `constrainCrop` | `true` (the default) enlarges the corrected photo so it fills the frame. `false` leaves the parts it no longer covers clear. |
+| `upright` | The Upright mode that last set the sliders: `auto`, `level`, `vertical`, `full` or `guided`, or `null`. It only marks the button; the sliders hold the correction. |
+| `guides` | Guided's lines, each `[x1, y1, x2, y2]` from 0 to 1 on the uncorrected photo as the camera oriented it, from the top left. At most four. Empty for none. |
+
+Values outside their ranges render as the nearer end.
 
 ## White balance
 
