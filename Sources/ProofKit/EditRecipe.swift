@@ -162,16 +162,24 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
     }
 
     /// Chooses from the white balance menu. A preset sets its Kelvin with no tint. Custom isn't
-    /// chosen; it is what the menu shows once a slider has moved.
+    /// chosen; it is what the menu shows once a slider has moved. Auto needs the photo, so it
+    /// is set with `setAuto(_:)`.
     public mutating func choose(_ preset: WhiteBalancePreset) {
         switch preset {
         case .asShot: resetWhiteBalance()
-        case .custom: break
+        case .auto, .custom: break
         default:
             temperature = preset.temperature
             tint = 0
             whiteBalance = preset
         }
+    }
+
+    /// Sets the white balance Auto estimated for the photo, which the menu shows as Auto.
+    public mutating func setAuto(_ found: WhiteBalance) {
+        temperature = min(max(found.temperature, WhiteBalance.temperatureRange.lowerBound), WhiteBalance.temperatureRange.upperBound)
+        tint = min(max(found.tint, WhiteBalance.tintRange.lowerBound), WhiteBalance.tintRange.upperBound)
+        whiteBalance = .auto
     }
 
     /// Sets the temperature from a slider or the value field, which makes the white balance Custom.
@@ -206,12 +214,12 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
 
 /// The white balance menu, in its order. The presets are Lightroom's color temperatures.
 public enum WhiteBalancePreset: String, Codable, CaseIterable, Sendable {
-    case asShot, daylight, cloudy, shade, tungsten, fluorescent, flash, custom
+    case asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash, custom
 
-    /// The preset's Kelvin; `nil` for As Shot and Custom, which have no fixed value.
+    /// The preset's Kelvin; `nil` for As Shot, Auto and Custom, which have no fixed value.
     public var temperature: Double? {
         switch self {
-        case .asShot, .custom: nil
+        case .asShot, .auto, .custom: nil
         case .daylight: 5500
         case .cloudy: 6500
         case .shade: 7500

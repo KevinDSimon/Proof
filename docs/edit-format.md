@@ -76,11 +76,11 @@ Each value runs from 0 to 100, and `null` keeps the camera's default, which `CIR
 
 | Field | Meaning |
 | --- | --- |
-| `whiteBalance` | The white balance menu's choice: `asShot`, `daylight`, `cloudy`, `shade`, `tungsten`, `fluorescent`, `flash` or `custom`. It labels the values; only `temperature` and `tint` change the render. A choice this version doesn't know reads as `custom`. |
+| `whiteBalance` | The white balance menu's choice: `asShot`, `auto`, `daylight`, `cloudy`, `shade`, `tungsten`, `fluorescent`, `flash` or `custom`. It labels the values; only `temperature` and `tint` change the render. A choice this version doesn't know reads as `custom`. |
 | `temperature` | The color temperature of the light in Kelvin, 2000 to 50000. `null` keeps the camera's. |
 | `tint` | From −150 (green) to +150 (magenta). `null` keeps the camera's. |
 
-As Shot is `whiteBalance: "asShot"` with `temperature` and `tint` both `null`, and is written that way so a save replaces earlier values. A preset writes its Kelvin with a tint of 0: Daylight 5500, Cloudy 6500, Shade 7500, Tungsten 2850, Fluorescent 3800, Flash 5500. Moving either slider sets `custom`. The values are absolute, the same in every version, so a preset's Kelvin can change later without changing saved edits.
+As Shot is `whiteBalance: "asShot"` with `temperature` and `tint` both `null`, and is written that way so a save replaces earlier values. A preset writes its Kelvin with a tint of 0: Daylight 5500, Cloudy 6500, Shade 7500, Tungsten 2850, Fluorescent 3800, Flash 5500. Auto writes the temperature and tint Proof estimated from the photo (see `docs/decisions/0018-auto-adjust.md`) and sets `auto`; the estimate is not repeated when the file is read, so the photo renders the same if a later version estimates differently. Versions before Auto read `auto` as `custom` with the same values. Moving either slider sets `custom`. The values are absolute, the same in every version, so a preset's Kelvin can change later without changing saved edits.
 
 ## Crop
 

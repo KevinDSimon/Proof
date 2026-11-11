@@ -429,6 +429,8 @@ final class Library {
     private(set) var isFindingHorizon = false
     /// Auto found no horizon, which the crop tool shows for a moment.
     private(set) var foundNoHorizon = false
+    /// Auto white balance or Auto Tone is measuring the photo.
+    private(set) var isAutoAdjusting = false
 
     /// The selected photo's crop. A photo without one starts locked to its own shape (Original).
     var selectedCrop: Crop {
@@ -507,6 +509,42 @@ final class Library {
         isDrawingLevelLine = false
         guard let correction = Horizon.correction(from: start, to: end, minimumLength: 8) else { return }
         setStraighten(selectedCrop.angle + correction)
+    }
+
+    /// Sets the selected photo's white balance to the one Auto estimates, labelled Auto.
+    func autoWhiteBalance(with renderer: RAWRenderer) async {
+        await autoAdjust(with: renderer, what: "white balance") { renderer, recipe in
+            let found = try await renderer.autoWhiteBalance(recipe: recipe)
+            return { $0.basic.setAuto(found) }
+        }
+    }
+
+    /// Sets the selected photo's six Tone sliders to the values Auto estimates.
+    func autoTone(with renderer: RAWRenderer) async {
+        await autoAdjust(with: renderer, what: "tone") { renderer, recipe in
+            let light = try await renderer.autoTone(recipe: recipe)
+            return { light.apply(to: &$0.basic) }
+        }
+    }
+
+    /// Measures the selected photo with `estimate` and applies the change it returns as one edit,
+    /// unless another photo was chosen meanwhile. Takes about a second for white balance.
+    private func autoAdjust(with renderer: RAWRenderer, what: String,
+                            estimate: (RAWRenderer, EditRecipe) async throws -> (inout EditRecipe) -> Void) async {
+        guard !isAutoAdjusting, let photo = browse.selectedPhoto, let url = selectedPhotoURL,
+              let recipe = selectedEdit?.recipe else { return }
+        isAutoAdjusting = true
+        defer { isAutoAdjusting = false }
+        let change: (inout EditRecipe) -> Void
+        do {
+            try await renderer.open(url)
+            change = try await estimate(renderer, recipe)
+        } catch {
+            errorMessage = "Auto couldn't measure the \(what) of this photo. (\(error))"
+            return
+        }
+        guard browse.selectedPhoto == photo else { return }
+        changeEdit(change)
     }
 
     /// Straightens to the horizon Vision finds in the selected photo. When there is none, the
