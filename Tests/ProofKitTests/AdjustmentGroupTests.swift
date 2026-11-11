@@ -13,6 +13,7 @@ struct AdjustmentGroupTests {
         recipe.basic.blacks = -10
         recipe.basic.vibrance = 30
         recipe.basic.saturation = -15
+        recipe.selectiveColor[.blue] = ColorRangeAdjustment(saturation: -30)
         recipe.curve.rgb = [CurvePoint(0, 0.1), CurvePoint(1, 1)]
         recipe.detail.sharpening = 70
         recipe.look = Look(lut: "Portra/400.cube", strength: 0.6)
@@ -21,17 +22,21 @@ struct AdjustmentGroupTests {
         return recipe
     }
 
-    @Test("Curve, Detail, Transform, Vignette and Looks start off, unless the recipe has a curve, changed detail, a perspective correction, a vignette or a look")
+    @Test("Selective Color, Curve, Detail, Transform, Vignette and Looks start off, unless the recipe has that adjustment")
     func initiallyOff() {
-        #expect(AdjustmentGroup.initiallyOff(for: nil) == [.curve, .detail, .transform, .vignette, .look])
-        #expect(AdjustmentGroup.initiallyOff(for: EditRecipe()) == [.curve, .detail, .transform, .vignette, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: nil) == [.selectiveColor, .curve, .detail, .transform, .vignette, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: EditRecipe()) == [.selectiveColor, .curve, .detail, .transform, .vignette, .look])
         #expect(AdjustmentGroup.initiallyOff(for: Self.edited).isEmpty)
         var lookOnly = EditRecipe()
         lookOnly.look = Look(lut: "Mono.cube")
-        #expect(AdjustmentGroup.initiallyOff(for: lookOnly) == [.curve, .detail, .transform, .vignette])
+        #expect(AdjustmentGroup.initiallyOff(for: lookOnly) == [.selectiveColor, .curve, .detail, .transform, .vignette])
         var vignetteOnly = EditRecipe()
         vignetteOnly.vignette.amount = 25
-        #expect(AdjustmentGroup.initiallyOff(for: vignetteOnly) == [.curve, .detail, .transform, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: vignetteOnly) == [.selectiveColor, .curve, .detail, .transform, .look])
+        var selectiveOnly = EditRecipe()
+        selectiveOnly.selectiveColor[.green] = ColorRangeAdjustment(hue: 20)
+        #expect(AdjustmentGroup.initiallyOff(for: selectiveOnly) == [.curve, .detail, .transform, .vignette, .look])
+        #expect(selectiveOnly.without([.selectiveColor]).selectiveColor.isNeutral)
     }
 
     @Test("Lens Corrections switched off renders without any lens correction, the profile included, and leaves the rest")

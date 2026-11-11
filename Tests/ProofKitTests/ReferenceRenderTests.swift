@@ -20,6 +20,7 @@ struct ReferenceRenderTests {
         ("edited", edited, nil),
         ("contrast-whites-blacks", contrastWhitesBlacks, nil),
         ("color", color, nil),
+        ("selective-color", selectiveColor, nil),
         ("crop", crop, nil),
         ("curve", curve, nil),
         ("look", look, PreparedLUT(lookTable)),
@@ -143,6 +144,19 @@ struct ReferenceRenderTests {
             .moved(by: CGVector(dx: 0, dy: -1)).applied(to: crop)
         var recipe = EditRecipe()
         recipe.crop = crop
+        return recipe
+    }()
+
+    /// Every kind of change on ranges the sample photo holds: warm tones turned and brightened,
+    /// greens and blues muted and darkened, so a change to the ranges, their blending or the
+    /// stage's place in the pipeline shows.
+    static let selectiveColor: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.selectiveColor[.orange] = ColorRangeAdjustment(hue: -40, saturation: 30, brightness: 25)
+        recipe.selectiveColor[.yellow] = ColorRangeAdjustment(hue: 50, saturation: 20)
+        recipe.selectiveColor[.green] = ColorRangeAdjustment(hue: 30, saturation: -60, brightness: -30)
+        recipe.selectiveColor[.blue] = ColorRangeAdjustment(hue: -30, saturation: 60, brightness: -40)
+        recipe.selectiveColor[.aqua] = ColorRangeAdjustment(saturation: -100)
         return recipe
     }()
 

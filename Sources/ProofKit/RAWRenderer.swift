@@ -507,8 +507,9 @@ public actor RAWRenderer {
         let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks,
                                curve: recipe.curve)
             .apply(to: dehazed)
-        // 3. Color: vibrance, then saturation.
-        let colored = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
+        // 3. Color: vibrance, then saturation, then selective color.
+        let saturated = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
+        let colored = SelectiveColorStage.apply(recipe.selectiveColor, to: saturated)
         // 4. LUT, blended by strength.
         let looked = recipe.look.map { LUTStage.apply(lut, strength: $0.strength, to: colored) } ?? colored
         // 5. Layers follow here when masks are built.

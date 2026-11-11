@@ -20,6 +20,16 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
     "contrast": 10, "texture": 20, "clarity": 15, "dehaze": 10, "highlights": -40, "shadows": 25,
     "whites": 0, "blacks": -5, "vibrance": 15, "saturation": 0
   },
+  "selectiveColor": {
+    "red": { "hue": 0, "saturation": 0, "brightness": 0 },
+    "orange": { "hue": -10, "saturation": 15, "brightness": 10 },
+    "yellow": { "hue": 0, "saturation": 0, "brightness": 0 },
+    "green": { "hue": 20, "saturation": -40, "brightness": -15 },
+    "aqua": { "hue": 0, "saturation": 0, "brightness": 0 },
+    "blue": { "hue": 0, "saturation": 0, "brightness": 0 },
+    "purple": { "hue": 0, "saturation": 0, "brightness": 0 },
+    "magenta": { "hue": 0, "saturation": 0, "brightness": 0 }
+  },
   "curve": {
     "rgb": [[0, 0], [1, 1]], "red": [[0, 0], [1, 1]], "green": [[0, 0], [1, 1]], "blue": [[0, 0], [1, 1]],
     "levels": { "rgb": [0, 0.5, 1], "red": [0, 0.5, 1], "green": [0, 0.5, 1], "blue": [0, 0.5, 1] }
@@ -50,6 +60,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `formatVersion` | Version of this JSON layout. Bumped when fields are renamed or restructured; older files are migrated on read. |
 | `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. |
 | `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Texture and clarity raise (positive) or lower (negative) local contrast: texture in fine detail a few pixels across, clarity over larger areas, mostly in the midtones. Both are measured against a share of the photo's size, so they look the same at any render size, and are clamped the same way. Files saved before they existed read both as 0. Dehaze removes (positive) or adds (negative) haze, measured against the photo's own haziest area; it is clamped the same way, and files saved before it existed read it as 0. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
+| `selectiveColor` | Hue, saturation and brightness for each of eight color ranges, described below. |
 | `curve` | Control points per channel (`rgb`, `red`, `green`, `blue`), each `[input, output]` from 0 to 1 in sRGB-encoded values, sorted by input, at most 16 per channel. The RGB curve applies after Contrast, Whites and Blacks, then each color channel's curve. The curve passes through every point with monotone cubic interpolation and is flat beyond the first and last points. Values outside 0 to 1 are clamped, and a point at the same input as an earlier one is ignored. `levels` holds each channel's black, midtone and white handles as `[black, midtone, white]`, described below. |
 | `detail` | Sharpening and noise reduction, described below. |
 | `look` | The LUT's path in the LUT library and its strength from 0 to 1. The path is relative to the library, with folders separated by `/`, as in `Portra/400.cube`; a LUT outside any folder is its file name alone, as edits saved before folders have it. A path with an empty, hidden or `..` part is skipped. Strength outside 0 to 1 renders as the nearer end. A LUT that can't be found is skipped. `null` for none. |
@@ -72,6 +83,18 @@ Each channel's handles apply before its points, as in Photoshop's Levels followe
 | `white` | From 0 to 1. Tones at or above it become white. Default 1. |
 
 Between `black` and `white` the tone is stretched to 0…1 and raised to the power that maps `midtone` to 0.5. `white` is kept at least 0.02 above `black`. A missing channel, or a missing `levels`, means the defaults; files saved before levels existed read that way.
+
+## Selective color
+
+Changes the colors of one hue range at a time, after vibrance and saturation and before the look. Proof writes all eight ranges, keyed `red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple` and `magenta`, centered at 0°, 30°, 60°, 120°, 180°, 225°, 270° and 315° around the HSV hue circle of the color encoded with a 2.2 gamma. A color between two centers takes part of each range's values, eased from one to the other, and the effect fades out toward gray. A missing `selectiveColor`, as in files saved before it existed, a missing range, or a missing value inside one means 0. A key Proof doesn't recognize is ignored. See decision 0026.
+
+| Field | Meaning |
+| --- | --- |
+| `hue` | −100 to +100, default 0. Turns the range's colors toward the previous range (negative) or the next (positive) around the circle; ±100 reaches that range's center. |
+| `saturation` | −100 to +100, default 0. Scales the range's saturation by 1 + value ÷ 100, so −100 leaves its colors gray and +100 doubles it, up to full. |
+| `brightness` | −100 to +100, default 0. Scales the range's colors in linear light by up to 1.5 stops. Lightening eases the brightest channel toward white so colors don't clip, and keeps their hue. |
+
+Values outside −100 to +100 render as the nearer end.
 
 ## Detail
 
