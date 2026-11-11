@@ -737,9 +737,9 @@ struct AdjustmentsInspector: View {
     /// which reads as a dark band. The faded middle takes the panel's color in either appearance.
     private static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
     private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
-    /// Dark to light, the way exposure moves the photo.
-    /// Starts at pure black because the system slider's own groove, drawn over it, lightens it.
-    private static let exposureTrack = [Color(white: 0), Color(white: 0.97)]
+    /// Dark to light, the way exposure moves the photo. A soft range of grays rather than black to
+    /// white, as Lightroom draws it, so the tracks don't compete with the photo.
+    private static let exposureTrack = [Color(white: 0.12), Color(white: 0.62)]
     /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
     private static let contrastTrack = exposureTrack
     /// Texture and Clarity run light to dark, the reverse of the tone sliders, as Lightroom draws them.
