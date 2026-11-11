@@ -154,7 +154,7 @@ private struct HueGraph: View {
 }
 
 /// The eight ranges as color swatches in a row, the chosen one marked with a ring, as Proof
-/// marks a selection. A dot under a swatch shows that range has been changed.
+/// marks a selection.
 private struct RangePicker: View {
     @Binding var selected: ColorRange
     let edited: Set<ColorRange>
@@ -163,21 +163,16 @@ private struct RangePicker: View {
         HStack(spacing: 0) {
             ForEach(ColorRange.allCases, id: \.self) { range in
                 Button { selected = range } label: {
-                    VStack(spacing: 3) {
-                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(SelectiveColorCard.color(hue: range.hue))
-                            .frame(width: 14, height: 14)
-                            .padding(4)
-                            .overlay {
-                                if range == selected {
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .strokeBorder(.primary, lineWidth: 2)
-                                }
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(SelectiveColorCard.color(hue: range.hue))
+                        .frame(width: 14, height: 14)
+                        .padding(4)
+                        .overlay {
+                            if range == selected {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(.primary, lineWidth: 2)
                             }
-                        Circle()
-                            .fill(edited.contains(range) ? Color.primary.opacity(0.6) : .clear)
-                            .frame(width: 4, height: 4)
-                    }
+                        }
                     .frame(maxWidth: .infinity)
                     .contentShape(.rect)
                 }
