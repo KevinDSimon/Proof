@@ -708,6 +708,12 @@ struct AdjustmentsInspector: View {
                         Button("Grant Access…") { library.grantWriteAccessForSelectedPhoto() }
                     }
                 }
+            } else if let photo = library.browse.selectedPhoto, library.unsavedMetadata.contains(photo) {
+                InspectorCard {
+                    Text("Rating and flag not saved. Proof needs permission to save in this photo's folder.")
+                        .foregroundStyle(.secondary)
+                    Button("Grant Access…") { library.grantWriteAccessForSelectedPhoto() }
+                }
             }
         }
     }

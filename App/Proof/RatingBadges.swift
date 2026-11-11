@@ -97,8 +97,6 @@ enum RatingBadges {
         default: "\(rating) Stars"
         }
     }
-
-    static let unsavedNote = "Changes aren't saved to the photo yet."
 }
 
 /// The Edit toolbar's star buttons, packed closer than separate toolbar items would be. Clicking
@@ -118,7 +116,7 @@ struct StarButtons: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help("\(RatingBadges.title(ofRating: star)) (\(star)). \(RatingBadges.unsavedNote)")
+                .help("\(RatingBadges.title(ofRating: star)) (\(star))")
                 .accessibilityLabel(RatingBadges.title(ofRating: star))
                 .accessibilityAddTraits(star == rating ? .isSelected : [])
             }
@@ -148,7 +146,7 @@ struct FlagButtons: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help("\(RatingBadges.title(of: option)). \(RatingBadges.unsavedNote)")
+                .help(RatingBadges.title(of: option))
                 .accessibilityLabel(RatingBadges.title(of: option))
                 .accessibilityAddTraits(option == flag ? .isSelected : [])
             }

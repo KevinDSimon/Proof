@@ -38,13 +38,8 @@ public struct FolderContents: Equatable, Sendable {
         guard values.isDirectory == true, values.isPackage != true else {
             guard isRAW(values) else { return FolderContents(subfolders: [], photos: []) }
             let isEdited = FileManager.default.fileExists(atPath: EditRecipe.sidecarURL(for: url).path)
-            let folder = url.deletingLastPathComponent()
-            let base = url.deletingPathExtension().lastPathComponent
-            let candidates = [base + ".xmp", base + ".XMP", url.lastPathComponent + ".xmp", url.lastPathComponent + ".XMP"]
-                .map { folder.appendingPathComponent($0) }
-                .filter { FileManager.default.fileExists(atPath: $0.path) }
             let photo = Photo(name: url.lastPathComponent, isEdited: isEdited,
-                              metadata: newestSidecar(of: candidates).flatMap(readSidecar))
+                              metadata: XMPSidecar.existing(for: url).flatMap(readSidecar))
             return FolderContents(subfolders: [], photos: [photo])
         }
 
@@ -116,7 +111,7 @@ public struct FolderContents: Equatable, Sendable {
 
     /// When two apps have each left a sidecar, such as `IMG_1.xmp` and `IMG_1.DNG.xmp`, the one
     /// changed most recently is the one the person last worked in.
-    private static func newestSidecar(of urls: [URL]) -> URL? {
+    static func newestSidecar(of urls: [URL]) -> URL? {
         urls.max { modified($0) < modified($1) }
     }
 

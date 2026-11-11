@@ -1,7 +1,7 @@
 # 0002. Edits in sidecars next to originals, ratings read from XMP
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; not writing ratings is superseded by 0022
 
 ## Context
 Photos live in year and month folders on a Synology NAS. Ratings are currently made in Photomator, which writes standard XMP sidecars. Edits must never touch the original files and should follow the photos between devices.
