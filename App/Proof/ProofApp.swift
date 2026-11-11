@@ -792,8 +792,49 @@ struct AdjustmentsInspector: View {
                     .help(lens.name == nil ? "The photo carries no lens correction data"
                                            : "The photo carries no correction data for this lens")
             }
+            // Manual corrections, for lenses without a profile, grouped as in Lightroom's Manual tab.
+            sectionHeading("Distortion")
+                .padding(.top, 6)
+            lensSlider("Amount", spoken: "Distortion Amount", range: LensCorrections.distortionRange,
+                       value: corrections.distortion ?? 0,
+                       set: { value, lens in lens.distortion = value == 0 ? nil : value },
+                       help: "Straightens lines that bow outward, or inward with negative values. The photo fills the frame")
+            sectionHeading("Vignetting")
+                .padding(.top, 6)
+            let vignetting = corrections.vignetting ?? LensVignetting()
+            lensSlider("Amount", spoken: "Lens Vignetting Amount", range: LensVignetting.amountRange,
+                       value: vignetting.amount, track: Self.vignetteAmountTrack,
+                       set: { value, lens in Self.setVignetting(&lens) { $0.amount = value } },
+                       help: "Brightens the corners the lens darkened, or darkens them")
+            // The midpoint does nothing without an amount, as in Lightroom.
+            lensSlider("Midpoint", spoken: "Lens Vignetting Midpoint", range: LensVignetting.midpointRange,
+                       value: vignetting.midpoint, showsSign: false, defaultValue: 50,
+                       set: { value, lens in Self.setVignetting(&lens) { $0.midpoint = value } },
+                       help: "How far toward the center the correction reaches")
+                .disabled(vignetting.amount == 0)
         }
         .disabled(edit == nil)
+    }
+
+    /// Changes the lens vignetting, back to `nil` at its defaults so the edit stays neutral.
+    private static func setVignetting(_ lens: inout LensCorrections, _ change: (inout LensVignetting) -> Void) {
+        var vignetting = lens.vignetting ?? LensVignetting()
+        change(&vignetting)
+        lens.vignetting = vignetting == LensVignetting() ? nil : vignetting
+    }
+
+    private func lensSlider(_ title: String, spoken: String, range: ClosedRange<Double>, value: Double,
+                            showsSign: Bool = true, track: [Color] = [], defaultValue: Double = 0,
+                            set: @escaping (Double, inout LensCorrections) -> Void, help: String) -> some View {
+        AdjustmentSlider(
+            title: title,
+            spokenTitle: spoken,
+            value: Binding(get: { value }, set: { new in library.changeEdit { set(new, &$0.lens) } }),
+            range: range, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+            showsSign: showsSign, track: track,
+            reset: { library.changeEdit { set(defaultValue, &$0.lens) } },
+            isAdjusting: { library.isAdjusting = $0 })
+            .help(help)
     }
 
     /// A switch on the card's trailing edge, lined up with the cards' own, with its name ahead of

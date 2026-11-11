@@ -3,8 +3,8 @@ import Foundation
 import ImageIO
 
 /// Lens corrections: the profile, the distortion and vignetting correction that `CIRAWFilter`
-/// reads from the RAW file where the camera or Apple provides one, and chromatic aberration,
-/// which Proof measures itself.
+/// reads from the RAW file where the camera or Apple provides one, chromatic aberration, which
+/// Proof measures itself, and manual distortion and vignetting for lenses without a profile.
 public struct LensCorrections: Codable, Equatable, Sendable {
     /// Whether the profile applies. `nil` keeps the decoder's default for the photo, which is how
     /// every edit rendered before this setting existed.
@@ -12,29 +12,45 @@ public struct LensCorrections: Codable, Equatable, Sendable {
     /// Measured when Remove Chromatic Aberration is turned on; `nil` while it is off. The values
     /// are kept, not measured again, so the photo renders the same in a later version.
     public var chromaticAberration: ChromaticAberration?
+    /// Manual distortion, -100 to 100: positive straightens lines that bow outward (barrel),
+    /// negative lines that bow inward (pincushion). `nil` at 0. See `LensDistortion`.
+    public var distortion: Double?
+    /// Manual lens vignetting; `nil` while Amount is 0. See `LensVignetting`.
+    public var vignetting: LensVignetting?
 
-    public init(profile: Bool? = nil, chromaticAberration: ChromaticAberration? = nil) {
+    public static let distortionRange = -100.0...100.0
+
+    public init(profile: Bool? = nil, chromaticAberration: ChromaticAberration? = nil,
+                distortion: Double? = nil, vignetting: LensVignetting? = nil) {
         self.profile = profile
         self.chromaticAberration = chromaticAberration
+        self.distortion = distortion
+        self.vignetting = vignetting
     }
 
-    private enum CodingKeys: String, CodingKey { case profile, chromaticAberration }
+    private enum CodingKeys: String, CodingKey { case profile, chromaticAberration, distortion, vignetting }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         profile = try c.decodeIfPresent(Bool.self, forKey: .profile)
         chromaticAberration = try c.decodeIfPresent(ChromaticAberration.self, forKey: .chromaticAberration)
+        distortion = try c.decodeIfPresent(Double.self, forKey: .distortion)
+        vignetting = try c.decodeIfPresent(LensVignetting.self, forKey: .vignetting)
     }
 
-    /// Writes the decoder's default and no chromatic aberration as `null`, so saving over a sidecar
+    /// Writes the decoder's default and settings that are off as `null`, so saving over a sidecar
     /// that had a value replaces it instead of keeping the old one (see `Sidecar`).
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(profile, forKey: .profile)
         try c.encode(chromaticAberration, forKey: .chromaticAberration)
+        try c.encode(distortion, forKey: .distortion)
+        try c.encode(vignetting, forKey: .vignetting)
     }
 
-    public var isNeutral: Bool { profile == nil && chromaticAberration == nil }
+    public var isNeutral: Bool {
+        profile == nil && chromaticAberration == nil && (distortion ?? 0) == 0 && (vignetting?.amount ?? 0) == 0
+    }
 
     /// Whether the profile applies to a photo taken with `lens`. Never for a photo without one.
     public func appliesProfile(for lens: CameraLens) -> Bool {

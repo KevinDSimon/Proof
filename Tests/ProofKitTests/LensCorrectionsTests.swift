@@ -36,6 +36,27 @@ struct LensCorrectionsTests {
         #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
     }
 
+    @Test("A lens setting saved before manual corrections has none; manual corrections survive a round trip and write null when off")
+    func migratesWithoutManual() throws {
+        let old = #"{"formatVersion": 3, "processVersion": 1, "lens": {"profile": null, "chromaticAberration": {"red": 1.001, "blue": 0.999}}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        #expect(recipe.lens.distortion == nil)
+        #expect(recipe.lens.vignetting == nil)
+        #expect(recipe.processVersion == 1)
+
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(recipe)) as? [String: Any]
+        let lens = try #require(written?["lens"] as? [String: Any])
+        #expect(lens["distortion"] is NSNull)
+        #expect(lens["vignetting"] is NSNull)
+
+        var edited = EditRecipe()
+        edited.lens.distortion = 12
+        edited.lens.vignetting = LensVignetting(amount: 40, midpoint: 30)
+        #expect(!edited.isNeutral)
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
+        #expect(LensCorrections(distortion: 0, vignetting: LensVignetting(amount: 0, midpoint: 20)).isNeutral)
+    }
+
     @Test("Show Original keeps the lens corrections, so it frames the same picture")
     func originalKeepsLens() {
         var recipe = EditRecipe()
