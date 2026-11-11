@@ -150,6 +150,30 @@ public actor RAWRenderer {
         AutoAdjust.tone(luminances: try samples(of: Self.measuring(recipe)).map(AutoAdjust.luminance))
     }
 
+    /// The chromatic aberration Remove Chromatic Aberration corrects in the open photo, measured
+    /// on the whole uncropped photo with `recipe`'s white balance, detail and lens profile, so the
+    /// measurement doesn't depend on the crop or the tone. Takes about a second.
+    public func chromaticAberration(recipe: EditRecipe) throws -> ChromaticAberration {
+        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        var measured = Self.measuring(recipe)
+        measured.crop = nil
+        measured.lens.chromaticAberration = nil
+        let size = CGSize(width: ChromaticAberration.measuringSize, height: ChromaticAberration.measuringSize)
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                    fitting: size))
+        guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens)
+        else { throw RAWRendererError.renderFailed }
+        let extent = image.extent.integral
+        let width = Int(extent.width), height = Int(extent.height)
+        guard width > 0, height > 0 else { throw RAWRendererError.renderFailed }
+        var bitmap = [Float](repeating: 0, count: width * height * 4)
+        histogramContext.render(image, toBitmap: &bitmap, rowBytes: width * 4 * MemoryLayout<Float>.size,
+                                bounds: extent, format: .RGBAf,
+                                colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB))
+        let pixels = stride(from: 0, to: bitmap.count, by: 4).map { SIMD3(bitmap[$0], bitmap[$0 + 1], bitmap[$0 + 2]) }
+        return ChromaticAberration.measure(pixels, width: width, height: height)
+    }
+
     /// `recipe`'s white balance, detail, lens corrections and crop with every other adjustment at its default, so
     /// Auto measures the photo itself and not the tone, color or look already applied.
     static func measuring(_ recipe: EditRecipe) -> EditRecipe {
@@ -413,7 +437,8 @@ public actor RAWRenderer {
     static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance,
                       cameraDetail: CameraDetail, cameraLens: CameraLens,
                       lut: PreparedLUT? = nil) -> CIImage? {
-        // 1. RAW decode in linear light. White balance is in Kelvin and tint; exposure in stops.
+        // 1. RAW decode in linear light, with the lens profile, then chromatic aberration. White
+        // balance is in Kelvin and tint; exposure in stops.
         // Sharpening and noise reduction are the decoder's own; it sharpens only above half size.
         let whiteBalance = recipe.basic.whiteBalance(asShot: asShot)
         filter.neutralTemperature = Float(whiteBalance.temperature)
@@ -423,7 +448,9 @@ public actor RAWRenderer {
         // The lens profile corrects distortion and vignetting as the decoder reads the file.
         // A photo without one is left alone.
         if cameraLens.hasProfile { filter.isLensCorrectionEnabled = recipe.lens.appliesProfile(for: cameraLens) }
-        guard let decoded = filter.outputImage else { return nil }
+        guard let raw = filter.outputImage else { return nil }
+        // Chromatic aberration next, about the center of the whole photo, where the lens's was.
+        let decoded = ChromaticAberration.apply(recipe.lens.chromaticAberration, to: raw)
         // 2. Tone: highlights and shadows first, then texture and clarity, then dehaze, then
         // contrast, whites, blacks and the tone curve as one lookup.
         let shaded = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)

@@ -756,9 +756,9 @@ struct AdjustmentsInspector: View {
         .disabled(shown == nil)
     }
 
-    /// The lens the photo was taken with and its correction profile, which `CIRAWFilter` applies
-    /// as it decodes. Many RAW files carry none, such as Leica M files; the switch is then off
-    /// and dimmed, with the reason under it.
+    /// The lens the photo was taken with, its correction profile, which `CIRAWFilter` applies as
+    /// it decodes, and Remove Chromatic Aberration, which Proof measures. Many RAW files carry no
+    /// profile, such as Leica M files; its switch is then off and dimmed, with the reason under it.
     private var lensCard: some View {
         let edit = library.selectedEdit
         let lens = edit?.cameraLens
@@ -773,19 +773,23 @@ struct AdjustmentsInspector: View {
                     .textSelection(.enabled)
             }
             .foregroundStyle(InspectorCard<EmptyView>.labelColor)
-            Toggle("Profile Corrections", isOn: Binding(
+            lensSwitch("Remove Chromatic Aberration", isOn: Binding(
+                get: { corrections.chromaticAberration != nil },
+                set: { value in
+                    guard let renderer else { return }
+                    Task { await library.setRemovesChromaticAberration(value, with: renderer) }
+                }),
+                help: "Lines up the red and blue fringes along edges, measured from this photo")
+                .disabled(renderer == nil || library.isAutoAdjusting)
+            lensSwitch("Profile Corrections", isOn: Binding(
                 get: { lens.map { corrections.appliesProfile(for: $0) } ?? false },
                 set: { value in
                     // Back to the decoder's default rather than a saved value when they match,
                     // so the edit stays neutral.
                     library.changeEdit { $0.lens.profile = value == lens?.profileIsOnByDefault ? nil : value }
-                }))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .tint(.green)
-                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                }),
+                help: "Corrects the lens's distortion and darkened corners with the profile in the photo")
                 .disabled(!(lens?.hasProfile ?? false))
-                .help("Corrects the lens's distortion and darkened corners with the profile in the photo")
             if let lens, !lens.hasProfile {
                 Text("This photo has no lens profile.")
                     .font(.callout)
@@ -793,6 +797,23 @@ struct AdjustmentsInspector: View {
             }
         }
         .disabled(edit == nil)
+    }
+
+    /// A switch on the card's trailing edge, lined up with the cards' own, with its name ahead of it.
+    private func lensSwitch(_ title: String, isOn: Binding<Bool>, help: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                .accessibilityHidden(true)
+            Spacer()
+            Toggle(title, isOn: isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                // Green, as the cards' own switches are.
+                .tint(.green)
+                .labelsHidden()
+        }
+        .help(help)
     }
 
     /// Lightroom's post-crop vignette: it centers on the cropped frame and follows any crop.
