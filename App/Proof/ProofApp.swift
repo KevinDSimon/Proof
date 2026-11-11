@@ -565,9 +565,8 @@ struct AdjustmentsInspector: View {
                         guard let renderer else { return }
                         Task { await library.autoTone(with: renderer) }
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .foregroundStyle(library.isAutoAdjusting ? Color.secondary : Color.primary)
                     .disabled(renderer == nil || library.isAutoAdjusting)
                     .help("Set Exposure, Contrast, Highlights, Shadows, Whites and Blacks from the photo")
                     .accessibilityLabel("Auto Tone")
