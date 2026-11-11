@@ -522,6 +522,9 @@ private struct SelectedHistogram: View {
 struct AdjustmentsInspector: View {
     let library: Library
     let renderer: RAWRenderer?
+    /// Whether Transform's Aspect, Scale and Offset are shown; `nil` follows whether the photo
+    /// uses them. Back to `nil` for each photo.
+    @State private var showsMoreTransform: Bool?
 
     var body: some View {
         InspectorPanel {
@@ -853,30 +856,41 @@ struct AdjustmentsInspector: View {
                 .accessibilityLabel("Upright")
             }
             .disabled(renderer == nil || library.isFindingLines)
-            .help("Auto balances level and perspective. Guided follows lines you draw. Level turns the photo level, Vertical also makes upright lines parallel, Full also makes level lines parallel")
+            .help("Auto balances level and perspective. Guided follows lines you draw. Level turns the photo level, Vertical also makes upright lines parallel, Full also makes level lines parallel. Choose a mode again to undo changes to its sliders")
             uprightStatus(transform)
-            lensSwitch("Constrain Crop", isOn: Binding(
-                get: { transform.constrainCrop },
-                set: { value in library.changeEdit { $0.transform.constrainCrop = value } }),
-                help: "Enlarges the corrected photo so it fills the frame, with no empty edges")
-            sectionHeading("Manual")
-                .padding(.top, 6)
+            // The sliders Upright sets, and the ones most often nudged by hand.
             transformSlider("Vertical", \.vertical, range: PerspectiveTransform.tiltRange,
                             help: "Tilts the photo top to bottom. Negative values straighten a building that leans back")
             transformSlider("Horizontal", \.horizontal, range: PerspectiveTransform.tiltRange,
                             help: "Tilts the photo side to side, to face a wall square on")
             transformSlider("Rotate", \.rotate, range: PerspectiveTransform.rotateRange, step: 0.1, fractionDigits: 1,
                             unit: "degrees", help: "Turns the photo, in degrees clockwise")
-            transformSlider("Aspect", \.aspect, range: PerspectiveTransform.aspectRange,
-                            help: "Stretches the photo across, or upward with negative values, to undo the stretch a correction leaves")
-            transformSlider("Scale", \.scale, range: PerspectiveTransform.scaleRange, defaultValue: 100, showsSign: false,
-                            unit: "percent", help: "Enlarges or shrinks the photo about its center")
-            transformSlider("X Offset", \.xOffset, range: PerspectiveTransform.offsetRange,
-                            help: "Moves the photo right, or left with negative values")
-            transformSlider("Y Offset", \.yOffset, range: PerspectiveTransform.offsetRange,
-                            help: "Moves the photo up, or down with negative values")
+            // Rarely needed, so closed unless the photo uses them.
+            let usesMore = transform.aspect != 0 || transform.scale != 100 || transform.xOffset != 0 || transform.yOffset != 0
+            DisclosureGroup("Aspect, Scale and Offset", isExpanded: Binding(
+                get: { showsMoreTransform ?? usesMore },
+                set: { showsMoreTransform = $0 })) {
+                VStack(alignment: .leading, spacing: InspectorCard<EmptyView>.controlSpacing) {
+                    transformSlider("Aspect", \.aspect, range: PerspectiveTransform.aspectRange,
+                                    help: "Stretches the photo across, or upward with negative values, to undo the stretch a correction leaves")
+                    transformSlider("Scale", \.scale, range: PerspectiveTransform.scaleRange, defaultValue: 100, showsSign: false,
+                                    unit: "percent", help: "Enlarges or shrinks the photo about its center")
+                    transformSlider("X Offset", \.xOffset, range: PerspectiveTransform.offsetRange,
+                                    help: "Moves the photo right, or left with negative values")
+                    transformSlider("Y Offset", \.yOffset, range: PerspectiveTransform.offsetRange,
+                                    help: "Moves the photo up, or down with negative values")
+                }
+                .padding(.top, 6)
+            }
+            .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+            // A setting about the result, so it comes last.
+            lensSwitch("Constrain Crop", isOn: Binding(
+                get: { transform.constrainCrop },
+                set: { value in library.changeEdit { $0.transform.constrainCrop = value } }),
+                help: "Enlarges the corrected photo so it fills the frame, with no empty edges")
         }
         .disabled(edit == nil)
+        .onChange(of: library.browse.selectedPhoto) { showsMoreTransform = nil }
     }
 
     /// Upright's menu, grouped as in Lightroom: Off, then Auto and Guided, then the fixed
@@ -895,7 +909,7 @@ struct AdjustmentsInspector: View {
     }
 
     /// What Upright is doing below its menu: looking for lines, finding none, or Guided's
-    /// instructions and buttons.
+    /// guide count and buttons.
     @ViewBuilder
     private func uprightStatus(_ transform: PerspectiveTransform) -> some View {
         if library.isFindingLines {
@@ -909,21 +923,21 @@ struct AdjustmentsInspector: View {
             Text("No straight lines found in this photo.")
                 .foregroundStyle(.secondary)
         } else if transform.upright == .guided {
-            if library.isDrawingGuides {
-                // Short enough for one line: a longer text widens the inspector, which keeps the width.
-                Text("Drag along 2 to 4 straight edges.")
-                    .foregroundStyle(.secondary)
-                    .help("Draw along edges that should be upright or level. Two each way set every slider")
-            }
+            // One line, so the card keeps its shape as guides are drawn.
             HStack {
-                Button("Clear Guides") { library.clearGuides() }
-                    .disabled(transform.guides.isEmpty)
+                Text("\(transform.guides.count) of \(Library.maximumGuides) guides")
+                    .foregroundStyle(.secondary)
+                    .help("Drag on the photo along edges that should be upright or level. Two each way set every slider")
                 Spacer()
+                Button("Clear") { library.clearGuides() }
+                    .disabled(transform.guides.isEmpty)
+                    .accessibilityLabel("Clear Guides")
                 if library.isDrawingGuides {
                     Button("Done") { library.isDrawingGuides = false }
                         .keyboardShortcut(.cancelAction)
                 } else {
-                    Button("Edit Guides") { library.isDrawingGuides = true }
+                    Button("Draw") { library.isDrawingGuides = true }
+                        .accessibilityLabel("Draw Guides")
                 }
             }
             .controlSize(.small)
