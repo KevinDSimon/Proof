@@ -516,10 +516,8 @@ struct AdjustmentsInspector: View {
             InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
                           canReset: basic.whiteBalance != .asShot,
                           reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
-                // The eyedropper beside the pop-up, as in Lightroom; Custom is listed only while it is chosen.
+                // The eyedropper after the pop-up; Custom is listed only while it is chosen.
                 HStack {
-                    EyedropperButton(isOn: library.isPickingWhiteBalance) { library.toggleWhiteBalancePicker() }
-                        .disabled(renderer == nil)
                     MenuPopUp(title: Self.title(of: basic.whiteBalance),
                               items: WhiteBalancePreset.allCases
                                   .filter { $0 != .custom || basic.whiteBalance == .custom }
@@ -535,6 +533,8 @@ struct AdjustmentsInspector: View {
                                   })
                         .frame(maxWidth: .infinity)
                         .accessibilityLabel("White Balance Preset")
+                    EyedropperButton(isOn: library.isPickingWhiteBalance) { library.toggleWhiteBalancePicker() }
+                        .disabled(renderer == nil)
                 }
                 AdjustmentSlider(
                     title: "Temperature",
