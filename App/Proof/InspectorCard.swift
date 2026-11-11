@@ -40,17 +40,21 @@ struct InspectorCard<Content: View>: View {
     }
 
     private func header(_ title: String) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 8) {
             Text(title)
                 .font(.headline)
+                // One line, ahead of the buttons, so "White Balance" doesn't wrap beside Reset.
+                .lineLimit(1)
+                .layoutPriority(1)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             if let reset {
+                // A small bordered button, so it reads as a control beside the title and the switch.
                 Button("Reset", action: reset)
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     .controlSize(.small)
-                    // Primary rather than the accent gray, so it reads as available beside the title.
-                    .foregroundStyle(canReset ? Color.primary : Color.secondary)
+                    .fixedSize()
                     .disabled(!canReset)
                     .accessibilityLabel("Reset \(title)")
             }

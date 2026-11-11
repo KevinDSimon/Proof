@@ -111,6 +111,56 @@ public actor RAWRenderer {
         return try await Horizon.correction(in: cgImage)
     }
 
+    /// The white balance Auto chooses for the open photo, as cropped in `recipe`, from
+    /// `AutoAdjust`. It depends only on the photo and the crop, so choosing it again gives the same.
+    public func autoWhiteBalance(recipe: EditRecipe) throws -> WhiteBalance {
+        var measured = Self.measuring(recipe)
+        let found = try AutoAdjust.whiteBalance(from: asShot) { whiteBalance in
+            measured.basic.temperature = whiteBalance.temperature
+            measured.basic.tint = whiteBalance.tint
+            return AutoAdjust.cast(of: try samples(of: measured))
+        }
+        guard let found else { throw RAWRendererError.renderFailed }
+        return found
+    }
+
+    /// The Tone sliders Auto chooses for the open photo, as cropped and white balanced in
+    /// `recipe`, from `AutoAdjust`. They don't depend on the Tone sliders already set.
+    public func autoTone(recipe: EditRecipe) throws -> AutoAdjust.Tone {
+        AutoAdjust.tone(luminances: try samples(of: Self.measuring(recipe)).map(AutoAdjust.luminance))
+    }
+
+    /// `recipe`'s white balance, detail and crop with every other adjustment at its default, so
+    /// Auto measures the photo itself and not the tone, color or look already applied.
+    static func measuring(_ recipe: EditRecipe) -> EditRecipe {
+        var measured = EditRecipe()
+        measured.basic.whiteBalance = recipe.basic.whiteBalance
+        measured.basic.temperature = recipe.basic.temperature
+        measured.basic.tint = recipe.basic.tint
+        measured.detail = recipe.detail
+        measured.crop = recipe.crop
+        return measured
+    }
+
+    /// The linear RGB pixels of the open photo with `recipe`, at about `AutoAdjust.sampleSize`.
+    private func samples(of recipe: EditRecipe) throws -> [SIMD3<Float>] {
+        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let size = CGSize(width: AutoAdjust.sampleSize, height: AutoAdjust.sampleSize)
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                    crop: recipe.crop, fitting: size))
+        guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail) else {
+            throw RAWRendererError.renderFailed
+        }
+        let extent = image.extent.integral
+        let width = Int(extent.width), height = Int(extent.height)
+        guard width > 0, height > 0 else { throw RAWRendererError.renderFailed }
+        var bitmap = [Float](repeating: 0, count: width * height * 4)
+        histogramContext.render(image, toBitmap: &bitmap, rowBytes: width * 4 * MemoryLayout<Float>.size,
+                                bounds: extent, format: .RGBAf,
+                                colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB))
+        return stride(from: 0, to: bitmap.count, by: 4).map { SIMD3(bitmap[$0], bitmap[$0 + 1], bitmap[$0 + 2]) }
+    }
+
     /// The photo's size in pixels as the camera oriented it, before any crop or turn. Blocks on
     /// file I/O; `nil` if it isn't a RAW photo.
     public static func orientedSize(of url: URL) -> CGSize? {

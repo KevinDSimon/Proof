@@ -143,6 +143,28 @@ struct EditRecipeTests {
         #expect(decoded.basic.tint == 0)
     }
 
+    @Test("Auto white balance is written as auto with its values and survives a JSON round trip")
+    func autoWhiteBalanceRoundTrip() throws {
+        var recipe = EditRecipe()
+        recipe.basic.setAuto(WhiteBalance(temperature: 7010, tint: -1))
+        let data = try JSONEncoder().encode(recipe)
+        let basic = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])["basic"] as? [String: Any]
+        #expect(basic?["whiteBalance"] as? String == "auto")
+        let decoded = try JSONDecoder().decode(EditRecipe.self, from: data)
+        #expect(decoded.basic.whiteBalance == .auto)
+        #expect(decoded.basic.whiteBalance(asShot: Self.asShot) == WhiteBalance(temperature: 7010, tint: -1))
+    }
+
+    @Test("Choosing Auto from the menu changes nothing until the photo is measured, and Auto stays within range")
+    func autoNeedsThePhoto() {
+        var basic = BasicAdjustments()
+        basic.choose(.auto)
+        #expect(basic == BasicAdjustments())
+        basic.setAuto(WhiteBalance(temperature: 90000, tint: -400))
+        #expect(basic.temperature == WhiteBalance.temperatureRange.upperBound)
+        #expect(basic.tint == WhiteBalance.tintRange.lowerBound)
+    }
+
     @Test("A white balance preset this version doesn't know reads as Custom with its values")
     func unknownPresetIsCustom() throws {
         let json = #"{"formatVersion": 2, "basic": {"whiteBalance": "candlelight", "temperature": 1900, "tint": 5}}"#

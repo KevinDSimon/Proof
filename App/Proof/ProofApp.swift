@@ -163,7 +163,7 @@ struct ContentView: View {
                     if library.isCropping {
                         CropInspector(library: library, renderer: renderer)
                     } else {
-                        AdjustmentsInspector(library: library)
+                        AdjustmentsInspector(library: library, renderer: renderer)
                     }
                 }
                 .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
@@ -493,6 +493,7 @@ private struct SelectedHistogram: View {
 /// plain color as the photo's canvas, so the panel and the photo read as one surface.
 struct AdjustmentsInspector: View {
     let library: Library
+    let renderer: RAWRenderer?
 
     var body: some View {
         InspectorPanel {
@@ -509,7 +510,12 @@ struct AdjustmentsInspector: View {
                               .filter { $0 != .custom || basic.whiteBalance == .custom }
                               .map { preset in
                                   .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
-                                      library.changeEdit { $0.basic.choose(preset) }
+                                      if preset == .auto {
+                                          guard let renderer else { return }
+                                          Task { await library.autoWhiteBalance(with: renderer) }
+                                      } else {
+                                          library.changeEdit { $0.basic.choose(preset) }
+                                      }
                                   }
                               })
                     .frame(maxWidth: .infinity)
@@ -551,8 +557,21 @@ struct AdjustmentsInspector: View {
                                   $0.basic.blacks = 0
                               }
                           }) {
-                // Grouped and ordered as in Lightroom's Basic panel.
-                sectionHeading("Tone")
+                // Grouped and ordered as in Lightroom's Basic panel, with Auto on the Tone row as there.
+                HStack {
+                    sectionHeading("Tone")
+                    Spacer()
+                    Button("Auto") {
+                        guard let renderer else { return }
+                        Task { await library.autoTone(with: renderer) }
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.small)
+                    .disabled(renderer == nil || library.isAutoAdjusting)
+                    .help("Set Exposure, Contrast, Highlights, Shadows, Whites and Blacks from the photo")
+                    .accessibilityLabel("Auto Tone")
+                }
                 AdjustmentSlider(
                     title: "Exposure",
                     value: Binding(get: { basic.exposure },
@@ -767,6 +786,7 @@ struct AdjustmentsInspector: View {
     private static func title(of preset: WhiteBalancePreset) -> String {
         switch preset {
         case .asShot: "As Shot"
+        case .auto: "Auto"
         case .daylight: "Daylight"
         case .cloudy: "Cloudy"
         case .shade: "Shade"
