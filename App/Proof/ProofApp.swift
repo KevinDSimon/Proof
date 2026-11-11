@@ -566,6 +566,7 @@ struct AdjustmentsInspector: View {
                         Task { await library.autoTone(with: renderer) }
                     }
                     .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     .controlSize(.small)
                     .disabled(renderer == nil || library.isAutoAdjusting)
                     .help("Set Exposure, Contrast, Highlights, Shadows, Whites and Blacks from the photo")

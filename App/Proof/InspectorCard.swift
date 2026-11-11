@@ -52,6 +52,7 @@ struct InspectorCard<Content: View>: View {
                 // A small bordered button, so it reads as a control beside the title and the switch.
                 Button("Reset", action: reset)
                     .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     .controlSize(.small)
                     .fixedSize()
                     .disabled(!canReset)
