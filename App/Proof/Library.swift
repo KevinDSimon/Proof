@@ -106,6 +106,7 @@ final class Library {
     }
 
     func setOn(_ group: AdjustmentGroup, _ isOn: Bool) {
+        showEdited()
         if isOn { offGroups.remove(group) } else { offGroups.insert(group) }
     }
     /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
@@ -344,6 +345,7 @@ final class Library {
     /// controls are idle, so a burst of key presses is one undo step.
     func changeEdit(_ change: (inout EditRecipe) -> Void) {
         guard let photo = browse.selectedPhoto, edits[photo] != nil else { return }
+        showEdited()
         change(&edits[photo]!.recipe)
         commitTask?.cancel()
         guard !isAdjusting else { return }
@@ -390,6 +392,7 @@ final class Library {
         guard let photo = browse.selectedPhoto else { return }
         commitEdit(of: photo)
         guard var edit = edits[photo], let recipe = step(&edit.history) else { return }
+        showEdited()
         edit.recipe = recipe
         edits[photo] = edit
         save(photo)
@@ -408,10 +411,23 @@ final class Library {
         commitTask?.cancel()
         commitEdit(of: photo)
         guard var edit = edits[photo] else { return }
+        showEdited()
         edit.history.record(EditRecipe())
         edit.recipe = EditRecipe()
         edits[photo] = edit
         save(photo, reverting: true)
+    }
+
+    /// Photo › Show Original (backslash): the photo without its edit, to compare. Any change to
+    /// the edit, and the crop tool and eyedropper, show the edited photo again, so a change is
+    /// never made out of sight.
+    func toggleOriginal() {
+        guard isEditing, !isCropping, !isPickingWhiteBalance, selectedEdit != nil else { return }
+        browse.toggleOriginal()
+    }
+
+    private func showEdited() {
+        if browse.isShowingOriginal { browse.showEdited() }
     }
 
     /// Reads the selected photo's sidecar the first time it is opened in Edit. Later visits keep
@@ -481,6 +497,7 @@ final class Library {
         commitTask?.cancel()
         commitEdit(of: photo)
         recipeBeforeCrop = edit.recipe
+        showEdited()
         unstraightenedFrame = nil
         isPickingWhiteBalance = false
         isCropping = true
@@ -551,6 +568,7 @@ final class Library {
     /// Opens or closes the White Balance eyedropper.
     func toggleWhiteBalancePicker() {
         guard isEditing, !isCropping, selectedEdit?.asShot != nil else { return }
+        showEdited()
         isPickingWhiteBalance.toggle()
     }
 

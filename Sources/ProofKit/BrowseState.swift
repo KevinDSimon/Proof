@@ -12,11 +12,18 @@ public struct BrowseState: Equatable, Sendable {
         case left, right, up, down
     }
 
-    public private(set) var mode: Mode = .browsing
+    public private(set) var mode: Mode = .browsing {
+        didSet { if mode != oldValue { isShowingOriginal = false } }
+    }
     /// Clearing the selection also leaves Edit, since there is no photo left to edit.
     public var selectedPhoto: PhotoReference? {
-        didSet { if selectedPhoto == nil { mode = .browsing } }
+        didSet {
+            if selectedPhoto == nil { mode = .browsing }
+            if selectedPhoto != oldValue { isShowingOriginal = false }
+        }
     }
+    /// In Edit, the photo is shown without its edit, to compare. Leaving the photo or Edit ends it.
+    public private(set) var isShowingOriginal = false
 
     public init(selectedPhoto: PhotoReference? = nil) {
         self.selectedPhoto = selectedPhoto
@@ -30,6 +37,16 @@ public struct BrowseState: Equatable, Sendable {
     /// Returns to Browse with the same photo selected.
     public mutating func finishEditing() {
         mode = .browsing
+    }
+
+    /// Switches between the edited photo and the original. Only in Edit.
+    public mutating func toggleOriginal() {
+        isShowingOriginal = mode == .editing && !isShowingOriginal
+    }
+
+    /// Shows the edited photo again, as after a change to the edit.
+    public mutating func showEdited() {
+        isShowingOriginal = false
     }
 
     /// Keeps the selection valid after the shown photos or the filter change. A photo that is
