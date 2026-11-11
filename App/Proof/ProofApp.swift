@@ -551,6 +551,8 @@ struct AdjustmentsInspector: View {
                                   $0.basic.blacks = 0
                               }
                           }) {
+                // Grouped and ordered as in Lightroom's Basic panel.
+                sectionHeading("Tone")
                 AdjustmentSlider(
                     title: "Exposure",
                     value: Binding(get: { basic.exposure },
@@ -566,22 +568,6 @@ struct AdjustmentsInspector: View {
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
                     showsSign: true, track: Self.contrastTrack,
                     reset: { library.changeEdit { $0.basic.contrast = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Texture",
-                    value: Binding(get: { basic.texture },
-                                   set: { value in library.changeEdit { $0.basic.texture = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.textureTrack,
-                    reset: { library.changeEdit { $0.basic.texture = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Clarity",
-                    value: Binding(get: { basic.clarity },
-                                   set: { value in library.changeEdit { $0.basic.clarity = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.clarityTrack,
-                    reset: { library.changeEdit { $0.basic.clarity = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
                     title: "Highlights",
@@ -614,6 +600,24 @@ struct AdjustmentsInspector: View {
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
                     showsSign: true, track: Self.blacksTrack,
                     reset: { library.changeEdit { $0.basic.blacks = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                sectionHeading("Presence")
+                    .padding(.top, 6)
+                AdjustmentSlider(
+                    title: "Texture",
+                    value: Binding(get: { basic.texture },
+                                   set: { value in library.changeEdit { $0.basic.texture = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.textureTrack,
+                    reset: { library.changeEdit { $0.basic.texture = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Clarity",
+                    value: Binding(get: { basic.clarity },
+                                   set: { value in library.changeEdit { $0.basic.clarity = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.clarityTrack,
+                    reset: { library.changeEdit { $0.basic.clarity = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
             }
             .disabled(library.selectedEdit == nil)
@@ -674,10 +678,10 @@ struct AdjustmentsInspector: View {
                              reset: { library.changeEdit { $0.detail = DetailAdjustments() } }) {
             // Grouped as in Lightroom's Detail panel, so Detail reads as part of noise reduction
             // rather than as the card's own control.
-            detailHeading("Sharpening")
+            sectionHeading("Sharpening")
             detailSlider("Amount", spoken: "Sharpening Amount", \.sharpening,
                          help: "Shows at 100% zoom, or when the photo is shown at more than half its size")
-            detailHeading("Noise Reduction")
+            sectionHeading("Noise Reduction")
                 .padding(.top, 6)
             detailSlider("Luminance", spoken: "Luminance Noise Reduction", \.noiseReduction,
                          help: "Smooths brightness noise. The camera's amount follows the photo's ISO")
@@ -692,7 +696,8 @@ struct AdjustmentsInspector: View {
         .disabled(shown == nil)
     }
 
-    private func detailHeading(_ title: String) -> some View {
+    /// A heading over a group of sliders inside a card, as in Lightroom's panels.
+    private func sectionHeading(_ title: String) -> some View {
         Text(title)
             .font(.callout.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -737,9 +742,8 @@ struct AdjustmentsInspector: View {
     private static let exposureTrack = [Color(white: 0), Color(white: 0.97)]
     /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
     private static let contrastTrack = exposureTrack
-    /// Texture and Clarity change detail rather than brightness, so their tracks are a plain
-    /// neutral gray, as Lightroom draws them.
-    private static let textureTrack = [Color(white: 0.55), Color(white: 0.55)]
+    /// Texture and Clarity run light to dark, the reverse of the tone sliders, as Lightroom draws them.
+    private static let textureTrack = Array(exposureTrack.reversed())
     private static let clarityTrack = textureTrack
     private static let highlightsTrack = exposureTrack
     private static let shadowsTrack = exposureTrack
