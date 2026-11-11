@@ -25,6 +25,7 @@ extension EditRecipe {
             recipe.basic.contrast = 0
             recipe.basic.texture = 0
             recipe.basic.clarity = 0
+            recipe.basic.dehaze = 0
             recipe.basic.highlights = 0
             recipe.basic.shadows = 0
             recipe.basic.whites = 0

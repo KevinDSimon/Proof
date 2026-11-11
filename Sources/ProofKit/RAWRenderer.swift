@@ -412,13 +412,14 @@ public actor RAWRenderer {
         filter.exposure = Float(recipe.basic.exposure)
         recipe.detail.decoded(camera: cameraDetail).apply(to: filter)
         guard let decoded = filter.outputImage else { return nil }
-        // 2. Tone: highlights and shadows first, then texture and clarity, then contrast, whites,
-        // blacks and the tone curve as one lookup.
+        // 2. Tone: highlights and shadows first, then texture and clarity, then dehaze, then
+        // contrast, whites, blacks and the tone curve as one lookup.
         let shaded = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)
         let detailed = TextureClarity.apply(to: shaded, texture: recipe.basic.texture, clarity: recipe.basic.clarity)
+        let dehazed = Dehaze.apply(to: detailed, amount: recipe.basic.dehaze)
         let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks,
                                curve: recipe.curve)
-            .apply(to: detailed)
+            .apply(to: dehazed)
         // 3. Color: vibrance, then saturation.
         let colored = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
         // 4. LUT, blended by strength.
