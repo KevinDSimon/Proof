@@ -672,17 +672,31 @@ struct AdjustmentsInspector: View {
         let shown = shownDetail
         return InspectorCard(title: "Detail", isOn: library.isOnBinding(.detail), canReset: !detail.isNeutral,
                              reset: { library.changeEdit { $0.detail = DetailAdjustments() } }) {
-            detailSlider("Sharpening", \.sharpening,
+            // Grouped as in Lightroom's Detail panel, so Detail reads as part of noise reduction
+            // rather than as the card's own control.
+            detailHeading("Sharpening")
+            detailSlider("Amount", spoken: "Sharpening Amount", \.sharpening,
                          help: "Shows at 100% zoom, or when the photo is shown at more than half its size")
-            detailSlider("Noise Reduction", \.noiseReduction,
+            detailHeading("Noise Reduction")
+                .padding(.top, 6)
+            detailSlider("Luminance", spoken: "Luminance Noise Reduction", \.noiseReduction,
                          help: "Smooths brightness noise. The camera's amount follows the photo's ISO")
-            detailSlider("Detail", \.noiseReductionDetail,
-                         help: "How much fine detail noise reduction keeps")
-            detailSlider("Color Noise Reduction", \.colorNoiseReduction,
+            detailSlider("Detail", spoken: "Noise Reduction Detail", \.noiseReductionDetail,
+                         help: "How much fine detail luminance noise reduction keeps. No effect while Luminance is 0")
+                // `CIRAWFilter` ignores it without luminance noise reduction to temper.
+                .disabled((shown?.noiseReduction ?? 0) == 0)
+            detailSlider("Color", spoken: "Color Noise Reduction", \.colorNoiseReduction,
                          help: "Smooths colored speckles")
         }
         // The sliders can't show the camera's values until they have been read from the photo.
         .disabled(shown == nil)
+    }
+
+    private func detailHeading(_ title: String) -> some View {
+        Text(title)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .accessibilityAddTraits(.isHeader)
     }
 
     /// The detail amounts the photo shows, the camera's where the edit has none; `nil` until the
@@ -692,10 +706,11 @@ struct AdjustmentsInspector: View {
         return edit.cameraDetail.map { edit.recipe.detail.shown(camera: $0) }
     }
 
-    private func detailSlider(_ title: String, _ keyPath: WritableKeyPath<DetailAdjustments, Double?>,
+    private func detailSlider(_ title: String, spoken: String, _ keyPath: WritableKeyPath<DetailAdjustments, Double?>,
                               help: String) -> some View {
         AdjustmentSlider(
             title: title,
+            spokenTitle: spoken,
             // Read from the edit on each call, not from a copy taken when the card was drawn: the
             // slider reads the value back right after setting it, to show the number.
             value: Binding(get: { shownDetail?[keyPath: keyPath] ?? 0 },
