@@ -844,7 +844,9 @@ struct AdjustmentsInspector: View {
             InspectorField("Upright") {
                 uprightStatus
             } content: {
-                MenuPopUp(title: Self.title(of: transform.upright), items: Array(Self.uprightGroups.map { group in
+                // The chosen mode at once, while Upright looks for lines for it.
+                let shownMode = library.isFindingLines ? library.findingMode : transform.upright
+                MenuPopUp(title: Self.title(of: shownMode), items: Array(Self.uprightGroups.map { group in
                     group.map { mode -> MenuPopUp.Item in
                         .action(Self.title(of: mode), isChecked: mode == transform.upright) {
                             guard let renderer else { return }
@@ -857,7 +859,7 @@ struct AdjustmentsInspector: View {
                 .disabled(renderer == nil || library.isFindingLines)
             }
             .help("Auto balances level and perspective. Guided follows lines you draw. Level turns the photo level, Vertical also makes upright lines parallel, Full also makes level lines parallel. Choose a mode again to undo changes to its sliders")
-            if transform.upright == .guided { guidedButtons(transform) }
+            if transform.upright == .guided && !library.isFindingLines { guidedButtons(transform) }
             // Under Upright, as in Lightroom Classic: Upright's corrections are the ones that leave
             // empty edges, and it sets how every slider below comes out.
             lensSwitch("Constrain Crop", isOn: Binding(

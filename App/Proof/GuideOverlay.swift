@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Guided Upright's tool on the photo, as in Lightroom: a drag draws a line along something that
 /// should be upright or level, and the photo is corrected to it at once. Dragging a guide's end
-/// moves it. The guides drawn so far
+/// moves it, and clicking one selects it for Delete to remove. The guides drawn so far
 /// are shown where they now fall on the corrected photo. A temporary tool, so it may sit on the
 /// photo. The canvas shows the whole photo meanwhile, uncropped and unturned, so a guide can
 /// reach any edge.
@@ -25,9 +25,15 @@ struct GuideOverlay: View {
     @State private var drag: Drag?
     /// The guide end under the pointer, which grows and takes an open-hand pointer to show it can be moved.
     @State private var hovered: (index: Int, isStart: Bool)?
+    /// The guide clicked on, drawn thicker, which Delete removes.
+    @State private var selected: Int?
+    /// Held while a guide is selected, so Delete reaches it.
+    @FocusState private var isFocused: Bool
 
     /// How close, in points, a press must be to a guide's end to move it rather than draw.
     private static let endReach = 10.0
+    /// How close, in points, a click must be to a guide to select it.
+    private static let lineReach = 6.0
 
     var body: some View {
         GeometryReader { geometry in
@@ -35,13 +41,17 @@ struct GuideOverlay: View {
             let map = transform.homography(for: photoSize)
             let ends = shownEnds(map: map, photo: photo)
             Canvas { context, _ in
-                var lines = Path(), handles = Path()
+                var lines = Path(), handles = Path(), chosen = Path()
                 for (index, guide) in ends.enumerated() {
                     var (start, end) = guide
                     if case let .moving(moved, isStart, to)? = drag, moved == index {
                         if isStart { start = to } else { end = to }
                     }
-                    lines.move(to: start); lines.addLine(to: end)
+                    if index == selected {
+                        chosen.move(to: start); chosen.addLine(to: end)
+                    } else {
+                        lines.move(to: start); lines.addLine(to: end)
+                    }
                     for (point, isStart) in [(start, true), (end, false)] {
                         let active = (hovered.map { $0.index == index && $0.isStart == isStart } ?? false)
                             || { if case let .moving(moved, movedStart, _)? = drag { return moved == index && movedStart == isStart }; return false }()
@@ -55,9 +65,23 @@ struct GuideOverlay: View {
                 var shadowed = context
                 shadowed.addFilter(.shadow(color: .black.opacity(0.6), radius: 1.5))
                 shadowed.stroke(lines, with: .color(.white), lineWidth: 1.5)
+                shadowed.stroke(chosen, with: .color(.white), lineWidth: 3.5)
                 shadowed.fill(handles, with: .color(.white))
             }
             .contentShape(Rectangle())
+            .focusable()
+            .focused($isFocused)
+            .focusEffectDisabled()
+            // Delete, and Edit › Delete, remove the selected guide.
+            .onDeleteCommand {
+                guard let index = selected else { return }
+                selected = nil
+                library.removeGuide(at: index)
+            }
+            .onChange(of: transform.guides.count) { selected = nil }
+            .accessibilityElement()
+            .accessibilityLabel("Guides")
+            .accessibilityValue("\(transform.guides.count) of \(Library.maximumGuides) drawn")
             .pointerStyle(drag.map { if case .moving = $0 { return .grabActive }; return .rectSelection }
                           ?? (hovered == nil ? .rectSelection : .grabIdle))
             .onContinuousHover { phase in
@@ -82,9 +106,15 @@ struct GuideOverlay: View {
                         let moved = hypot(value.location.x - value.startLocation.x, value.location.y - value.startLocation.y)
                         switch drag {
                         case let .moving(index, isStart, to)?:
+                            select(index)
                             guard moved >= 2, let point = source(of: to, map: map, photo: photo) else { return }
                             library.moveGuideEnd(at: index, isStart: isStart, to: point)
                         case .drawing?:
+                            // A click selects the guide under it, or nothing.
+                            if moved < 8 {
+                                select(guide(near: value.startLocation, in: ends))
+                                return
+                            }
                             guard moved >= 8,
                                   let start = source(of: value.startLocation, map: map, photo: photo),
                                   let end = source(of: value.location, map: map, photo: photo) else { return }
@@ -98,13 +128,11 @@ struct GuideOverlay: View {
         // happens. Material and the label color keep it gray in either appearance.
         .overlay(alignment: .top) {
             HStack(spacing: 10) {
-                Text(transform.guides.isEmpty
-                        ? "Drag along an edge that should be straight"
-                        : "Drag along another edge, or drag an end to adjust · \(transform.guides.count) of \(Library.maximumGuides)")
+                Text(instructions + (transform.guides.isEmpty ? "" : " · \(transform.guides.count) of \(Library.maximumGuides)"))
                     .monospacedDigit()
-                Button("Clear") { library.clearGuides() }
+                Button("Clear All") { library.clearGuides() }
                     .disabled(transform.guides.isEmpty)
-                    .accessibilityLabel("Clear Guides")
+                    .accessibilityLabel("Clear All Guides")
                 Button("Done") { library.isDrawingGuides = false }
                     .keyboardShortcut(.cancelAction)
                     .help("Stop drawing guides (Esc)")
@@ -118,9 +146,33 @@ struct GuideOverlay: View {
             .background(.regularMaterial, in: Capsule())
             .padding(.top, 12)
         }
-        .accessibilityElement()
-        .accessibilityLabel("Guides")
-        .accessibilityValue("\(transform.guides.count) of \(Library.maximumGuides) drawn")
+    }
+
+    /// What to do next, leading the pill.
+    private var instructions: String {
+        if selected != nil { return "Press Delete to remove the selected guide" }
+        if transform.guides.isEmpty { return "Drag along an edge that should be straight" }
+        return "Drag along another edge, drag an end to adjust, or click a guide"
+    }
+
+    /// Selects the guide at `index`, or none, and takes focus so Delete reaches it.
+    private func select(_ index: Int?) {
+        selected = index
+        if index != nil { isFocused = true }
+    }
+
+    /// The guide within reach of `point`, the nearest if several are.
+    private func guide(near point: CGPoint, in ends: [(CGPoint, CGPoint)]) -> Int? {
+        var best: (index: Int, distance: Double)?
+        for (index, guide) in ends.enumerated() {
+            let (a, b) = guide
+            let dx = b.x - a.x, dy = b.y - a.y
+            let lengthSquared = dx * dx + dy * dy
+            let t = lengthSquared > 0 ? min(max(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared, 0), 1) : 0
+            let distance = hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy))
+            if distance <= Self.lineReach, distance < (best?.distance ?? .infinity) { best = (index, distance) }
+        }
+        return best?.index
     }
 
     /// Each guide's ends where they now fall on the canvas.

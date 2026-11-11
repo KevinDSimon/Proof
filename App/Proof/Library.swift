@@ -635,6 +635,8 @@ final class Library {
 
     /// Upright is looking for lines in the selected photo.
     private(set) var isFindingLines = false
+    /// The mode Upright is looking for lines for, which the menu shows meanwhile.
+    private(set) var findingMode: UprightMode?
     /// Upright found no lines to go by, which the Transform card shows for a moment.
     private(set) var foundNoLines = false
     /// Guided is open: a drag on the photo draws a line to make upright or level.
@@ -672,6 +674,7 @@ final class Library {
             isDrawingGuides = false
             guard !isFindingLines, let url = selectedPhotoURL else { return }
             isFindingLines = true
+            findingMode = mode
             defer { isFindingLines = false }
             if foundLines?.photo != photo || foundLines?.lens != recipe.lens {
                 do {
@@ -685,16 +688,23 @@ final class Library {
             }
             // Another photo may have been chosen meanwhile.
             guard browse.selectedPhoto == photo, let found = foundLines, found.photo == photo else { return }
-            guard let solved = Upright.solve(mode, segments: found.segments, size: found.size,
-                                             from: recipe.transform) else {
+            // With no lines to go by, the mode is still the one chosen, so the menu shows it, but
+            // it corrects nothing.
+            let solved = Upright.solve(mode, segments: found.segments, size: found.size, from: recipe.transform)
+            changeEdit { recipe in
+                if let solved {
+                    recipe.transform = solved
+                    recipe.crop?.angle = 0
+                } else {
+                    recipe.transform = recipe.transform.with(vertical: 0, horizontal: 0, rotate: 0)
+                    recipe.transform.upright = mode
+                    recipe.transform.guides = []
+                }
+            }
+            if solved == nil {
                 foundNoLines = true
                 try? await Task.sleep(for: .seconds(2))
                 foundNoLines = false
-                return
-            }
-            changeEdit { recipe in
-                recipe.transform = solved
-                recipe.crop?.angle = 0
             }
         }
     }
@@ -718,6 +728,16 @@ final class Library {
         changeEdit { recipe in
             guard recipe.transform.guides.indices.contains(index) else { return }
             if isStart { recipe.transform.guides[index].start = point } else { recipe.transform.guides[index].end = point }
+            recipe.transform = Self.solveGuides(recipe.transform, size: size)
+        }
+    }
+
+    /// Removes the guide at `index` and straightens to the ones left.
+    func removeGuide(at index: Int) {
+        let size = selectedEdit?.size
+        changeEdit { recipe in
+            guard recipe.transform.guides.indices.contains(index) else { return }
+            recipe.transform.guides.remove(at: index)
             recipe.transform = Self.solveGuides(recipe.transform, size: size)
         }
     }
