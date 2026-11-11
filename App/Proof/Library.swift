@@ -608,12 +608,19 @@ final class Library {
         }
     }
 
+    /// Remove Chromatic Aberration is measuring the selected photo. Its switch shows on meanwhile,
+    /// with a spinner, so turning it on answers at once.
+    private(set) var isMeasuringChromaticAberration = false
+
     /// Turns Remove Chromatic Aberration on, measuring the selected photo's fringes, or off.
     func setRemovesChromaticAberration(_ isOn: Bool, with renderer: RAWRenderer) async {
         guard isOn else {
             changeEdit { $0.lens.chromaticAberration = nil }
             return
         }
+        guard !isAutoAdjusting else { return }
+        isMeasuringChromaticAberration = true
+        defer { isMeasuringChromaticAberration = false }
         await autoAdjust(with: renderer, what: "chromatic aberration") { renderer, recipe in
             let found = try await renderer.chromaticAberration(recipe: recipe)
             return { $0.lens.chromaticAberration = found }

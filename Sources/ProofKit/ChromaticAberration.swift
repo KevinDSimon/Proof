@@ -23,84 +23,153 @@ public struct ChromaticAberration: Codable, Equatable, Sendable {
     static let measuringSize = 3000.0
 
     /// Measures the scales that line red and blue up with green in `pixels`, the whole uncropped
-    /// photo in linear RGB, `width` by `height`, row by row. Only edges that run across the
-    /// direction from the center, away from it and not clipped, are compared, since those are
-    /// the ones lateral aberration moves. A photo with too few such edges measures as 1.
+    /// photo in linear RGB, `width` by `height`, row by row.
     static func measure(_ pixels: [SIMD3<Float>], width: Int, height: Int) -> ChromaticAberration {
-        guard width >= 16, height >= 16, pixels.count == width * height else { return ChromaticAberration() }
-        // Square roots, so dark and bright edges count about alike, as they look.
-        var red = [Float](repeating: 0, count: pixels.count)
-        var green = red, blue = red
-        var clipped = [Bool](repeating: false, count: pixels.count)
-        for (i, p) in pixels.enumerated() {
-            red[i] = max(p.x, 0).squareRoot()
-            green[i] = max(p.y, 0).squareRoot()
-            blue[i] = max(p.z, 0).squareRoot()
-            clipped[i] = max(p.x, p.y, p.z) > 0.9
-        }
-
-        let center = SIMD2(Float(width - 1) / 2, Float(height - 1) / 2)
-        let halfDiagonal = (center * center).sum().squareRoot()
-        var edges: [Edge] = []
-        for y in 2..<(height - 2) {
-            for x in 2..<(width - 2) {
-                let i = y * width + x
-                if clipped[i] || clipped[i - 1] || clipped[i + 1] || clipped[i - width] || clipped[i + width] { continue }
-                let offset = SIMD2(Float(x), Float(y)) - center
-                let radius = (offset * offset).sum().squareRoot()
-                guard radius > 0.3 * halfDiagonal else { continue }
-                let outward = offset / radius
-                let gradient = SIMD2(green[i + 1] - green[i - 1], green[i + width] - green[i - width]) / 2
-                let along = (gradient * outward).sum()
-                guard abs(along) > 0.01 else { continue }
-                edges.append(Edge(position: SIMD2(Float(x), Float(y)), outward: outward, green: along))
-            }
-        }
-        // The strongest edges only: weak ones are mostly noise.
-        let count = 40_000
-        guard edges.count >= 200 else { return ChromaticAberration() }
-        if edges.count > count {
-            edges.sort { abs($0.green) > abs($1.green) }
-            edges.removeLast(edges.count - count)
-        }
-        let image = Plane(width: width, height: height)
-        return ChromaticAberration(red: Double(bestScale(of: red, in: image, edges: edges, center: center)),
-                                   blue: Double(bestScale(of: blue, in: image, edges: edges, center: center)))
+        guard pixels.count == width * height else { return ChromaticAberration() }
+        return measure(rgba: pixels.flatMap { [$0.x, $0.y, $0.z, 1] }, width: width, height: height)
     }
 
-    private struct Edge {
-        var position: SIMD2<Float>
-        var outward: SIMD2<Float>
-        /// Green's slope along `outward`.
-        var green: Float
+    /// Measures as above from `rgba`, four floats a pixel, as Core Image renders them. Only edges
+    /// that run across the direction from the center, away from it and not clipped, are compared,
+    /// since those are the ones lateral aberration moves. A photo with too few such edges
+    /// measures as 1. Written over raw buffers, since it reads millions of pixels and has to stay
+    /// quick in a debug build too.
+    static func measure(rgba: [Float], width: Int, height: Int) -> ChromaticAberration {
+        let count = width * height
+        guard width >= 16, height >= 16, rgba.count == count * 4 else { return ChromaticAberration() }
+        // Square roots, so dark and bright edges count about alike, as they look.
+        var red = [Float](repeating: 0, count: count)
+        var green = red, blue = red
+        var clipped = [Bool](repeating: false, count: count)
+        rgba.withUnsafeBufferPointer { source in
+            red.withUnsafeMutableBufferPointer { r in
+                green.withUnsafeMutableBufferPointer { g in
+                    blue.withUnsafeMutableBufferPointer { b in
+                        clipped.withUnsafeMutableBufferPointer { c in
+                            for i in 0..<count {
+                                let x = source[4 * i], y = source[4 * i + 1], z = source[4 * i + 2]
+                                r[i] = x > 0 ? x.squareRoot() : 0
+                                g[i] = y > 0 ? y.squareRoot() : 0
+                                b[i] = z > 0 ? z.squareRoot() : 0
+                                c[i] = x > 0.9 || y > 0.9 || z > 0.9
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Every second pixel each way: edges are many pixels long, so this misses none.
+        let cx = Float(width - 1) / 2, cy = Float(height - 1) / 2
+        let inner = 0.3 * (cx * cx + cy * cy).squareRoot()
+        var edges = Edges()
+        green.withUnsafeBufferPointer { g in
+            clipped.withUnsafeBufferPointer { c in
+                for y in stride(from: 2, to: height - 2, by: 2) {
+                    let dy = Float(y) - cy
+                    for x in stride(from: 2, to: width - 2, by: 2) {
+                        let dx = Float(x) - cx
+                        let radius = (dx * dx + dy * dy).squareRoot()
+                        if radius <= inner { continue }
+                        let i = y * width + x
+                        if c[i] || c[i - 1] || c[i + 1] || c[i - width] || c[i + width] { continue }
+                        let ox = dx / radius, oy = dy / radius
+                        let along = ((g[i + 1] - g[i - 1]) * ox + (g[i + width] - g[i - width]) * oy) / 2
+                        if abs(along) <= 0.01 { continue }
+                        edges.append(dx: dx, dy: dy, ox: ox, oy: oy, green: along)
+                    }
+                }
+            }
+        }
+        guard edges.count >= 200 else { return ChromaticAberration() }
+        // The strongest edges only: weak ones are mostly noise.
+        edges.keepStrongest(20_000)
+        let plane = Plane(width: width, height: height, cx: cx, cy: cy)
+        return ChromaticAberration(red: Double(bestScale(of: red, in: plane, edges: edges)),
+                                   blue: Double(bestScale(of: blue, in: plane, edges: edges)))
+    }
+
+    /// Edges as separate arrays, which a debug build reads much faster than an array of structs.
+    private struct Edges {
+        /// Offset from the center.
+        var dx: [Float] = [], dy: [Float] = []
+        /// The unit direction away from the center.
+        var ox: [Float] = [], oy: [Float] = []
+        /// Green's slope along that direction.
+        var green: [Float] = []
+
+        var count: Int { green.count }
+
+        mutating func append(dx: Float, dy: Float, ox: Float, oy: Float, green slope: Float) {
+            self.dx.append(dx); self.dy.append(dy); self.ox.append(ox); self.oy.append(oy); green.append(slope)
+        }
+
+        /// Keeps about the `limit` steepest, found from a histogram of slopes instead of a sort.
+        mutating func keepStrongest(_ limit: Int) {
+            guard count > limit else { return }
+            let bins = 1024
+            let steepest = green.reduce(0) { max($0, abs($1)) }
+            var histogram = [Int](repeating: 0, count: bins)
+            for slope in green { histogram[min(Int(abs(slope) / steepest * Float(bins)), bins - 1)] += 1 }
+            var kept = 0, bin = bins
+            while bin > 0, kept + histogram[bin - 1] <= limit {
+                bin -= 1
+                kept += histogram[bin]
+            }
+            let threshold = Float(bin) / Float(bins) * steepest
+            var strongest = Edges()
+            for i in 0..<count where abs(green[i]) >= threshold {
+                strongest.append(dx: dx[i], dy: dy[i], ox: ox[i], oy: oy[i], green: green[i])
+            }
+            self = strongest
+        }
     }
 
     private struct Plane {
         var width: Int
         var height: Int
-
-        /// Bilinear, with positions outside held at the edge.
-        func sample(_ values: [Float], at p: SIMD2<Float>) -> Float {
-            let x = min(max(p.x, 0), Float(width - 1)), y = min(max(p.y, 0), Float(height - 1))
-            let x0 = min(Int(x), width - 2), y0 = min(Int(y), height - 2)
-            let fx = x - Float(x0), fy = y - Float(y0)
-            let i = y0 * width + x0
-            let top = values[i] + (values[i + 1] - values[i]) * fx
-            let bottom = values[i + width] + (values[i + width + 1] - values[i + width]) * fx
-            return top + (bottom - top) * fy
-        }
+        var cx: Float
+        var cy: Float
     }
 
     /// The scale at which `channel`'s slopes, read at the scaled positions, best match green's:
     /// a coarse search, a fine one around its best, then a parabola through the finest three.
-    private static func bestScale(of channel: [Float], in image: Plane, edges: [Edge], center: SIMD2<Float>) -> Float {
+    private static func bestScale(of channel: [Float], in plane: Plane, edges: Edges) -> Float {
+        let width = plane.width
+        let maxX = Float(width - 1), maxY = Float(plane.height - 1)
         func score(_ scale: Float) -> Float {
             var product: Float = 0, energy: Float = 0
-            for edge in edges {
-                let p = center + (edge.position - center) * scale
-                let slope = (image.sample(channel, at: p + edge.outward) - image.sample(channel, at: p - edge.outward)) / 2
-                product += slope * edge.green
-                energy += slope * slope
+            channel.withUnsafeBufferPointer { values in
+                edges.dx.withUnsafeBufferPointer { dx in
+                    edges.dy.withUnsafeBufferPointer { dy in
+                        edges.ox.withUnsafeBufferPointer { ox in
+                            edges.oy.withUnsafeBufferPointer { oy in
+                                edges.green.withUnsafeBufferPointer { green in
+                                    for i in 0..<green.count {
+                                        let px = plane.cx + dx[i] * scale, py = plane.cy + dy[i] * scale
+                                        // Bilinear reads one pixel outward and one inward, held inside the photo.
+                                        var taps: (Float, Float) = (0, 0)
+                                        for side in 0..<2 {
+                                            let sign: Float = side == 0 ? 1 : -1
+                                            let x = min(max(px + sign * ox[i], 0), maxX)
+                                            let y = min(max(py + sign * oy[i], 0), maxY)
+                                            let x0 = min(Int(x), width - 2), y0 = min(Int(y), plane.height - 2)
+                                            let fx = x - Float(x0), fy = y - Float(y0)
+                                            let j = y0 * width + x0
+                                            let top = values[j] + (values[j + 1] - values[j]) * fx
+                                            let bottom = values[j + width] + (values[j + width + 1] - values[j + width]) * fx
+                                            let value = top + (bottom - top) * fy
+                                            if side == 0 { taps.0 = value } else { taps.1 = value }
+                                        }
+                                        let slope = (taps.0 - taps.1) / 2
+                                        product += slope * green[i]
+                                        energy += slope * slope
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             return energy > 0 ? product / energy.squareRoot() : 0
         }
@@ -114,8 +183,8 @@ public struct ChromaticAberration: Codable, Equatable, Sendable {
             return found
         }
         let coarse = best(around: 1, step: 0.0004, steps: 10)
-        let step: Float = 0.00005
-        let fine = best(around: coarse.scale, step: step, steps: 8)
+        let step: Float = 0.0001
+        let fine = best(around: coarse.scale, step: step, steps: 4)
         let before = score(fine.scale - step), after = score(fine.scale + step)
         let curvature = before - 2 * fine.score + after
         let shift = curvature < 0 ? min(max((before - after) / (2 * curvature), -0.5), 0.5) : 0

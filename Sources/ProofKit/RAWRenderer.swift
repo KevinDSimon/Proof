@@ -152,8 +152,9 @@ public actor RAWRenderer {
 
     /// The chromatic aberration Remove Chromatic Aberration corrects in the open photo, measured
     /// on the whole uncropped photo with `recipe`'s white balance, detail and lens profile, so the
-    /// measurement doesn't depend on the crop or the tone. Takes about a second.
-    public func chromaticAberration(recipe: EditRecipe) throws -> ChromaticAberration {
+    /// measurement doesn't depend on the crop or the tone. Only the render runs on the actor; the
+    /// measuring runs beside it, so renders of the canvas go on meanwhile.
+    public func chromaticAberration(recipe: EditRecipe) async throws -> ChromaticAberration {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         var measured = Self.measuring(recipe)
         measured.crop = nil
@@ -170,8 +171,9 @@ public actor RAWRenderer {
         histogramContext.render(image, toBitmap: &bitmap, rowBytes: width * 4 * MemoryLayout<Float>.size,
                                 bounds: extent, format: .RGBAf,
                                 colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB))
-        let pixels = stride(from: 0, to: bitmap.count, by: 4).map { SIMD3(bitmap[$0], bitmap[$0 + 1], bitmap[$0 + 2]) }
-        return ChromaticAberration.measure(pixels, width: width, height: height)
+        return await Task.detached(priority: .userInitiated) { [bitmap] in
+            ChromaticAberration.measure(rgba: bitmap, width: width, height: height)
+        }.value
     }
 
     /// `recipe`'s white balance, detail, lens corrections and crop with every other adjustment at its default, so
