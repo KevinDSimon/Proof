@@ -152,6 +152,10 @@ final class Library {
     /// Photos whose rating or flag was changed since the filter or folder last changed. They stay
     /// visible even if the filter no longer matches, so a photo doesn't vanish while it's rated.
     private var changedPhotos: Set<PhotoReference> = []
+    /// Photos whose rating or flag couldn't be saved yet because their folder has a read-only grant.
+    private(set) var unsavedMetadata: Set<PhotoReference> = []
+    /// The latest XMP write. Each waits for the one before, so quick changes land in order.
+    private var metadataWrite: Task<Void, Never>?
     private static let selectionKey = "selectedFolder"
 
     init() {
@@ -287,13 +291,12 @@ final class Library {
         return contents[photo.folder]?.photos.first { $0.name == photo.name }?.metadata
     }
 
-    /// Sets the selected photo's stars. Not saved: Proof doesn't write XMP yet, so the change
-    /// lasts until the folder is read again or Proof quits.
+    /// Sets the selected photo's stars and saves them to its XMP sidecar.
     func setRating(_ rating: Int) {
         changeSelectedMetadata { $0.rating = rating }
     }
 
-    /// Sets the selected photo's flag. Not saved, like `setRating`.
+    /// Sets the selected photo's flag and saves it to its XMP sidecar.
     func setFlag(_ flag: PhotoMetadata.Flag) {
         changeSelectedMetadata { $0.flag = flag }
     }
@@ -306,6 +309,28 @@ final class Library {
         change(&metadata)
         contents[photo.folder]?.photos[index].metadata = metadata
         changedPhotos.insert(photo)
+        saveMetadata(of: photo)
+    }
+
+    /// Writes the photo's rating and flag to its XMP sidecar off the main thread (decision 0022).
+    /// Without write access the change stays in memory, and is saved once the folder is granted.
+    private func saveMetadata(of photo: PhotoReference) {
+        guard let url = url(ofPhoto: photo.name, in: photo.folder),
+              let metadata = contents[photo.folder]?.photos.first(where: { $0.name == photo.name })?.metadata
+        else { return }
+        guard ensureCanWrite(nextTo: url) else {
+            unsavedMetadata.insert(photo)
+            return
+        }
+        unsavedMetadata.remove(photo)
+        let previous = metadataWrite
+        metadataWrite = Task {
+            await previous?.value
+            let result = await Task.detached { try XMPSidecar.save(metadata, for: url) }.result
+            if case .failure(let error) = result {
+                errorMessage = "The rating and flag of “\(photo.name)” couldn't be saved. (\(error.localizedDescription))"
+            }
+        }
     }
 
     // MARK: Edits
@@ -842,6 +867,9 @@ final class Library {
                 }
                 for (photo, edit) in edits where photo.folder.locationID == location.id && edit.unsaved == .noAccess {
                     save(photo)
+                }
+                for photo in unsavedMetadata where photo.folder.locationID == location.id {
+                    saveMetadata(of: photo)
                 }
             }
         } catch {

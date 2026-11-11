@@ -6,7 +6,7 @@ Proof is split into a platform-neutral engine package, `ProofKit`, and thin app 
 
 | Layer | Owns | Never imports |
 | --- | --- | --- |
-| `ProofKit` | Edit recipe, render pipeline, sidecar and XMP reading, `.cube` parsing, thumbnails | AppKit, UIKit, SwiftUI |
+| `ProofKit` | Edit recipe, render pipeline, sidecars, XMP reading and rating writes, `.cube` parsing, thumbnails | AppKit, UIKit, SwiftUI |
 | Mac app (`App/Proof.xcodeproj`) | Folders panel, filmstrip, inspector, canvas, export UI | — |
 | iOS app (later) | The same panels for touch, Files-app folder picking | — |
 
@@ -37,7 +37,7 @@ Zoom renders only what the view shows. `Viewport` in `ProofKit` holds the zoom, 
 | Data | Where it lives | Who writes it |
 | --- | --- | --- |
 | Original RAW | Its own folder | Never written |
-| Ratings, flags and labels | XMP sidecar (`IMG_0001.xmp` or `IMG_0001.DNG.xmp`) or XMP embedded in the DNG | Other apps; Proof reads only |
+| Ratings, flags and labels | XMP sidecar (`IMG_0001.xmp` or `IMG_0001.DNG.xmp`) or XMP embedded in the DNG | Other apps; Proof writes ratings and flags to the sidecar only |
 | Edit recipe | `IMG_0001.DNG.proof` next to the original, JSON | Proof |
 | Thumbnails, folder index | Application Support | Proof; disposable |
 
@@ -85,7 +85,7 @@ The Mac app has one window. Panels sit beside the photo and never cover it; see 
 - Proof's own interface uses only black, white and gray, so no color competes with the photo. The app's accent color is black in the light appearance and 40% gray in the dark; it colors the focused sidebar selection, the filter and the slider. White would make the selected row's text unreadable, because macOS keeps that text white. A selected thumbnail in the grid or the filmstrip has a ring a few points outside the photo, black in light and white in dark, and no fill. Folder symbols in the sidebar are gray. macOS uses an app's accent color only when the system accent is Multicolor; with another system accent, that color shows instead.
 - Thumbnails in the grid and the filmstrip show what other apps recorded in XMP: a flag in the photo's top-right corner if it is flagged, and the rating as a star and a number in its bottom-left, in white on a dark backing. Unflagged and unrated photos show nothing. A rejected photo has no flag badge and is dimmed to 35% opacity, as in Lightroom. VoiceOver reads the rating and flag after the photo's name. The grid shows each photo's file name centered under it; photos sit on the bottom of their square so the name is directly under every photo.
 - In Edit, the toolbar has two groups of buttons: five stars, and Flagged, Unflagged and Rejected. Clicking a star sets the rating and clicking the current one clears it; the current flag is shown selected. The flag icons follow Lightroom: a filled flag, an outlined flag, and a filled flag with an X cut out of it (SF Symbols has no such symbol). The Photo menu has the same choices with Lightroom's keys: 0 to 5 for stars, P, U and X for the flag, in Browse and Edit.
-- Changed ratings and flags are kept only in memory. Proof doesn't write XMP yet, so a change lasts until Proof quits, and other apps don't see it. When a folder is read again, a changed rating stays unless the photo's XMP sidecar has one; XMP read from inside a photo is kept the same way. A photo whose rating or flag changed stays visible until the filter or folder changes, even if the filter no longer matches it. XMP read in the background never replaces a rating already changed.
+- A changed rating or flag is saved to the photo's XMP sidecar by `XMPSidecar`, off the main thread, creating `IMG_0001.xmp` when there is none. Only `xmp:Rating`, `xmpDM:pick` and `xmpDM:good` change; the rest of the file keeps its bytes. See [decision 0022](decisions/0022-writing-ratings.md). In a folder with a read-only grant, Proof asks for access once; until then the change stays in memory, the Edit inspector says it isn't saved, and it is saved once the folder is granted. When a folder is read again, a changed rating stays unless the photo's XMP sidecar has one; XMP read from inside a photo is kept the same way. A photo whose rating or flag changed stays visible until the filter or folder changes, even if the filter no longer matches it. XMP read in the background never replaces a rating already changed.
 - Every toolbar action is also in the menu bar: Add Folder in File; Undo and Redo of edits in Edit; the filter (All, 5-Star Photos and Edited Photos, ⌘1–⌘3 in Browse), Reload Folders (⌘R), Show Sidebar, Show Inspector (⌃⌘I) and the zoom commands in View; Edit (Return), Back to Folder (Esc), Crop (C), Rotate Left (⌘[), Rotate Right (⌘]), Flip Horizontal, Flip Vertical, Next Look (⌥⌘]), Previous Look (⌥⌘[), Rating (0–5) and Flag (P, U, X) in Photo. While cropping, Photo has Done Cropping (Return), Cancel Cropping (Esc) and Swap Crop Orientation (X) in place of Crop, and X no longer rejects the photo.
 - The sidebar selection, All Photos or a folder's `FileReference`, is remembered between launches. A selection saved before All Photos existed is still read. The selected photo is not remembered.
 
