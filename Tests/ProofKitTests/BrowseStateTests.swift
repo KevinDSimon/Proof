@@ -27,6 +27,34 @@ struct BrowseStateTests {
         #expect(state.selectedPhoto == ref(3))
     }
 
+    @Test("Backslash's original shows only in Edit, and ends when leaving the photo or Edit")
+    func showOriginal() {
+        var state = BrowseState(selectedPhoto: ref(3))
+        state.toggleOriginal()
+        #expect(!state.isShowingOriginal)
+
+        state.edit()
+        state.toggleOriginal()
+        #expect(state.isShowingOriginal)
+        state.toggleOriginal()
+        #expect(!state.isShowingOriginal)
+
+        state.toggleOriginal()
+        state.selectedPhoto = ref(3)
+        #expect(state.isShowingOriginal)
+        state.selectedPhoto = ref(4)
+        #expect(!state.isShowingOriginal)
+
+        state.toggleOriginal()
+        state.finishEditing()
+        #expect(!state.isShowingOriginal)
+
+        state.edit()
+        state.toggleOriginal()
+        state.showEdited()
+        #expect(!state.isShowingOriginal)
+    }
+
     @Test("A photo the filter hides is deselected, which leaves Edit")
     func keepOnlyShownPhotos() {
         var state = BrowseState(selectedPhoto: ref(3))

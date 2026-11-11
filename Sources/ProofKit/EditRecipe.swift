@@ -86,6 +86,15 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && vignette.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
+    /// The photo without its adjustments, for Show Original: the crop, with its turns and flips,
+    /// is kept, so the comparison frames the same picture. Geometry added later belongs here too.
+    public var original: EditRecipe {
+        var original = EditRecipe()
+        original.processVersion = processVersion
+        original.crop = crop
+        return original
+    }
+
     /// The sidecar URL for an original photo: the full file name plus `.proof`.
     public static func sidecarURL(for original: URL) -> URL {
         original.deletingLastPathComponent()

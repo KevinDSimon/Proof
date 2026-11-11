@@ -3,6 +3,22 @@ import Testing
 @testable import ProofKit
 
 struct EditRecipeTests {
+    @Test("The original keeps the crop and drops every adjustment")
+    func originalKeepsCrop() {
+        var recipe = EditRecipe()
+        recipe.basic.exposure = 1
+        recipe.vignette.amount = -20
+        recipe.look = Look(lut: "Film.cube", strength: 0.5)
+        recipe.crop = Crop(x: 0.1, y: 0.05, width: 0.8, height: 0.9, angle: 1.5)
+
+        let original = recipe.original
+        #expect(original.crop == recipe.crop)
+        #expect(original.basic.isNeutral)
+        #expect(original.vignette.isNeutral)
+        #expect(original.look == nil)
+        #expect(EditRecipe().original == EditRecipe())
+    }
+
     @Test("A new recipe is neutral and has no layers")
     func newRecipeIsNeutral() {
         let recipe = EditRecipe()

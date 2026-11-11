@@ -74,6 +74,12 @@ struct ProofApp: App {
                     .disabled(!library.isEditing)
                 Button("Revert to Original") { library.revertEdit() }
                     .disabled(!library.isEditing || !library.canRevertEdit)
+                // Backslash, as in Lightroom. A toggle, so the menu marks it while the original shows.
+                Toggle("Show Original", isOn: Binding(get: { library.browse.isShowingOriginal },
+                                                      set: { _ in library.toggleOriginal() }))
+                    .keyboardShortcut("\\", modifiers: [])
+                    .disabled(!library.isEditing || library.isCropping || library.isPickingWhiteBalance
+                              || library.selectedEdit == nil)
                 Divider()
                 // C opens and closes the crop tool, as R does in Lightroom's.
                 if library.isCropping {
@@ -378,7 +384,7 @@ struct ContentView: View {
     }
 
     /// In Browse, how many photos are shown, and for All Photos which locations are left out; in
-    /// Edit, the photo's folder and its position.
+    /// Edit, the photo's folder and its position, after "Original" while backslash shows it.
     private var subtitle: String {
         let visible = library.visiblePhotos
         if library.isEditing {
@@ -386,7 +392,8 @@ struct ContentView: View {
             // A saved location that is a single photo has no folder name to show.
             let folder = library.browse.selectedPhoto.map { library.name(of: $0.folder) }
             let shownFolder = folder == library.browse.selectedPhoto?.name ? nil : folder
-            return [shownFolder, position].compactMap { $0 }.joined(separator: " · ")
+            let original = library.browse.isShowingOriginal ? "Original" : nil
+            return [original, shownFolder, position].compactMap { $0 }.joined(separator: " · ")
         }
         if let folder = library.selection?.folder, library.contents[folder] == nil { return "" }
         if library.selection == nil { return "" }
@@ -459,6 +466,7 @@ struct EditCanvas: View {
     /// marks the rectangle, so a drag doesn't wait for a render.
     private var shownRecipe: EditRecipe {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
+        if library.browse.isShowingOriginal { return recipe.original }
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
         return recipe.without(library.offGroups)
     }
