@@ -6,6 +6,9 @@ import SwiftUI
 /// and by `fineStep` with Option. Double-clicking the name or the slider resets the adjustment.
 struct AdjustmentSlider: View {
     let title: String
+    /// Read by VoiceOver in place of `title` when the title leans on a heading above it, such as
+    /// "Amount" under Sharpening.
+    var spokenTitle: String? = nil
     @Binding var value: Double
     let range: ClosedRange<Double>
     let fineStep: Double
@@ -54,12 +57,12 @@ struct AdjustmentSlider: View {
                         return .handled
                     }
                     .help("Up and Down arrows step by \(formatted(step)). Shift steps by \(formatted(coarseStep)), Option by \(formatted(fineStep)).")
-                    .accessibilityLabel(title)
+                    .accessibilityLabel(spokenTitle ?? title)
             }
             Slider(value: Binding(get: { position?(value) ?? normalized(value) },
                                   set: { set(valueAtPosition?($0) ?? denormalized($0)) }),
                    in: 0...1) {
-                Text(title)
+                Text(spokenTitle ?? title)
             } onEditingChanged: { editing in
                 isAdjusting(editing)
                 // The slider tracks the mouse itself, so a tap gesture on it never fires. A
@@ -80,7 +83,7 @@ struct AdjustmentSlider: View {
                 .accessibilityValue("\(formatted(value)) \(unit)")
                 .accessibilityAction(named: "Reset", reset)
         }
-        .contextMenu { Button("Reset \(title)", action: reset) }
+        .contextMenu { Button("Reset \(spokenTitle ?? title)", action: reset) }
         .onAppear { text = formatted(value) }
         .onChange(of: value) { if !isEditingText || text != formatted(value) { text = formatted(value) } }
     }

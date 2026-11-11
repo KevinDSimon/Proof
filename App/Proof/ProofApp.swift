@@ -672,23 +672,38 @@ struct AdjustmentsInspector: View {
         let shown = library.selectedEdit?.cameraDetail.map { detail.shown(camera: $0) }
         return InspectorCard(title: "Detail", isOn: library.isOnBinding(.detail), canReset: !detail.isNeutral,
                              reset: { library.changeEdit { $0.detail = DetailAdjustments() } }) {
-            detailSlider("Sharpening", \.sharpening, shown: shown,
+            // Grouped as in Lightroom's Detail panel, so Detail reads as part of noise reduction
+            // rather than as the card's own control.
+            detailHeading("Sharpening")
+            detailSlider("Amount", spoken: "Sharpening Amount", \.sharpening, shown: shown,
                          help: "Shows at 100% zoom, or when the photo is shown at more than half its size")
-            detailSlider("Noise Reduction", \.noiseReduction, shown: shown,
+            detailHeading("Noise Reduction")
+                .padding(.top, 6)
+            detailSlider("Luminance", spoken: "Luminance Noise Reduction", \.noiseReduction, shown: shown,
                          help: "Smooths brightness noise. The camera's amount follows the photo's ISO")
-            detailSlider("Detail", \.noiseReductionDetail, shown: shown,
-                         help: "How much fine detail noise reduction keeps")
-            detailSlider("Color Noise Reduction", \.colorNoiseReduction, shown: shown,
+            detailSlider("Detail", spoken: "Noise Reduction Detail", \.noiseReductionDetail, shown: shown,
+                         help: "How much fine detail luminance noise reduction keeps. No effect while Luminance is 0")
+                // `CIRAWFilter` ignores it without luminance noise reduction to temper.
+                .disabled((shown?.noiseReduction ?? 0) == 0)
+            detailSlider("Color", spoken: "Color Noise Reduction", \.colorNoiseReduction, shown: shown,
                          help: "Smooths colored speckles")
         }
         // The sliders can't show the camera's values until they have been read from the photo.
         .disabled(shown == nil)
     }
 
-    private func detailSlider(_ title: String, _ keyPath: WritableKeyPath<DetailAdjustments, Double?>,
+    private func detailHeading(_ title: String) -> some View {
+        Text(title)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func detailSlider(_ title: String, spoken: String, _ keyPath: WritableKeyPath<DetailAdjustments, Double?>,
                               shown: DetailAdjustments?, help: String) -> some View {
         AdjustmentSlider(
             title: title,
+            spokenTitle: spoken,
             value: Binding(get: { shown?[keyPath: keyPath] ?? 0 },
                            set: { value in library.changeEdit { $0.detail[keyPath: keyPath] = value } }),
             range: DetailAdjustments.range, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
