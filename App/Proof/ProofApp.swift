@@ -182,7 +182,8 @@ struct ContentView: View {
                         AdjustmentsInspector(library: library, renderer: renderer)
                     }
                 }
-                .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
+                // Wide enough at its narrowest for the longest card header, "Lens Corrections" beside Reset and its switch.
+                .inspectorColumnWidth(min: 300, ideal: 320, max: 420)
             }
         }
         // Both modes follow the system appearance. The toolbar keeps the system's default
