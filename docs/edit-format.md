@@ -27,6 +27,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
   "detail": { "sharpening": 70, "noiseReduction": null, "noiseReductionDetail": null, "colorNoiseReduction": 40 },
   "look": { "lut": "Portra.cube", "strength": 0.7 },
   "vignette": { "amount": -30, "midpoint": 50, "roundness": 0, "feather": 50 },
+  "lens": { "profile": null, "chromaticAberration": { "red": 1.00012, "blue": 0.99994 } },
   "crop": {
     "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
     "rotation": 90, "flipHorizontal": false, "flipVertical": false, "aspect": [4, 5]
@@ -46,6 +47,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `detail` | Sharpening and noise reduction, described below. |
 | `look` | The LUT's path in the LUT library and its strength from 0 to 1. The path is relative to the library, with folders separated by `/`, as in `Portra/400.cube`; a LUT outside any folder is its file name alone, as edits saved before folders have it. A path with an empty, hidden or `..` part is skipped. Strength outside 0 to 1 renders as the nearer end. A LUT that can't be found is skipped. `null` for none. |
 | `vignette` | Darkened or lightened edges, centered on the cropped frame, described below. |
+| `lens` | Lens corrections, described below. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
 
@@ -84,6 +86,15 @@ Lightroom's post-crop vignetting. It applies after the crop, so it centers on th
 | `midpoint` | 0 to 100, default 50. Where the effect is half, from close to the center (0) to near the corners (100). |
 | `roundness` | −100 to +100, default 0. 0 is an oval matching the frame, +100 a circle of the same area, −100 a rounded rectangle following the frame's corners. |
 | `feather` | 0 to 100, default 50. How gradually the effect fades in; 0 is a hard edge. |
+
+## Lens corrections
+
+Corrections for the lens, applied as the photo is decoded, before every other adjustment: first the profile, then chromatic aberration. Show Original keeps them, as it keeps the crop. A missing `lens`, as in files saved before it existed, means both are `null`, so those edits render as they always did.
+
+| Field | Meaning |
+| --- | --- |
+| `profile` | `true` applies the file's distortion and vignetting correction, `false` leaves the lens uncorrected, and `null` keeps the decoder's default for the photo, which Proof writes whenever the choice matches that default. Ignored for files with no correction, such as Leica M DNGs, which render the same either way. |
+| `chromaticAberration` | Remove Chromatic Aberration: `red` and `blue` are the scales, about the center of the uncropped photo, at which those channels are read to line up with green. 1 leaves a channel in place; values outside 0.99 to 1.01 render as the nearer end. Proof measures them when the switch is turned on and doesn't measure again on read (decision 0023). `null` while it is off. |
 
 ## White balance
 

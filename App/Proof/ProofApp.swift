@@ -706,6 +706,7 @@ struct AdjustmentsInspector: View {
             }
             .disabled(library.selectedEdit == nil)
             detailCard
+            lensCard
             vignetteCard
             LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
@@ -753,6 +754,86 @@ struct AdjustmentsInspector: View {
         }
         // The sliders can't show the camera's values until they have been read from the photo.
         .disabled(shown == nil)
+    }
+
+    /// The lens the photo was taken with, its correction profile, which `CIRAWFilter` applies as
+    /// it decodes, and Remove Chromatic Aberration, which Proof measures. Many RAW files carry no
+    /// profile, such as Leica M files; the card then says so in place of the profile's switch.
+    private var lensCard: some View {
+        let edit = library.selectedEdit
+        let lens = edit?.cameraLens
+        let corrections = edit?.recipe.lens ?? LensCorrections()
+        return InspectorCard(title: "Lens Corrections", canReset: !corrections.isNeutral,
+                             reset: { library.changeEdit { $0.lens = LensCorrections() } }) {
+            if let lens {
+                lensRow("Lens", value: lens.name ?? "Not recorded")
+            }
+            lensSwitch("Remove Chromatic Aberration", isOn: Binding(
+                get: { corrections.chromaticAberration != nil || library.isMeasuringChromaticAberration },
+                set: { value in
+                    guard let renderer else { return }
+                    Task { await library.setRemovesChromaticAberration(value, with: renderer) }
+                }),
+                isBusy: library.isMeasuringChromaticAberration,
+                help: "Lines up the red and blue fringes along edges, measured from this photo")
+                .disabled(renderer == nil || library.isAutoAdjusting)
+            // A photo without a profile says so instead of showing a switch that can't turn on.
+            if let lens, lens.hasProfile {
+                lensSwitch("Profile Corrections", isOn: Binding(
+                    get: { corrections.appliesProfile(for: lens) },
+                    set: { value in
+                        // Back to the decoder's default rather than a saved value when they match,
+                        // so the edit stays neutral.
+                        library.changeEdit { $0.lens.profile = value == lens.profileIsOnByDefault ? nil : value }
+                    }),
+                    help: "Corrects the lens's distortion and darkened corners with the profile in the photo")
+            } else if let lens {
+                lensRow("Profile", value: "None in this photo")
+                    .help(lens.name == nil ? "The photo carries no lens correction data"
+                                           : "The photo carries no correction data for this lens")
+            }
+        }
+        .disabled(edit == nil)
+    }
+
+    /// A switch on the card's trailing edge, lined up with the cards' own, with its name ahead of
+    /// it, and a spinner beside it while `isBusy`.
+    private func lensSwitch(_ title: String, isOn: Binding<Bool>, isBusy: Bool = false, help: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                .accessibilityHidden(true)
+            Spacer()
+            if isBusy {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Measuring")
+            }
+            Toggle(title, isOn: isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                // Green, as the cards' own switches are.
+                .tint(.green)
+                .labelsHidden()
+        }
+        .help(help)
+    }
+
+    /// A name and its value, the value on the card's trailing edge like the switches.
+    private func lensRow(_ title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                .fixedSize()
+            Spacer(minLength: 12)
+            // Wraps rather than truncates: a lens name is often longer than the space beside its label.
+            Text(value)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// Lightroom's post-crop vignette: it centers on the cropped frame and follows any crop.

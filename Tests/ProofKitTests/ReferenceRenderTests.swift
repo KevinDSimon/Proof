@@ -27,6 +27,7 @@ struct ReferenceRenderTests {
         ("clarity", clarity, nil),
         ("dehaze", dehaze, nil),
         ("vignette", vignette, nil),
+        ("chromatic-aberration", chromaticAberration, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -148,6 +149,14 @@ struct ReferenceRenderTests {
     static let vignette: EditRecipe = {
         var recipe = crop
         recipe.vignette = VignetteAdjustments(amount: -100)
+        return recipe
+    }()
+
+    /// Red enlarged and blue shrunk far more than any lens needs, so a change to the kernel, its
+    /// center or its place in the pipeline shows as fringes that move.
+    static let chromaticAberration: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.lens.chromaticAberration = ChromaticAberration(red: 1.004, blue: 0.996)
         return recipe
     }()
 

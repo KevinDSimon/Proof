@@ -40,6 +40,9 @@ struct PhotoEdit {
     /// The camera's sharpening and noise reduction, which the Detail sliders show where the edit
     /// has none. `nil` until it has been read from the photo.
     var cameraDetail: CameraDetail?
+    /// The lens and whether the file has a correction profile, which the Lens Corrections card
+    /// shows. `nil` until it has been read from the photo.
+    var cameraLens: CameraLens?
     /// The photo's size in pixels as the camera oriented it, which the crop tool lays out by.
     /// `nil` until it has been read from the photo.
     var size: CGSize?
@@ -443,12 +446,13 @@ final class Library {
         }
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.
         Task {
-            let (asShot, cameraDetail, settings, size) = await Task.detached {
-                (WhiteBalance.asShot(of: url), CameraDetail.of(url), CaptureSettings.read(from: url),
+            let (asShot, cameraDetail, cameraLens, settings, size) = await Task.detached {
+                (WhiteBalance.asShot(of: url), CameraDetail.of(url), CameraLens.of(url), CaptureSettings.read(from: url),
                  RAWRenderer.orientedSize(of: url))
             }.value
             edits[photo]?.asShot = asShot
             edits[photo]?.cameraDetail = cameraDetail
+            edits[photo]?.cameraLens = cameraLens
             edits[photo]?.captureSettings = settings
             edits[photo]?.size = size
         }
@@ -601,6 +605,25 @@ final class Library {
         await autoAdjust(with: renderer, what: "tone") { renderer, recipe in
             let light = try await renderer.autoTone(recipe: recipe)
             return { light.apply(to: &$0.basic) }
+        }
+    }
+
+    /// Remove Chromatic Aberration is measuring the selected photo. Its switch shows on meanwhile,
+    /// with a spinner, so turning it on answers at once.
+    private(set) var isMeasuringChromaticAberration = false
+
+    /// Turns Remove Chromatic Aberration on, measuring the selected photo's fringes, or off.
+    func setRemovesChromaticAberration(_ isOn: Bool, with renderer: RAWRenderer) async {
+        guard isOn else {
+            changeEdit { $0.lens.chromaticAberration = nil }
+            return
+        }
+        guard !isAutoAdjusting else { return }
+        isMeasuringChromaticAberration = true
+        defer { isMeasuringChromaticAberration = false }
+        await autoAdjust(with: renderer, what: "chromatic aberration") { renderer, recipe in
+            let found = try await renderer.chromaticAberration(recipe: recipe)
+            return { $0.lens.chromaticAberration = found }
         }
     }
 
