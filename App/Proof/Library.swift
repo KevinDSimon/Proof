@@ -85,6 +85,7 @@ final class Library {
             guard browse.selectedPhoto != oldValue.selectedPhoto || browse.mode != oldValue.mode else { return }
             // Leaving the photo any way but Done or Cancel keeps the crop.
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
+            isPickingWhiteBalance = false
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
             offGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
@@ -431,6 +432,8 @@ final class Library {
     private(set) var foundNoHorizon = false
     /// Auto white balance or Auto Tone is measuring the photo.
     private(set) var isAutoAdjusting = false
+    /// The White Balance eyedropper is waiting for a click on something neutral in the photo.
+    var isPickingWhiteBalance = false
 
     /// The selected photo's crop. A photo without one starts locked to its own shape (Original).
     var selectedCrop: Crop {
@@ -454,6 +457,7 @@ final class Library {
         commitEdit(of: photo)
         recipeBeforeCrop = edit.recipe
         unstraightenedFrame = nil
+        isPickingWhiteBalance = false
         isCropping = true
     }
 
@@ -516,6 +520,36 @@ final class Library {
         await autoAdjust(with: renderer, what: "white balance") { renderer, recipe in
             let found = try await renderer.autoWhiteBalance(recipe: recipe)
             return { $0.basic.setAuto(found) }
+        }
+    }
+
+    /// Opens or closes the White Balance eyedropper.
+    func toggleWhiteBalancePicker() {
+        guard isEditing, !isCropping, selectedEdit?.asShot != nil else { return }
+        isPickingWhiteBalance.toggle()
+    }
+
+    /// Sets the white balance that makes `patch` of the selected photo neutral gray, as Custom,
+    /// and closes the eyedropper, as Lightroom's closes after one click. A patch too dark to tell
+    /// its color beeps and leaves the eyedropper open for another try.
+    func pickWhiteBalance(in patch: CGRect, with renderer: RAWRenderer) async {
+        let photo = browse.selectedPhoto
+        var isTooDark = false
+        await autoAdjust(with: renderer, what: "white balance") { renderer, recipe in
+            let found = try await renderer.whiteBalance(neutralIn: patch, recipe: recipe)
+            isTooDark = found == nil
+            return { recipe in
+                guard let found else { return }
+                recipe.basic.setTemperature(found.temperature)
+                recipe.basic.setTint(found.tint)
+            }
+        }
+        guard browse.selectedPhoto == photo else { return }
+        if isTooDark {
+            NSSound.beep()
+        } else {
+            setOn(.whiteBalance, true)
+            isPickingWhiteBalance = false
         }
     }
 

@@ -227,6 +227,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
             let frame = viewport.isFit || photo == nil ? nil : viewport.frame(photo: photo!.photoSize, view: bounds)
             // A detail rendered before the crop changed would land in the wrong place.
             let detail = renderedDetail?.recipe.crop == rendered?.recipe.crop ? detail : nil
+            zoom.shown = photo.map { ($0, frame == nil ? nil : detail) }
             try renderer.draw(photo, detail: frame == nil ? nil : detail, frame: frame, into: drawable.texture,
                               commandBuffer: commandBuffer, background: background, angle: angle)
             commandBuffer.present(drawable)

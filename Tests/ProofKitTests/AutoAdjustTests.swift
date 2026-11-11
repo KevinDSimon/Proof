@@ -47,6 +47,21 @@ struct AutoAdjustTests {
         #expect(AutoAdjust.cast(of: Array(repeating: [0, 0, 0], count: 1000)) == nil)
     }
 
+    @Test("A patch picked as neutral reads its plain color as the cast")
+    func neutralPatch() throws {
+        // A gray card under warm light, with some noise.
+        let patch: [SIMD3<Float>] = (0..<64).map { i in [0.25, 0.2, 0.16] * (0.95 + 0.1 * Float(i % 5) / 4) }
+        let cast = try #require(AutoAdjust.cast(ofNeutral: patch))
+        #expect(abs(cast.blueYellow - log2(0.16 / 0.25)) < 0.01)
+        #expect(abs(cast.greenMagenta - log2(0.2 / (0.25 * 0.16).squareRoot())) < 0.01)
+    }
+
+    @Test("A black patch has no color to pick")
+    func blackPatch() {
+        #expect(AutoAdjust.cast(ofNeutral: Array(repeating: [0.001, 0.001, 0.001], count: 64)) == nil)
+        #expect(AutoAdjust.cast(ofNeutral: []) == nil)
+    }
+
     /// A stand-in for the RAW decoder: the cast changes smoothly, and not quite in a straight
     /// line, with the temperature in mireds and the tint, and is neutral at 4300 K and +14.
     static func modelCast(_ wb: WhiteBalance) -> AutoAdjust.Cast {
@@ -151,6 +166,23 @@ struct AutoAdjustTests {
         print("Auto white balance: \(found) in \(elapsed)")
         #expect(try await renderer.autoWhiteBalance(recipe: EditRecipe()) == found)
         #expect(WhiteBalance.temperatureRange.contains(found.temperature))
+    }
+
+    @Test("On a real photo, the eyedropper leaves the picked patch neutral, from any starting white balance",
+          .enabled(if: sampleDNG != nil))
+    func sampleEyedropper() async throws {
+        let renderer = try RAWRenderer()
+        try await renderer.open(try #require(sampleDNG))
+        let patch = CGRect(x: 0.495, y: 0.495, width: 0.01, height: 0.01)
+        var recipe = EditRecipe()
+        let start = ContinuousClock.now
+        let found = try #require(try await renderer.whiteBalance(neutralIn: patch, recipe: recipe))
+        print("Eyedropper: \(found) in \(ContinuousClock.now - start)")
+        #expect(WhiteBalance.temperatureRange.contains(found.temperature))
+        recipe.basic.setTemperature(2500)
+        recipe.basic.setTint(60)
+        let again = try #require(try await renderer.whiteBalance(neutralIn: patch, recipe: recipe))
+        #expect(again == found)
     }
 
     @Test("On a real photo, Auto Tone chooses moderate values and repeats exactly",

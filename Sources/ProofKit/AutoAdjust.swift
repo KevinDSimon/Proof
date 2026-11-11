@@ -50,6 +50,18 @@ public enum AutoAdjust {
         return Cast(blueYellow: log2(b / r), greenMagenta: log2(g / (r * b).squareRoot()))
     }
 
+    /// Pixels across the patch the eyedropper measures.
+    static let patchSize: CGFloat = 8
+
+    /// The cast of a patch picked as neutral gray: the color of its plain mean, linear RGB.
+    /// `nil` when the patch is too dark for its color to show through the noise.
+    static func cast(ofNeutral pixels: [SIMD3<Float>]) -> Cast? {
+        guard !pixels.isEmpty else { return nil }
+        let mean = SIMD3<Double>(pixels.reduce(SIMD3<Float>(repeating: 0), +)) / Double(pixels.count)
+        guard mean.max() > 0.002, mean.min() > 0 else { return nil }
+        return Cast(blueYellow: log2(mean.z / mean.x), greenMagenta: log2(mean.y / (mean.x * mean.z).squareRoot()))
+    }
+
     /// The white balance that leaves no cast, found by Newton's method on the temperature (in
     /// mireds, where equal steps look alike) and the tint. `measure` renders the photo with a
     /// white balance and returns its cast. The first step is judged from two small nudges;
