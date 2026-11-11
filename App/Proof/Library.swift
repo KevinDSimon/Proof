@@ -89,6 +89,7 @@ final class Library {
             // Leaving the photo any way but Done or Cancel keeps the crop.
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             isPickingWhiteBalance = false
+            isDrawingGuides = false
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
             offGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
@@ -119,8 +120,8 @@ final class Library {
             if !isAdjusting, let photo = browse.selectedPhoto { commitEdit(of: photo) }
         }
     }
-    /// The Distortion slider is being dragged, which shows a grid over the photo.
-    var isAdjustingDistortion = false
+    /// The Distortion slider or a Transform slider is being dragged, which shows a grid over the photo.
+    var isAdjustingGeometry = false
     var isInspectorShown = true
     /// How far the photo in Edit is zoomed and where; back to Fit for each photo and for the crop tool.
     let zoom = CanvasZoom()
@@ -506,6 +507,7 @@ final class Library {
         showEdited()
         unstraightenedFrame = nil
         isPickingWhiteBalance = false
+        isDrawingGuides = false
         isCropping = true
     }
 
@@ -627,6 +629,103 @@ final class Library {
             let found = try await renderer.chromaticAberration(recipe: recipe)
             return { $0.lens.chromaticAberration = found }
         }
+    }
+
+    // MARK: Transform
+
+    /// Upright is looking for lines in the selected photo.
+    private(set) var isFindingLines = false
+    /// Upright found no lines to go by, which the Transform card shows for a moment.
+    private(set) var foundNoLines = false
+    /// Guided is open: a drag on the photo draws a line to make upright or level.
+    var isDrawingGuides = false
+    /// The lines found in a photo, kept while its lens corrections stay the same, so trying
+    /// each Upright mode in turn doesn't look again.
+    private var foundLines: (photo: PhotoReference, lens: LensCorrections, segments: [LineSegment], size: CGSize)?
+
+    /// The most guides Guided keeps, as in Lightroom: two each way pin every slider it sets.
+    static let maximumGuides = 4
+
+    /// Sets the Transform sliders as Upright `mode` chooses them, or returns them to none for
+    /// `nil` (Off). Aspect, Scale and the offsets are kept. Guided opens the guide tool instead,
+    /// keeping guides drawn before. Upright straightens the photo itself, so the crop's
+    /// straighten angle goes back to zero, as Lightroom resets it.
+    func setUpright(_ mode: UprightMode?, with renderer: RAWRenderer) async {
+        guard let photo = browse.selectedPhoto, let recipe = selectedEdit?.recipe else { return }
+        setOn(.transform, true)
+        switch mode {
+        case nil:
+            isDrawingGuides = false
+            changeEdit { recipe in
+                recipe.transform = recipe.transform.with(vertical: 0, horizontal: 0, rotate: 0)
+                recipe.transform.upright = nil
+                recipe.transform.guides = []
+            }
+        case .guided:
+            isDrawingGuides = true
+            let size = selectedEdit?.size
+            changeEdit { recipe in
+                recipe.transform.upright = .guided
+                recipe.transform = Self.solveGuides(recipe.transform, size: size)
+            }
+        case let mode?:
+            isDrawingGuides = false
+            guard !isFindingLines, let url = selectedPhotoURL else { return }
+            isFindingLines = true
+            defer { isFindingLines = false }
+            if foundLines?.photo != photo || foundLines?.lens != recipe.lens {
+                do {
+                    try await renderer.open(url)
+                    let lines = try await renderer.uprightSegments(recipe: recipe)
+                    foundLines = (photo, recipe.lens, lines.segments, lines.size)
+                } catch {
+                    errorMessage = "Upright couldn't look for lines in this photo. (\(error))"
+                    return
+                }
+            }
+            // Another photo may have been chosen meanwhile.
+            guard browse.selectedPhoto == photo, let found = foundLines, found.photo == photo else { return }
+            guard let solved = Upright.solve(mode, segments: found.segments, size: found.size,
+                                             from: recipe.transform) else {
+                foundNoLines = true
+                try? await Task.sleep(for: .seconds(2))
+                foundNoLines = false
+                return
+            }
+            changeEdit { recipe in
+                recipe.transform = solved
+                recipe.crop?.angle = 0
+            }
+        }
+    }
+
+    /// Adds a guide, from 0 to 1 on each axis of the uncorrected photo, replacing the oldest once
+    /// there are `maximumGuides`, and straightens to the guides.
+    func addGuide(_ guide: GuideLine) {
+        let size = selectedEdit?.size
+        changeEdit { recipe in
+            recipe.transform.guides = Array((recipe.transform.guides + [guide]).suffix(Self.maximumGuides))
+            recipe.transform.upright = .guided
+            recipe.transform = Self.solveGuides(recipe.transform, size: size)
+            recipe.crop?.angle = 0
+        }
+    }
+
+    /// Removes the guides and the correction they made.
+    func clearGuides() {
+        changeEdit { recipe in
+            recipe.transform.guides = []
+            recipe.transform = recipe.transform.with(vertical: 0, horizontal: 0, rotate: 0)
+        }
+    }
+
+    /// `transform` straightened to its guides, on a photo of `size`, or with no tilt or turn
+    /// while it has none. Static, since it runs inside `changeEdit`, which holds the edits.
+    private static func solveGuides(_ transform: PerspectiveTransform, size: CGSize?) -> PerspectiveTransform {
+        guard let size,
+              let solved = Upright.solve(.guided, segments: [], size: size, from: transform)
+        else { return transform.with(vertical: 0, horizontal: 0, rotate: 0) }
+        return solved
     }
 
     /// Measures the selected photo with `estimate` and applies the change it returns as one edit,

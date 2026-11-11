@@ -10,7 +10,7 @@ Status: pre-alpha. Nothing to download yet.
 - Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, Texture, Clarity, Dehaze, vibrance, saturation
 - Zoom to 100% and beyond, sharpening and noise reduction
 - Lightroom's post-crop vignette: amount, midpoint, roundness and feather
-- Lens profile corrections, manual distortion and perspective
+- Lens profile corrections, manual distortion, and perspective correction with Upright (Auto, Guided, Level, Vertical, Full)
 - HSL color mixer and black and white
 - Tone curve (RGB and per channel) and a histogram
 - `.cube` LUTs imported into a library, with previews of the photo and a strength slider

@@ -163,6 +163,7 @@ public actor RAWRenderer {
         measured.lens.chromaticAberration = nil
         measured.lens.distortion = nil
         measured.lens.vignetting = nil
+        measured.transform = PerspectiveTransform()
         let size = CGSize(width: ChromaticAberration.measuringSize, height: ChromaticAberration.measuringSize)
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     fitting: size))
@@ -180,7 +181,39 @@ public actor RAWRenderer {
         }.value
     }
 
-    /// `recipe`'s white balance, detail, lens corrections and crop with every other adjustment at its default, so
+    /// The straight edges Upright goes by in the open photo, in pixels of an image of the
+    /// returned size: the whole photo as the camera oriented it, with `recipe`'s white balance,
+    /// detail and lens corrections, but no perspective correction, crop or tone. Only the render
+    /// runs on the actor; the finding runs beside it.
+    public func uprightSegments(recipe: EditRecipe) async throws -> (segments: [LineSegment], size: CGSize) {
+        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        var measured = Self.measuring(recipe)
+        measured.crop = nil
+        measured.transform = PerspectiveTransform()
+        let size = CGSize(width: LineDetector.measuringSize, height: LineDetector.measuringSize)
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                    fitting: size))
+        guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens)
+        else { throw RAWRendererError.renderFailed }
+        let extent = image.extent.integral
+        let width = Int(extent.width), height = Int(extent.height)
+        guard width > 2, height > 2 else { throw RAWRendererError.renderFailed }
+        // Gamma-encoded, so an edge counts the same in the shadows as in the highlights.
+        var bitmap = [UInt8](repeating: 0, count: width * height * 4)
+        histogramContext.render(image, toBitmap: &bitmap, rowBytes: width * 4, bounds: extent, format: .RGBA8,
+                                colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        let segments = await Task.detached(priority: .userInitiated) { [bitmap] in
+            var gray = [Float](repeating: 0, count: width * height)
+            for i in 0..<(width * height) {
+                gray[i] = (0.2126 * Float(bitmap[4 * i]) + 0.7152 * Float(bitmap[4 * i + 1])
+                    + 0.0722 * Float(bitmap[4 * i + 2])) / 255
+            }
+            return LineDetector.segments(in: gray, width: width, height: height)
+        }.value
+        return (segments, CGSize(width: width, height: height))
+    }
+
+    /// `recipe`'s white balance, detail, lens corrections, perspective and crop with every other adjustment at its default, so
     /// Auto measures the photo itself and not the tone, color or look already applied.
     static func measuring(_ recipe: EditRecipe) -> EditRecipe {
         var measured = EditRecipe()
@@ -189,6 +222,7 @@ public actor RAWRenderer {
         measured.basic.tint = recipe.basic.tint
         measured.detail = recipe.detail
         measured.lens = recipe.lens
+        measured.transform = recipe.transform
         measured.crop = recipe.crop
         return measured
     }
@@ -444,7 +478,7 @@ public actor RAWRenderer {
                       cameraDetail: CameraDetail, cameraLens: CameraLens,
                       lut: PreparedLUT? = nil) -> CIImage? {
         // 1. RAW decode in linear light, with the lens profile, then chromatic aberration, lens
-        // vignetting and distortion. White
+        // vignetting, distortion and perspective. White
         // balance is in Kelvin and tint; exposure in stops.
         // Sharpening and noise reduction are the decoder's own; it sharpens only above half size.
         let whiteBalance = recipe.basic.whiteBalance(asShot: asShot)
@@ -460,8 +494,11 @@ public actor RAWRenderer {
         let aligned = ChromaticAberration.apply(recipe.lens.chromaticAberration, to: raw)
         // Manual lens vignetting and distortion, for lenses without a profile. Vignetting first,
         // since the lens's falloff is centered where the sensor recorded it.
-        let decoded = LensDistortion.apply(recipe.lens.distortion,
-                                           to: LensVignetting.apply(recipe.lens.vignetting, to: aligned))
+        let undistorted = LensDistortion.apply(recipe.lens.distortion,
+                                               to: LensVignetting.apply(recipe.lens.vignetting, to: aligned))
+        // Then perspective, on lines the lens corrections have made straight, and before the
+        // crop's turns, so it stays with the photo as it is turned.
+        let decoded = PerspectiveTransform.apply(recipe.transform, to: undistorted)
         // 2. Tone: highlights and shadows first, then texture and clarity, then dehaze, then
         // contrast, whites, blacks and the tone curve as one lookup.
         let shaded = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)

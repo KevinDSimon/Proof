@@ -439,7 +439,9 @@ struct EditCanvas: View {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
-            } else if library.isAdjustingDistortion {
+            } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
+                GuideOverlay(library: library, zoom: library.zoom, transform: shownRecipe.transform, photoSize: size)
+            } else if library.isAdjustingGeometry {
                 DistortionGrid(zoom: library.zoom)
             }
         }
@@ -453,15 +455,16 @@ struct EditCanvas: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: library.zoom.canPan)
-        // Each photo opens at Fit. The crop tool shows the whole photo, so zoom is off while it's open.
+        // Each photo opens at Fit.
         .onAppear { library.zoom.reset() }
         .onChange(of: url) {
             library.zoom.reset()
             library.zoom.preview = nil
         }
-        .onChange(of: library.isCropping, initial: true) { _, isCropping in
-            library.zoom.isEnabled = !isCropping
-            if isCropping { library.zoom.reset() }
+        // The crop tool and Guided show the whole photo, so zoom is off while either is open.
+        .onChange(of: library.isCropping || library.isDrawingGuides, initial: true) { _, isWhole in
+            library.zoom.isEnabled = !isWhole
+            if isWhole { library.zoom.reset() }
         }
     }
 
@@ -471,6 +474,8 @@ struct EditCanvas: View {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.browse.isShowingOriginal { return recipe.original }
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
+        // Guided shows the whole photo as the camera oriented it, the space guides are drawn in.
+        if library.isDrawingGuides { recipe.crop = nil }
         return recipe.without(library.offGroups)
     }
 }
@@ -710,6 +715,7 @@ struct AdjustmentsInspector: View {
             .disabled(library.selectedEdit == nil)
             detailCard
             lensCard
+            transformCard
             vignetteCard
             LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
@@ -820,6 +826,117 @@ struct AdjustmentsInspector: View {
         .disabled(edit == nil)
     }
 
+    /// Perspective correction, as in Lightroom's Transform panel: Upright sets the sliders from
+    /// lines in the photo, or from guides drawn on it, and the sliders stay editable.
+    private var transformCard: some View {
+        let edit = library.selectedEdit
+        let transform = edit?.recipe.transform ?? PerspectiveTransform()
+        return InspectorCard(title: "Transform", isOn: library.isOnBinding(.transform), canReset: !transform.isNeutral || !transform.guides.isEmpty,
+                             reset: {
+                                 library.isDrawingGuides = false
+                                 library.changeEdit { $0.transform = PerspectiveTransform() }
+                             }) {
+            sectionHeading("Upright")
+            Picker("Upright", selection: Binding(
+                get: { transform.upright },
+                set: { mode in
+                    guard let renderer else { return }
+                    Task { await library.setUpright(mode, with: renderer) }
+                })) {
+                Text("Off").tag(UprightMode?.none)
+                Text("Auto").tag(UprightMode?.some(.auto))
+                Text("Guided").tag(UprightMode?.some(.guided))
+                Text("Level").tag(UprightMode?.some(.level))
+                Text("Vertical").tag(UprightMode?.some(.vertical))
+                Text("Full").tag(UprightMode?.some(.full))
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            // Six modes, as in Lightroom: mini keeps them within the inspector's width.
+            .controlSize(.mini)
+            .disabled(renderer == nil || library.isFindingLines)
+            .help("Auto balances level and perspective. Guided follows lines you draw. Level turns the photo level, Vertical also makes upright lines parallel, Full also makes level lines parallel")
+            uprightStatus(transform)
+            lensSwitch("Constrain Crop", isOn: Binding(
+                get: { transform.constrainCrop },
+                set: { value in library.changeEdit { $0.transform.constrainCrop = value } }),
+                help: "Enlarges the corrected photo so it fills the frame, with no empty edges")
+            sectionHeading("Manual")
+                .padding(.top, 6)
+            transformSlider("Vertical", \.vertical, range: PerspectiveTransform.tiltRange,
+                            help: "Tilts the photo top to bottom. Negative values straighten a building that leans back")
+            transformSlider("Horizontal", \.horizontal, range: PerspectiveTransform.tiltRange,
+                            help: "Tilts the photo side to side, to face a wall square on")
+            transformSlider("Rotate", \.rotate, range: PerspectiveTransform.rotateRange, step: 0.1, fractionDigits: 1,
+                            unit: "degrees", help: "Turns the photo, in degrees clockwise")
+            transformSlider("Aspect", \.aspect, range: PerspectiveTransform.aspectRange,
+                            help: "Stretches the photo across, or upward with negative values, to undo the stretch a correction leaves")
+            transformSlider("Scale", \.scale, range: PerspectiveTransform.scaleRange, defaultValue: 100, showsSign: false,
+                            unit: "percent", help: "Enlarges or shrinks the photo about its center")
+            transformSlider("X Offset", \.xOffset, range: PerspectiveTransform.offsetRange,
+                            help: "Moves the photo right, or left with negative values")
+            transformSlider("Y Offset", \.yOffset, range: PerspectiveTransform.offsetRange,
+                            help: "Moves the photo up, or down with negative values")
+        }
+        .disabled(edit == nil)
+    }
+
+    /// What Upright is doing below its buttons: looking for lines, finding none, or Guided's
+    /// instructions and buttons.
+    @ViewBuilder
+    private func uprightStatus(_ transform: PerspectiveTransform) -> some View {
+        if library.isFindingLines {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Finding lines…")
+                    .foregroundStyle(.secondary)
+            }
+        } else if library.foundNoLines {
+            Text("No straight lines found in this photo.")
+                .foregroundStyle(.secondary)
+        } else if transform.upright == .guided {
+            if library.isDrawingGuides {
+                // Short enough for one line: a longer text widens the inspector, which keeps the width.
+                Text("Drag along 2 to 4 straight edges.")
+                    .foregroundStyle(.secondary)
+                    .help("Draw along edges that should be upright or level. Two each way set every slider")
+            }
+            HStack {
+                Button("Clear Guides") { library.clearGuides() }
+                    .disabled(transform.guides.isEmpty)
+                Spacer()
+                if library.isDrawingGuides {
+                    Button("Done") { library.isDrawingGuides = false }
+                        .keyboardShortcut(.cancelAction)
+                } else {
+                    Button("Edit Guides") { library.isDrawingGuides = true }
+                }
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private func transformSlider(_ title: String, _ keyPath: WritableKeyPath<PerspectiveTransform, Double>,
+                                 range: ClosedRange<Double>, step: Double = 1, fractionDigits: Int = 0,
+                                 defaultValue: Double = 0, showsSign: Bool = true, unit: String = "",
+                                 help: String) -> some View {
+        let transform = library.selectedEdit?.recipe.transform ?? PerspectiveTransform()
+        return AdjustmentSlider(
+            title: title,
+            spokenTitle: "Transform \(title)",
+            value: Binding(get: { transform[keyPath: keyPath] },
+                           set: { new in library.changeEdit { $0.transform[keyPath: keyPath] = new } }),
+            range: range, fineStep: step, step: step, coarseStep: step * 10, fractionDigits: fractionDigits,
+            showsSign: showsSign, unit: unit,
+            reset: { library.changeEdit { $0.transform[keyPath: keyPath] = defaultValue } },
+            isAdjusting: { adjusting in
+                library.isAdjusting = adjusting
+                library.isAdjustingGeometry = adjusting
+            })
+            .help(help)
+    }
+
     /// Changes the lens vignetting, back to `nil` at its defaults so the edit stays neutral.
     private static func setVignetting(_ lens: inout LensCorrections, _ change: (inout LensVignetting) -> Void) {
         var vignetting = lens.vignetting ?? LensVignetting()
@@ -840,7 +957,7 @@ struct AdjustmentsInspector: View {
             reset: { library.changeEdit { set(defaultValue, &$0.lens) } },
             isAdjusting: { adjusting in
                 library.isAdjusting = adjusting
-                if showsGrid { library.isAdjustingDistortion = adjusting }
+                if showsGrid { library.isAdjustingGeometry = adjusting }
             })
             .help(help)
     }

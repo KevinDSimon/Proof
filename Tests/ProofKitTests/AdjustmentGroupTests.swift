@@ -17,20 +17,21 @@ struct AdjustmentGroupTests {
         recipe.detail.sharpening = 70
         recipe.look = Look(lut: "Portra/400.cube", strength: 0.6)
         recipe.vignette = VignetteAdjustments(amount: -40, feather: 70)
+        recipe.transform = PerspectiveTransform(vertical: -20)
         return recipe
     }
 
-    @Test("Curve, Detail, Vignette and Looks start off, unless the recipe has a curve, changed detail, a vignette or a look")
+    @Test("Curve, Detail, Transform, Vignette and Looks start off, unless the recipe has a curve, changed detail, a perspective correction, a vignette or a look")
     func initiallyOff() {
-        #expect(AdjustmentGroup.initiallyOff(for: nil) == [.curve, .detail, .vignette, .look])
-        #expect(AdjustmentGroup.initiallyOff(for: EditRecipe()) == [.curve, .detail, .vignette, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: nil) == [.curve, .detail, .transform, .vignette, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: EditRecipe()) == [.curve, .detail, .transform, .vignette, .look])
         #expect(AdjustmentGroup.initiallyOff(for: Self.edited).isEmpty)
         var lookOnly = EditRecipe()
         lookOnly.look = Look(lut: "Mono.cube")
-        #expect(AdjustmentGroup.initiallyOff(for: lookOnly) == [.curve, .detail, .vignette])
+        #expect(AdjustmentGroup.initiallyOff(for: lookOnly) == [.curve, .detail, .transform, .vignette])
         var vignetteOnly = EditRecipe()
         vignetteOnly.vignette.amount = 25
-        #expect(AdjustmentGroup.initiallyOff(for: vignetteOnly) == [.curve, .detail, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: vignetteOnly) == [.curve, .detail, .transform, .look])
     }
 
     @Test("Lens Corrections switched off renders without any lens correction, the profile included, and leaves the rest")
@@ -55,6 +56,8 @@ struct AdjustmentGroupTests {
         #expect(none.lens == LensCorrections(profile: false))
         none.lens = LensCorrections()
         #expect(none.isNeutral)
+
+        #expect(recipe.without([.transform]).transform.isNeutral && recipe.without([.lens]).transform == recipe.transform)
 
         let noLight = recipe.without([.light])
         #expect(noLight.basic.exposure == 0 && noLight.basic.contrast == 0 && noLight.basic.blacks == 0)
