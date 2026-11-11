@@ -711,6 +711,17 @@ final class Library {
         }
     }
 
+    /// Moves one end of the guide at `index` to `point`, from 0 to 1 on the uncorrected photo,
+    /// and straightens to the guides again.
+    func moveGuideEnd(at index: Int, isStart: Bool, to point: CGPoint) {
+        let size = selectedEdit?.size
+        changeEdit { recipe in
+            guard recipe.transform.guides.indices.contains(index) else { return }
+            if isStart { recipe.transform.guides[index].start = point } else { recipe.transform.guides[index].end = point }
+            recipe.transform = Self.solveGuides(recipe.transform, size: size)
+        }
+    }
+
     /// Removes the guides and the correction they made.
     func clearGuides() {
         changeEdit { recipe in

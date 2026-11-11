@@ -80,6 +80,37 @@ struct InspectorCard<Content: View>: View {
     }
 }
 
+/// A control with its name above it, as the sliders have theirs, so every name in a card starts
+/// at the same edge and reads down one column. `status` sits at the end of the name's line, such
+/// as a spinner or a short note, so it never adds a line and moves what follows.
+struct InspectorField<Content: View, Status: View>: View {
+    let title: String
+    @ViewBuilder var status: () -> Status
+    @ViewBuilder var content: () -> Content
+
+    init(_ title: String, @ViewBuilder status: @escaping () -> Status = { EmptyView() },
+         @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.status = status
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 0)
+                status()
+                    .foregroundStyle(.secondary)
+                    .controlSize(.small)
+            }
+            content()
+        }
+    }
+}
+
 extension Library {
     /// A card's switch for `group`.
     func isOnBinding(_ group: AdjustmentGroup) -> Binding<Bool> {

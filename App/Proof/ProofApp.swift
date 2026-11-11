@@ -839,11 +839,11 @@ struct AdjustmentsInspector: View {
                                  library.isDrawingGuides = false
                                  library.changeEdit { $0.transform = PerspectiveTransform() }
                              }) {
-            // A pop-up, as Lightroom's Geometry panel has it and as White Balance's presets are.
-            HStack {
-                Text("Upright")
-                    .foregroundStyle(InspectorCard<EmptyView>.labelColor)
-                    .accessibilityHidden(true)
+            // A pop-up, as Lightroom's Geometry panel has it, with its name above, as the sliders
+            // have theirs. What Upright is doing shows on the name's line, so nothing below moves.
+            InspectorField("Upright") {
+                uprightStatus
+            } content: {
                 MenuPopUp(title: Self.title(of: transform.upright), items: Array(Self.uprightGroups.map { group in
                     group.map { mode -> MenuPopUp.Item in
                         .action(Self.title(of: mode), isChecked: mode == transform.upright) {
@@ -854,10 +854,10 @@ struct AdjustmentsInspector: View {
                 }.joined(separator: [.separator])))
                 .frame(maxWidth: .infinity)
                 .accessibilityLabel("Upright")
+                .disabled(renderer == nil || library.isFindingLines)
             }
-            .disabled(renderer == nil || library.isFindingLines)
             .help("Auto balances level and perspective. Guided follows lines you draw. Level turns the photo level, Vertical also makes upright lines parallel, Full also makes level lines parallel. Choose a mode again to undo changes to its sliders")
-            uprightStatus(transform)
+            if transform.upright == .guided { guidedButtons(transform) }
             // Under Upright, as in Lightroom Classic: Upright's corrections are the ones that leave
             // empty edges, and it sets how every slider below comes out.
             lensSwitch("Constrain Crop", isOn: Binding(
@@ -909,51 +909,29 @@ struct AdjustmentsInspector: View {
         }
     }
 
-    /// What Upright is doing below its menu: looking for lines, finding none, or Guided's
-    /// guide count and buttons.
+    /// What Upright is doing, beside its name: looking for lines, or having found none.
     @ViewBuilder
-    private func uprightStatus(_ transform: PerspectiveTransform) -> some View {
+    private var uprightStatus: some View {
         if library.isFindingLines {
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Finding lines…")
-                    .foregroundStyle(.secondary)
-            }
+            ProgressView()
+                .accessibilityLabel("Finding lines")
+            Text("Finding lines…")
         } else if library.foundNoLines {
-            Text("No straight lines found in this photo.")
-                .foregroundStyle(.secondary)
-        } else if transform.upright == .guided {
-            if library.isDrawingGuides {
-                // The photo is where the next step happens; it shows how. The card counts and ends.
-                HStack {
-                    Text("\(transform.guides.count) of \(Library.maximumGuides) guides")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Clear") { library.clearGuides() }
-                        .disabled(transform.guides.isEmpty)
-                        .accessibilityLabel("Clear Guides")
-                    Button("Done") { library.isDrawingGuides = false }
-                        .keyboardShortcut(.cancelAction)
-                }
-                .controlSize(.small)
-            } else {
-                // Drawing is the next step, so it gets a full-width button.
-                HStack {
-                    Button {
-                        library.isDrawingGuides = true
-                    } label: {
-                        Label(transform.guides.isEmpty ? "Draw Guides" : "Edit Guides", systemImage: "pencil.line")
-                            .frame(maxWidth: .infinity)
-                    }
-                    if !transform.guides.isEmpty {
-                        Button("Clear") { library.clearGuides() }
-                            .accessibilityLabel("Clear Guides")
-                    }
-                }
-                .help("Draw along edges that should be upright or level. Two each way set every slider")
-            }
+            Text("No straight lines found")
         }
+    }
+
+    /// Guided's way in and out of drawing: one button that keeps its shape, so nothing moves as
+    /// guides are drawn. Clear, Done and the count sit on the photo while drawing.
+    private func guidedButtons(_ transform: PerspectiveTransform) -> some View {
+        Button {
+            library.isDrawingGuides.toggle()
+        } label: {
+            Text(library.isDrawingGuides ? "Done" : transform.guides.isEmpty ? "Draw Guides" : "Edit Guides")
+                .frame(maxWidth: .infinity)
+        }
+        .help(library.isDrawingGuides ? "Stop drawing guides (Esc)"
+                                      : "Draw along edges that should be upright or level. Two each way set every slider")
     }
 
     private func transformSlider(_ title: String, _ keyPath: WritableKeyPath<PerspectiveTransform, Double>,
