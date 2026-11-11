@@ -66,21 +66,17 @@ struct DehazeTests {
         for target in [CGSize(width: 2880, height: 1800), CGSize(width: 3456, height: 2234)] {
             recipe.basic.dehaze = 10
             _ = try await renderer.render(fitting: target, recipe: recipe)
-            var times: [Double] = []
             var size = ""
-            for value in stride(from: 20.0, through: 100, by: 10) {
+            let times = try await frameTimes(for: Array(stride(from: 20.0, through: 100, by: 10))) { value in
                 recipe.basic.dehaze = value
-                let start = ContinuousClock.now
                 let photo = try await renderer.render(fitting: target, recipe: recipe)
-                times.append((ContinuousClock.now - start) / .milliseconds(1))
                 size = "\(photo.texture.width)×\(photo.texture.height)"
             }
-            times.sort()
             let median = times[times.count / 2]
             print("Dehaze render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
                 + "\(String(format: "%.1f", median)) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
-            #expect(times.first! < 1000.0 / 30)
+            #expect(times.first! < frameBudget)
         }
     }
 

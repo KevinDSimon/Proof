@@ -87,22 +87,18 @@ struct TextureClarityTests {
             recipe.basic.texture = 10
             recipe.basic.clarity = 10
             _ = try await renderer.render(fitting: target, recipe: recipe)
-            var times: [Double] = []
             var size = ""
-            for value in stride(from: 20.0, through: 100, by: 10) {
+            let times = try await frameTimes(for: Array(stride(from: 20.0, through: 100, by: 10))) { value in
                 recipe.basic.texture = value
                 recipe.basic.clarity = -value
-                let start = ContinuousClock.now
                 let photo = try await renderer.render(fitting: target, recipe: recipe)
-                times.append((ContinuousClock.now - start) / .milliseconds(1))
                 size = "\(photo.texture.width)×\(photo.texture.height)"
             }
-            times.sort()
             let median = times[times.count / 2]
             print("Texture and clarity render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
                 + "\(String(format: "%.1f", median)) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
-            #expect(times.first! < 1000.0 / 30)
+            #expect(times.first! < frameBudget)
         }
     }
 
