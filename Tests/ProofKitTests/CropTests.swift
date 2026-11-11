@@ -252,3 +252,37 @@ struct CropTests {
         return pixel[0] > 200 && pixel[1] < 50 ? .red : .other
     }
 }
+
+struct CropPointTests {
+    /// Where the one bright pixel of `image` lands, in pixels from the top left.
+    static func brightest(in image: CIImage) -> CGPoint {
+        let extent = image.extent.integral
+        let (w, h) = (Int(extent.width), Int(extent.height))
+        var bitmap = [Float](repeating: 0, count: w * h * 4)
+        CIContext().render(image, toBitmap: &bitmap, rowBytes: w * 16, bounds: extent, format: .RGBAf, colorSpace: nil)
+        var best = (value: Float(-1), x: 0, y: 0)
+        for y in 0..<h { for x in 0..<w where bitmap[(y * w + x) * 4] > best.value { best = (bitmap[(y * w + x) * 4], x, y) } }
+        return CGPoint(x: Double(best.x) + 0.5, y: Double(best.y) + 0.5)
+    }
+
+    @Test("A point of the photo maps to where the crop's render puts it, and back", arguments: [
+        Crop(x: 0.1, y: 0.15, width: 0.7, height: 0.6, angle: 7),
+        Crop(x: 0.05, y: 0.1, width: 0.8, height: 0.7, angle: -5, rotation: 90, flipHorizontal: true),
+        Crop(x: 0.2, y: 0, width: 0.6, height: 0.9, angle: 3, rotation: 270, flipVertical: true),
+        Crop(rotation: 180),
+    ])
+    func pointsFollowTheRender(crop: Crop) throws {
+        let size = CGSize(width: 400, height: 300)
+        // A bright dot at (150, 120) from the top left; Core Image's y points up.
+        let dot = CIImage(color: .white).cropped(to: CGRect(x: 149, y: 300 - 121, width: 2, height: 2))
+        let photo = dot.composited(over: CIImage(color: .black).cropped(to: CGRect(origin: .zero, size: size)))
+        let rendered = RAWRenderer.applyGeometry(crop, to: photo)
+        let found = Self.brightest(in: rendered)
+        let point = CGPoint(x: 150.0 / 400, y: 120.0 / 300)
+        let mapped = crop.resultPoint(of: point, photoSize: size)
+        #expect(abs(mapped.x * rendered.extent.width - found.x) < 2)
+        #expect(abs(mapped.y * rendered.extent.height - found.y) < 2)
+        let back = crop.photoPoint(of: mapped, photoSize: size)
+        #expect(abs(back.x - point.x) < 1e-9 && abs(back.y - point.y) < 1e-9)
+    }
+}

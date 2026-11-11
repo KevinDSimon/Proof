@@ -440,7 +440,8 @@ struct EditCanvas: View {
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
             } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
-                GuideOverlay(library: library, zoom: library.zoom, transform: shownRecipe.transform, photoSize: size)
+                GuideOverlay(library: library, zoom: library.zoom, transform: shownRecipe.transform, crop: shownRecipe.crop,
+                             photoSize: size)
             } else if library.isAdjustingGeometry {
                 DistortionGrid(zoom: library.zoom)
             }
@@ -461,10 +462,10 @@ struct EditCanvas: View {
             library.zoom.reset()
             library.zoom.preview = nil
         }
-        // The crop tool and Guided show the whole photo, so zoom is off while either is open.
-        .onChange(of: library.isCropping || library.isDrawingGuides, initial: true) { _, isWhole in
-            library.zoom.isEnabled = !isWhole
-            if isWhole { library.zoom.reset() }
+        // The crop tool shows the whole photo, so zoom is off while it's open.
+        .onChange(of: library.isCropping, initial: true) { _, isCropping in
+            library.zoom.isEnabled = !isCropping
+            if isCropping { library.zoom.reset() }
         }
     }
 
@@ -474,8 +475,6 @@ struct EditCanvas: View {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.browse.isShowingOriginal { return recipe.original }
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
-        // Guided shows the whole photo as the camera oriented it, the space guides are drawn in.
-        if library.isDrawingGuides { recipe.crop = nil }
         return recipe.without(library.offGroups)
     }
 }
