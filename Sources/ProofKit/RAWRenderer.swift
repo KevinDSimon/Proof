@@ -124,6 +124,21 @@ public actor RAWRenderer {
         return found
     }
 
+    /// The white balance that makes `patch` of the open photo neutral gray, for the eyedropper.
+    /// `patch` is from 0 to 1 on each axis of the photo as cropped in `recipe`, from the top left.
+    /// Found as Auto's is, measuring only the patch. The search starts from the camera's white
+    /// balance rather than the current one, which may be far enough off to push a channel of the
+    /// patch below zero; so picking the same spot always gives the same result. `nil` when the
+    /// patch is too dark to tell its color.
+    public func whiteBalance(neutralIn patch: CGRect, recipe: EditRecipe) throws -> WhiteBalance? {
+        var measured = Self.measuring(recipe)
+        return try AutoAdjust.whiteBalance(from: asShot) { whiteBalance in
+            measured.basic.temperature = whiteBalance.temperature
+            measured.basic.tint = whiteBalance.tint
+            return AutoAdjust.cast(ofNeutral: try samples(of: measured, in: patch))
+        }
+    }
+
     /// The Tone sliders Auto chooses for the open photo, as cropped and white balanced in
     /// `recipe`, from `AutoAdjust`. They don't depend on the Tone sliders already set.
     public func autoTone(recipe: EditRecipe) throws -> AutoAdjust.Tone {
@@ -143,15 +158,32 @@ public actor RAWRenderer {
     }
 
     /// The linear RGB pixels of the open photo with `recipe`, at about `AutoAdjust.sampleSize`.
-    private func samples(of recipe: EditRecipe) throws -> [SIMD3<Float>] {
+    /// With `region`, from 0 to 1 on each axis from the top left, only that part, at a scale that
+    /// makes it about `AutoAdjust.patchSize` pixels across, up to full resolution.
+    private func samples(of recipe: EditRecipe, in region: CGRect? = nil) throws -> [SIMD3<Float>] {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
-        let size = CGSize(width: AutoAdjust.sampleSize, height: AutoAdjust.sampleSize)
-        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
-                                                    crop: recipe.crop, fitting: size))
+        if let region {
+            let photo = Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation, crop: recipe.crop)
+            let across = max(region.width * photo.width, region.height * photo.height, 1)
+            filter.scaleFactor = Float(min(AutoAdjust.patchSize / across, 1))
+        } else {
+            let size = CGSize(width: AutoAdjust.sampleSize, height: AutoAdjust.sampleSize)
+            filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                        crop: recipe.crop, fitting: size))
+        }
         guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail) else {
             throw RAWRendererError.renderFailed
         }
-        let extent = image.extent.integral
+        var extent = image.extent.integral
+        if let region {
+            // Core Image's y axis points up. A patch narrower than a pixel still gets one.
+            let full = extent
+            let x = full.minX + region.midX * full.width, y = full.maxY - region.midY * full.height
+            let half = CGSize(width: max(region.width * full.width, 1) / 2, height: max(region.height * full.height, 1) / 2)
+            extent = CGRect(x: x - half.width, y: y - half.height, width: half.width * 2, height: half.height * 2)
+                .integral.intersection(full)
+            guard !extent.isNull else { throw RAWRendererError.renderFailed }
+        }
         let width = Int(extent.width), height = Int(extent.height)
         guard width > 0, height > 0 else { throw RAWRendererError.renderFailed }
         var bitmap = [Float](repeating: 0, count: width * height * 4)
@@ -285,6 +317,22 @@ public actor RAWRenderer {
                                                            colorSpace: Self.colorSpace)
         else { throw RAWRendererError.renderFailed }
         return preview
+    }
+
+    /// The `count` × `count` pixels of a rendered photo centered on `point`, from 0 to 1 on each
+    /// axis of the whole photo from the top left, as shown, for the eyedropper's loupe. Pixels
+    /// past the photo's edge are clear. `nil` when `point` is outside the part the photo holds.
+    public nonisolated func pixels(of photo: RenderedPhoto, around point: CGPoint, count: Int) -> CGImage? {
+        guard photo.region.contains(point),
+              let image = CIImage(mtlTexture: photo.texture, options: [.colorSpace: Self.colorSpace])
+        else { return nil }
+        // The texture's row 0 is the photo's bottom, as Core Image's y axis points up.
+        let x = (point.x - photo.region.minX) / photo.region.width * image.extent.width
+        let y = (1 - (point.y - photo.region.minY) / photo.region.height) * image.extent.height
+        let half = CGFloat(count / 2)
+        let rect = CGRect(x: x.rounded(.down) - half, y: y.rounded(.down) - half, width: CGFloat(count), height: CGFloat(count))
+        return histogramContext.createCGImage(image.cropped(to: rect), from: rect, format: .RGBA8,
+                                              colorSpace: Self.colorSpace)
     }
 
     /// Draws a photo from `render(fitting:)` into `drawable` over `background`: centered and

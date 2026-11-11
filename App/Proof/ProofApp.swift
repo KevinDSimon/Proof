@@ -69,7 +69,8 @@ struct ProofApp: App {
                     .disabled(library.isEditing || library.browse.selectedPhoto == nil)
                 // While cropping, Esc cancels the crop instead.
                 Button("Back to Folder") { library.browse.finishEditing() }
-                    .keyboardShortcut(library.isCropping ? nil : KeyboardShortcut(.escape, modifiers: []))
+                    .keyboardShortcut(library.isCropping || library.isPickingWhiteBalance
+                                      ? nil : KeyboardShortcut(.escape, modifiers: []))
                     .disabled(!library.isEditing)
                 Button("Revert to Original") { library.revertEdit() }
                     .disabled(!library.isEditing || !library.canRevertEdit)
@@ -86,6 +87,15 @@ struct ProofApp: App {
                     Button("Crop") { library.startCropping() }
                         .keyboardShortcut("c", modifiers: [])
                         .disabled(!library.isEditing || library.selectedEdit == nil)
+                }
+                // W, as in Lightroom; while it's open, Esc closes it instead of leaving Edit.
+                if library.isPickingWhiteBalance {
+                    Button("Cancel White Balance Selector") { library.isPickingWhiteBalance = false }
+                        .keyboardShortcut(.escape, modifiers: [])
+                } else {
+                    Button("White Balance Selector") { library.toggleWhiteBalancePicker() }
+                        .keyboardShortcut("w", modifiers: [])
+                        .disabled(!library.isEditing || library.isCropping || library.selectedEdit?.asShot == nil)
                 }
                 Button("Rotate Left") { library.rotate(clockwise: false) }
                     .keyboardShortcut("[")
@@ -226,7 +236,7 @@ struct ContentView: View {
         ToolbarItem(placement: .navigation) {
             // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
             Button("Back to Folder", systemImage: "chevron.backward") { library.browse.finishEditing() }
-                .keyboardShortcut(library.isCropping ? nil : .cancelAction)
+                .keyboardShortcut(library.isCropping || library.isPickingWhiteBalance ? nil : .cancelAction)
                 .help("Return to the folder")
         }
     }
@@ -419,6 +429,8 @@ struct EditCanvas: View {
         .overlay {
             if library.isCropping, let frame = library.selectedCropFrame {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
+            } else if library.isPickingWhiteBalance {
+                WhiteBalancePicker(library: library, renderer: renderer)
             }
         }
         // A temporary tool, so it may sit on the photo: only while zoomed, in the corner under the
@@ -504,22 +516,26 @@ struct AdjustmentsInspector: View {
             InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
                           canReset: basic.whiteBalance != .asShot,
                           reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
-                // A full-width pop-up, as in Finder's settings; Custom is listed only while it is chosen.
-                MenuPopUp(title: Self.title(of: basic.whiteBalance),
-                          items: WhiteBalancePreset.allCases
-                              .filter { $0 != .custom || basic.whiteBalance == .custom }
-                              .map { preset in
-                                  .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
-                                      if preset == .auto {
-                                          guard let renderer else { return }
-                                          Task { await library.autoWhiteBalance(with: renderer) }
-                                      } else {
-                                          library.changeEdit { $0.basic.choose(preset) }
+                // The eyedropper beside the pop-up, as in Lightroom; Custom is listed only while it is chosen.
+                HStack {
+                    EyedropperButton(isOn: library.isPickingWhiteBalance) { library.toggleWhiteBalancePicker() }
+                        .disabled(renderer == nil)
+                    MenuPopUp(title: Self.title(of: basic.whiteBalance),
+                              items: WhiteBalancePreset.allCases
+                                  .filter { $0 != .custom || basic.whiteBalance == .custom }
+                                  .map { preset in
+                                      .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
+                                          if preset == .auto {
+                                              guard let renderer else { return }
+                                              Task { await library.autoWhiteBalance(with: renderer) }
+                                          } else {
+                                              library.changeEdit { $0.basic.choose(preset) }
+                                          }
                                       }
-                                  }
-                              })
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel("White Balance Preset")
+                                  })
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("White Balance Preset")
+                }
                 AdjustmentSlider(
                     title: "Temperature",
                     value: Binding(get: { shown.temperature },

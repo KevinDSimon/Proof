@@ -13,6 +13,9 @@ final class CanvasZoom {
     var viewSize: CGSize = .zero
     /// A small copy of the photo as shown, for the navigator. The canvas sets it after each render.
     var preview: CGImage?
+    /// What the canvas last drew: the screen-size photo and, while zoomed, its sharp region. The
+    /// White Balance eyedropper's loupe reads its pixels from these.
+    @ObservationIgnored var shown: (photo: RenderedPhoto, detail: RenderedPhoto?)?
     /// Off while the crop tool is open, which always shows the whole photo.
     var isEnabled = true
 
