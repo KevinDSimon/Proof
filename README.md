@@ -7,10 +7,10 @@ Status: pre-alpha. Nothing to download yet.
 ## v1 scope
 
 - Folders panel with an All Photos view across every saved folder and its subfolders, and a filmstrip, with a star filter that reads ratings from XMP sidecars (written by Photomator, Lightroom, Capture One and others); ratings and flags set in Proof are saved to the same sidecars
-- Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, Texture, Clarity, vibrance, saturation
+- Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, Texture, Clarity, Dehaze, vibrance, saturation
 - Zoom to 100% and beyond, sharpening and noise reduction
 - Lens profile corrections, manual distortion and perspective
-- HSL color mixer, black and white, Dehaze and a vignette
+- HSL color mixer, black and white, and a vignette
 - Tone curve (RGB and per channel) and a histogram
 - `.cube` LUTs imported into a library, with previews of the photo and a strength slider
 - Crop, straighten, rotate and flip, before/after, copy and paste settings, undo

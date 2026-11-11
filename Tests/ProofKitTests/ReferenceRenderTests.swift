@@ -25,6 +25,7 @@ struct ReferenceRenderTests {
         ("look", look, PreparedLUT(lookTable)),
         ("texture", texture, nil),
         ("clarity", clarity, nil),
+        ("dehaze", dehaze, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -67,6 +68,14 @@ struct ReferenceRenderTests {
     static let clarity: EditRecipe = {
         var recipe = EditRecipe()
         recipe.basic.clarity = 100
+        return recipe
+    }()
+
+    /// Dehaze alone, at its strongest, so a change to the haze map, the haze's color or the
+    /// strength shows.
+    static let dehaze: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.basic.dehaze = 100
         return recipe
     }()
 

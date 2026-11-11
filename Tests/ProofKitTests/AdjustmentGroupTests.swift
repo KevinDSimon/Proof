@@ -9,6 +9,7 @@ struct AdjustmentGroupTests {
         recipe.basic.contrast = 20
         recipe.basic.texture = 25
         recipe.basic.clarity = -30
+        recipe.basic.dehaze = 40
         recipe.basic.blacks = -10
         recipe.basic.vibrance = 30
         recipe.basic.saturation = -15
@@ -36,7 +37,7 @@ struct AdjustmentGroupTests {
 
         let noLight = recipe.without([.light])
         #expect(noLight.basic.exposure == 0 && noLight.basic.contrast == 0 && noLight.basic.blacks == 0)
-        #expect(noLight.basic.texture == 0 && noLight.basic.clarity == 0)
+        #expect(noLight.basic.texture == 0 && noLight.basic.clarity == 0 && noLight.basic.dehaze == 0)
         #expect(noLight.basic.whiteBalance == recipe.basic.whiteBalance)
         #expect(noLight.basic.vibrance == 30 && noLight.curve == recipe.curve && noLight.look == recipe.look)
 

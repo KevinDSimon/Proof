@@ -100,6 +100,7 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
     public var contrast: Double = 0
     public var texture: Double = 0
     public var clarity: Double = 0
+    public var dehaze: Double = 0
     public var highlights: Double = 0
     public var shadows: Double = 0
     public var whites: Double = 0
@@ -108,7 +109,7 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
     public var saturation: Double = 0
 
     private enum CodingKeys: String, CodingKey {
-        case whiteBalance, temperature, tint, exposure, contrast, texture, clarity, highlights, shadows, whites, blacks, vibrance, saturation
+        case whiteBalance, temperature, tint, exposure, contrast, texture, clarity, dehaze, highlights, shadows, whites, blacks, vibrance, saturation
     }
 
     public init() {}
@@ -125,6 +126,7 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
         contrast = try value(.contrast)
         texture = try value(.texture)
         clarity = try value(.clarity)
+        dehaze = try value(.dehaze)
         highlights = try value(.highlights)
         shadows = try value(.shadows)
         whites = try value(.whites)
@@ -144,6 +146,7 @@ public struct BasicAdjustments: Codable, Equatable, Sendable {
         try c.encode(contrast, forKey: .contrast)
         try c.encode(texture, forKey: .texture)
         try c.encode(clarity, forKey: .clarity)
+        try c.encode(dehaze, forKey: .dehaze)
         try c.encode(highlights, forKey: .highlights)
         try c.encode(shadows, forKey: .shadows)
         try c.encode(whites, forKey: .whites)

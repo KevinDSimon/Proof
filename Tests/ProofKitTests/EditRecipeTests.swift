@@ -209,6 +209,23 @@ struct EditRecipeTests {
         #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
     }
 
+    @Test("A file saved before Dehaze reads it as 0 and stays neutral; it survives a round trip")
+    func migratesWithoutDehaze() throws {
+        let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"texture": 0, "clarity": 0}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        #expect(recipe.basic.dehaze == 0)
+        #expect(recipe.isNeutral)
+        #expect(recipe.processVersion == 1)
+
+        var edited = recipe
+        edited.basic.dehaze = -42.5
+        #expect(!edited.isNeutral)
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        let basic = try #require(written?["basic"] as? [String: Any])
+        #expect(basic["dehaze"] as? Double == -42.5)
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
+    }
+
     static let asShot = WhiteBalance(temperature: 6112, tint: 10)
 
     @Test("A preset sets its Kelvin with no tint, and As Shot clears both")

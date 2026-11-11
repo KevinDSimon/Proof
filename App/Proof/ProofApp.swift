@@ -559,7 +559,7 @@ struct AdjustmentsInspector: View {
             .disabled(library.selectedEdit?.asShot == nil)
             InspectorCard(title: "Basic", isOn: library.isOnBinding(.light),
                           canReset: basic.exposure != 0 || basic.contrast != 0 || basic.texture != 0
-                              || basic.clarity != 0 || basic.highlights != 0 || basic.shadows != 0
+                              || basic.clarity != 0 || basic.dehaze != 0 || basic.highlights != 0 || basic.shadows != 0
                               || basic.whites != 0 || basic.blacks != 0,
                           reset: {
                               library.changeEdit {
@@ -567,6 +567,7 @@ struct AdjustmentsInspector: View {
                                   $0.basic.contrast = 0
                                   $0.basic.texture = 0
                                   $0.basic.clarity = 0
+                                  $0.basic.dehaze = 0
                                   $0.basic.highlights = 0
                                   $0.basic.shadows = 0
                                   $0.basic.whites = 0
@@ -653,6 +654,14 @@ struct AdjustmentsInspector: View {
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
                     showsSign: true, track: Self.clarityTrack,
                     reset: { library.changeEdit { $0.basic.clarity = 0 } },
+                    isAdjusting: { library.isAdjusting = $0 })
+                AdjustmentSlider(
+                    title: "Dehaze",
+                    value: Binding(get: { basic.dehaze },
+                                   set: { value in library.changeEdit { $0.basic.dehaze = value } }),
+                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                    showsSign: true, track: Self.dehazeTrack,
+                    reset: { library.changeEdit { $0.basic.dehaze = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
             }
             .disabled(library.selectedEdit == nil)
@@ -777,9 +786,10 @@ struct AdjustmentsInspector: View {
     private static let exposureTrack = [Color(white: 0.12), Color(white: 0.62)]
     /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
     private static let contrastTrack = exposureTrack
-    /// Texture and Clarity run light to dark, the reverse of the tone sliders, as Lightroom draws them.
+    /// Texture, Clarity and Dehaze run light to dark, the reverse of the tone sliders, as Lightroom draws them.
     private static let textureTrack = Array(exposureTrack.reversed())
     private static let clarityTrack = textureTrack
+    private static let dehazeTrack = textureTrack
     private static let highlightsTrack = exposureTrack
     private static let shadowsTrack = exposureTrack
     private static let whitesTrack = exposureTrack
