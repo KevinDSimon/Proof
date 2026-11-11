@@ -148,7 +148,7 @@ struct VignetteTests {
             let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
             let tiles = try settings.map { vignette in
                 try #require(RAWRenderer.apply(EditRecipe(vignette: vignette), to: filter, asShot: asShot,
-                                               cameraDetail: CameraDetail(of: filter)))
+                                               cameraDetail: CameraDetail(of: filter), cameraLens: CameraLens(of: filter)))
             }
             let strip = tiles.enumerated().reduce(CIImage.empty()) { strip, tile in
                 let column = CGFloat(tile.offset % 4), row = CGFloat(1 - tile.offset / 4)

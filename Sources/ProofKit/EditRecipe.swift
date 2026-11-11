@@ -14,11 +14,12 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var detail: DetailAdjustments
     public var look: Look?
     public var vignette: VignetteAdjustments
+    public var lens: LensCorrections
     public var crop: Crop?
     public var layers: [Layer]
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, detail, look, vignette, crop, layers
+        case formatVersion, processVersion, basic, curve, detail, look, vignette, lens, crop, layers
     }
 
     public init(
@@ -27,6 +28,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         detail: DetailAdjustments = DetailAdjustments(),
         look: Look? = nil,
         vignette: VignetteAdjustments = VignetteAdjustments(),
+        lens: LensCorrections = LensCorrections(),
         crop: Crop? = nil,
         layers: [Layer] = []
     ) {
@@ -37,6 +39,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         self.detail = detail
         self.look = look
         self.vignette = vignette
+        self.lens = lens
         self.crop = crop
         self.layers = layers
     }
@@ -53,6 +56,8 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         look = try c.decodeIfPresent(Look.self, forKey: .look)
         // Edits saved before the Vignette card have none.
         vignette = try c.decodeIfPresent(VignetteAdjustments.self, forKey: .vignette) ?? VignetteAdjustments()
+        // Edits saved before Lens Corrections keep the decoder's default, as they always rendered.
+        lens = try c.decodeIfPresent(LensCorrections.self, forKey: .lens) ?? LensCorrections()
         crop = try c.decodeIfPresent(Crop.self, forKey: .crop)
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
         // Format 1 held temperature and tint as −100 to 100 offsets. Nothing rendered them, so
@@ -77,20 +82,23 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(detail, forKey: .detail)
         try c.encode(look, forKey: .look)
         try c.encode(vignette, forKey: .vignette)
+        try c.encode(lens, forKey: .lens)
         try c.encode(crop, forKey: .crop)
         try c.encode(layers, forKey: .layers)
     }
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && vignette.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && detail.isNeutral && look == nil && vignette.isNeutral && lens.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
-    /// The photo without its adjustments, for Show Original: the crop, with its turns and flips,
-    /// is kept, so the comparison frames the same picture. Geometry added later belongs here too.
+    /// The photo without its adjustments, for Show Original: lens corrections and the crop, with
+    /// its turns and flips, are kept, so the comparison frames the same picture. Geometry added
+    /// later belongs here too.
     public var original: EditRecipe {
         var original = EditRecipe()
         original.processVersion = processVersion
+        original.lens = lens
         original.crop = crop
         return original
     }
