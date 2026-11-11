@@ -130,7 +130,7 @@ struct TextureClarityTests {
                                                                fitting: CGSize(width: 2880, height: 1800)))
             let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
             let decoded = try #require(RAWRenderer.apply(EditRecipe(), to: filter, asShot: asShot,
-                                                               cameraDetail: CameraDetail(of: filter)))
+                                                               cameraDetail: CameraDetail(of: filter), cameraLens: CameraLens(of: filter)))
             let tiles = settings.map { TextureClarity.apply(to: decoded, texture: $0.texture, clarity: $0.clarity) }
             // The whole photo shrunk, and a 600-pixel square from its middle at the rendered size.
             let middle = CGRect(x: decoded.extent.midX - 300, y: decoded.extent.midY - 300, width: 600, height: 600)

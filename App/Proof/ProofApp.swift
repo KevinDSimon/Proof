@@ -706,6 +706,7 @@ struct AdjustmentsInspector: View {
             }
             .disabled(library.selectedEdit == nil)
             detailCard
+            lensCard
             vignetteCard
             LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
@@ -753,6 +754,45 @@ struct AdjustmentsInspector: View {
         }
         // The sliders can't show the camera's values until they have been read from the photo.
         .disabled(shown == nil)
+    }
+
+    /// The lens the photo was taken with and its correction profile, which `CIRAWFilter` applies
+    /// as it decodes. Many RAW files carry none, such as Leica M files; the switch is then off
+    /// and dimmed, with the reason under it.
+    private var lensCard: some View {
+        let edit = library.selectedEdit
+        let lens = edit?.cameraLens
+        let corrections = edit?.recipe.lens ?? LensCorrections()
+        return InspectorCard(title: "Lens Corrections", canReset: !corrections.isNeutral,
+                             reset: { library.changeEdit { $0.lens = LensCorrections() } }) {
+            LabeledContent("Lens") {
+                Text(lens.map { $0.name ?? "Not recorded" } ?? "")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+            }
+            .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+            Toggle("Profile Corrections", isOn: Binding(
+                get: { lens.map { corrections.appliesProfile(for: $0) } ?? false },
+                set: { value in
+                    // Back to the decoder's default rather than a saved value when they match,
+                    // so the edit stays neutral.
+                    library.changeEdit { $0.lens.profile = value == lens?.profileIsOnByDefault ? nil : value }
+                }))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .tint(.green)
+                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                .disabled(!(lens?.hasProfile ?? false))
+                .help("Corrects the lens's distortion and darkened corners with the profile in the photo")
+            if let lens, !lens.hasProfile {
+                Text("This photo has no lens profile.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .disabled(edit == nil)
     }
 
     /// Lightroom's post-crop vignette: it centers on the cropped frame and follows any crop.
