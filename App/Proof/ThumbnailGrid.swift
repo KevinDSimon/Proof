@@ -43,6 +43,9 @@ struct ThumbnailGrid: View {
                 }
                 .padding(Self.margin)
             }
+            // A filled title bar with a dividing line, as macOS shows over a view that doesn't
+            // scroll, such as an empty folder, so the bar looks the same with or without photos.
+            .scrollEdgeEffectStyle(.hard, for: .top)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 let usable = width - 2 * Self.margin + Self.spacing
                 columnCount = max(1, Int(usable / (Self.cellSize + Self.spacing)))
