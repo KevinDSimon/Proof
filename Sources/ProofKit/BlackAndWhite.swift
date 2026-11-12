@@ -38,27 +38,30 @@ public struct BlackAndWhite: Codable, Equatable, Sendable {
     /// Rec. 709 luminance weights for linear sRGB primaries, the working space's.
     static let luminance = (red: 0.2126, green: 0.7152, blue: 0.0722)
 
-    /// A slider at ±100 multiplies its channel's weight by this, or divides it.
-    static let maximumFactor = 4.0
-
     /// The weights of red, green and blue in the gray, which always add up to 1, so a gray
     /// pixel stays the same gray whatever the mix and the photo's overall brightness holds.
-    /// Values outside −100…100, which only a hand-edited sidecar can hold, are clamped.
+    ///
+    /// Each slider adds value ÷ 100 to its channel's weight, and the total added is then taken
+    /// back from all three in proportion to luminance. Red at +100 alone makes the gray the red
+    /// channel, as a deep red filter does. A weight can go below 0, so a color can be pushed past
+    /// the darkest of its channels, as in a channel mixer: a blend of channels that only averaged
+    /// them would barely move the muted colors of most photos. Values outside −100…100, which
+    /// only a hand-edited sidecar can hold, are clamped.
     public var weights: (red: Double, green: Double, blue: Double) {
-        func factor(_ value: Double) -> Double {
-            pow(Self.maximumFactor, min(max(value, Self.range.lowerBound), Self.range.upperBound) / 100)
+        func amount(_ value: Double) -> Double {
+            min(max(value, Self.range.lowerBound), Self.range.upperBound) / 100
         }
-        let r = Self.luminance.red * factor(red)
-        let g = Self.luminance.green * factor(green)
-        let b = Self.luminance.blue * factor(blue)
-        let sum = r + g + b
-        return (r / sum, g / sum, b / sum)
+        let (r, g, b) = (amount(red), amount(green), amount(blue))
+        let added = r + g + b
+        let l = Self.luminance
+        return (l.red + r - added * l.red, l.green + g - added * l.green, l.blue + b - added * l.blue)
     }
 }
 
 enum BlackAndWhiteStage {
-    /// Every channel becomes the same weighted blend of the three, in one `CIColorMatrix`.
-    /// Alpha is left as it is. Off returns the image as is.
+    /// Every channel becomes the same weighted blend of the three, in one `CIColorMatrix`, and
+    /// is kept from going below black, which a negative weight can push a color to. Alpha is
+    /// left as it is. Off returns the image as is.
     static func apply(_ blackAndWhite: BlackAndWhite, to image: CIImage) -> CIImage {
         guard blackAndWhite.isOn else { return image }
         let w = blackAndWhite.weights
@@ -67,6 +70,10 @@ enum BlackAndWhiteStage {
             "inputRVector": row, "inputGVector": row, "inputBVector": row,
             "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
             "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+        ]).applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputMaxComponents": CIVector(x: .greatestFiniteMagnitude, y: .greatestFiniteMagnitude,
+                                           z: .greatestFiniteMagnitude, w: 1),
         ])
     }
 }

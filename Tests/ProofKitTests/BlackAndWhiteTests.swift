@@ -43,6 +43,22 @@ struct BlackAndWhiteTests {
         #expect(try render(Self.blue, blueDown)[0] < render(Self.blue, even)[0])
     }
 
+    @Test("A channel at +100 alone makes the gray that channel, as a deep filter does")
+    func fullFilterIsOneChannel() throws {
+        let w = BlackAndWhite(isOn: true, red: 100).weights
+        #expect(abs(w.red - 1) < 1e-12 && abs(w.green) < 1e-12 && abs(w.blue) < 1e-12)
+        #expect(abs(try render(Self.blue, BlackAndWhite(isOn: true, red: 100))[0] - Self.blue[0]) < 1e-4)
+    }
+
+    @Test("A channel at -100 can darken its color past its darkest channel, but never below black")
+    func negativeWeightsStopAtBlack() throws {
+        let w = BlackAndWhite(isOn: true, red: -100).weights
+        #expect(w.red < 0)
+        #expect(try render(Self.red, BlackAndWhite(isOn: true, red: -100))[0] == 0)
+        let muted: [Float] = [0.4, 0.1, 0.1]
+        #expect(try render(muted, BlackAndWhite(isOn: true, red: -60))[0] < 0.1)
+    }
+
     @Test("Values outside -100 to 100 are clamped")
     func clampsValues() {
         let far = BlackAndWhite(isOn: true, red: 400).weights

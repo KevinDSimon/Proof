@@ -105,7 +105,7 @@ Turns the photo gray after selective color and before the look, so vibrance, sat
 | Field | Meaning |
 | --- | --- |
 | `isOn` | `true` for the Black & White treatment, `false` for Color. Default `false`. The mix is kept while it is `false` and doesn't render. |
-| `red`, `green`, `blue` | −100 to +100, default 0. Each multiplies its channel's Rec. 709 luminance weight (0.2126, 0.7152, 0.0722) by 4 raised to value ÷ 100, so ±100 multiplies or divides it by 4. The three weights are then divided by their sum, so they add up to 1 and a gray pixel keeps its value. With all three at 0 the gray is the photo's luminance. |
+| `red`, `green`, `blue` | −100 to +100, default 0. The weights start from Rec. 709 luminance (0.2126, 0.7152, 0.0722). Each value ÷ 100 is added to its channel's weight, and the sum of the three values ÷ 100 is then subtracted from the weights in proportion to luminance, so they still add up to 1 and a gray pixel keeps its value. Red +100 alone makes the gray the red channel. A weight can be negative; a result below black renders as black. With all three at 0 the gray is the photo's luminance. |
 
 Values outside −100 to +100 render as the nearer end.
 
