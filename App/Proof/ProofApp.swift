@@ -694,6 +694,15 @@ struct AdjustmentsInspector: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 6)
                 if blackAndWhite.isOn {
+                    // Custom is listed only while it is chosen, as in the White Balance menu.
+                    MenuPopUp(title: blackAndWhite.filter?.title ?? "Custom",
+                              items: BlackAndWhite.Filter.allCases.map { filter in
+                                  .action(filter.title, isChecked: filter == blackAndWhite.filter) {
+                                      library.changeEdit { $0.blackAndWhite.choose(filter) }
+                                  }
+                              } + (blackAndWhite.filter == nil ? [.action("Custom", isChecked: true) {}] : []))
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("Filter")
                     mixSlider("Red", \.red, hue: 0, help: "Lightens or darkens reds, oranges and skin, as a red filter does on film")
                     mixSlider("Green", \.green, hue: 120, help: "Lightens or darkens greens and foliage, as a green filter does on film")
                     mixSlider("Blue", \.blue, hue: 240, help: "Lightens or darkens blue skies and water, as a blue filter does on film")

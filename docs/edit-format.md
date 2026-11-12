@@ -109,6 +109,8 @@ Turns the photo gray after selective color and before the look, so vibrance, sat
 
 Values outside −100 to +100 render as the nearer end.
 
+The filter menu isn't saved: choosing Yellow, Orange, Red or Green sets `red`, `green` and `blue` to (15, 0, −15), (45, 0, −15), (80, −20, −30) or (−30, 30, −20), No Filter to 0, and a mix that matches one shows as that filter.
+
 ## Detail
 
 Each value runs from 0 to 100, and `null` keeps the camera's default, which `CIRAWFilter` chooses for each photo from its camera and ISO. Values outside 0 to 100 render as the nearer end. A missing `detail`, as in files saved before it existed, means all four are `null`, so those edits render as they always did. See decision 0016.

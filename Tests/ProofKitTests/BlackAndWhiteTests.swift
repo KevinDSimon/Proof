@@ -59,6 +59,28 @@ struct BlackAndWhiteTests {
         #expect(try render(muted, BlackAndWhite(isOn: true, red: -60))[0] < 0.1)
     }
 
+    @Test("A filter sets the sliders, and a mix that matches one reads as it")
+    func filters() throws {
+        var mix = BlackAndWhite(isOn: true)
+        #expect(mix.filter == BlackAndWhite.Filter.none)
+        mix.choose(.red)
+        #expect(mix.filter == .red && mix.red == 80 && mix.isOn)
+        mix.blue += 1
+        #expect(mix.filter == nil)
+        // From Yellow to Red each darkens a blue sky more.
+        let sky: [Float] = [0.1, 0.2, 0.4]
+        var darkness: [Float] = []
+        for filter in [BlackAndWhite.Filter.none, .yellow, .orange, .red] {
+            var preset = BlackAndWhite(isOn: true)
+            preset.choose(filter)
+            darkness.append(try render(sky, preset)[0])
+        }
+        #expect(darkness == darkness.sorted(by: >) && Set(darkness).count == 4)
+        var green = BlackAndWhite(isOn: true)
+        green.choose(.green)
+        #expect(try render(Self.green, green)[0] > render(Self.green, BlackAndWhite(isOn: true))[0])
+    }
+
     @Test("Values outside -100 to 100 are clamped")
     func clampsValues() {
         let far = BlackAndWhite(isOn: true, red: 400).weights

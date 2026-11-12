@@ -58,6 +58,47 @@ public struct BlackAndWhite: Codable, Equatable, Sendable {
     }
 }
 
+extension BlackAndWhite {
+    /// Colored filters as used on black-and-white film. Each is a starting mix of the three
+    /// sliders; the edit stores only the sliders, and a mix that matches a filter's reads as it.
+    /// From Yellow to Red each darkens blue skies more and lightens warm tones more; Green
+    /// lightens foliage and darkens reds and skin.
+    public enum Filter: String, CaseIterable, Sendable {
+        case none, yellow, orange, red, green
+
+        public var title: String {
+            switch self {
+            case .none: "No Filter"
+            case .yellow: "Yellow Filter"
+            case .orange: "Orange Filter"
+            case .red: "Red Filter"
+            case .green: "Green Filter"
+            }
+        }
+
+        /// Red, green and blue for the filter.
+        public var mix: (red: Double, green: Double, blue: Double) {
+            switch self {
+            case .none: (0, 0, 0)
+            case .yellow: (15, 0, -15)
+            case .orange: (45, 0, -15)
+            case .red: (80, -20, -30)
+            case .green: (-30, 30, -20)
+            }
+        }
+    }
+
+    /// The filter whose mix the sliders hold, or `nil` for a mix of the person's own.
+    public var filter: Filter? {
+        Filter.allCases.first { $0.mix == (red, green, blue) }
+    }
+
+    /// Sets the sliders to `filter`'s mix.
+    public mutating func choose(_ filter: Filter) {
+        (red, green, blue) = filter.mix
+    }
+}
+
 enum BlackAndWhiteStage {
     /// Every channel becomes the same weighted blend of the three, in one `CIColorMatrix`, and
     /// is kept from going below black, which a negative weight can push a color to. Alpha is
