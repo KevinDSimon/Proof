@@ -182,6 +182,25 @@ struct ThumbnailCacheTests {
         #expect(renderer.count == 0)
     }
 
+    @Test("Looking up the preview of a photo opening in Edit finds only a thumbnail of its current edit, and never renders one")
+    func cachedEditedThumbnail() async throws {
+        let photo = try makePhoto("A.DNG")
+        let renderer = FakeRenderer()
+        let cache = ThumbnailCache(directory: root.appendingPathComponent("Cache"),
+                                   renderEdit: { renderer.render($0, $1) })
+        #expect(cache.cachedThumbnail(for: photo, edit: edit(exposure: 1)) == nil)
+        #expect(renderer.count == 0)
+
+        _ = await cache.thumbnail(for: photo, edit: edit(exposure: 1))
+        let cached = try #require(cache.cachedThumbnail(for: photo, edit: edit(exposure: 1)))
+        #expect(cached.width == 100)
+        #expect(cache.cachedThumbnail(for: photo, edit: edit(exposure: 2)) == nil)
+        #expect(renderer.count == 1)
+
+        _ = cache.thumbnail(for: photo)
+        #expect(cache.cachedThumbnail(for: photo, edit: EditRecipe())?.width == 512)
+    }
+
     @Test("A look whose LUT is missing is left out, and the thumbnail is made again when the LUT appears or changes")
     func lookFollowsItsLUT() async throws {
         let photo = try makePhoto("A.DNG")

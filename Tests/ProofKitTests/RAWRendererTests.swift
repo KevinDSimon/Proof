@@ -273,6 +273,41 @@ struct RAWRendererTests {
         return Double(0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2])
     }
 
+    @Test("A placeholder fills the frame of the photo it stands in for, not its own shape")
+    func placeholderTakesPhotoSize() throws {
+        let context = try #require(CGContext(data: nil, width: 512, height: 300, bitsPerComponent: 8, bytesPerRow: 0,
+                                             space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                             bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let image = try #require(context.makeImage())
+        let renderer = try RAWRenderer()
+        let placeholder = try renderer.placeholder(image, photoSize: m11)
+        #expect(placeholder.texture.width == 512 && placeholder.texture.height == 300)
+        #expect(placeholder.photoSize == m11)
+        #expect(placeholder.region == CGRect(x: 0, y: 0, width: 1, height: 1))
+    }
+
+    @Test("A file that isn't a RAW photo has no photo size")
+    func noPhotoSizeForNonRAW() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("not-a-photo-\(UUID().uuidString).dng")
+        try Data("hello".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(RAWRenderer.photoSize(of: url, crop: nil) == nil)
+    }
+
+    @Test("The photo size read ahead of a render matches the render's, with and without a crop",
+          .enabled(if: sampleDNG != nil))
+    func photoSizeMatchesRender() async throws {
+        let url = try #require(sampleDNG)
+        let renderer = try RAWRenderer()
+        try await renderer.open(url)
+        var cropped = EditRecipe()
+        cropped.crop = Crop(x: 0.1, y: 0.2, width: 0.5, height: 0.6, rotation: 90)
+        for recipe in [EditRecipe(), cropped] {
+            let photo = try await renderer.render(fitting: CGSize(width: 800, height: 800), recipe: recipe)
+            #expect(RAWRenderer.photoSize(of: url, crop: recipe.crop) == photo.photoSize)
+        }
+    }
+
     /// The photo's average red, green, blue and alpha.
     private func averageColor(_ photo: RenderedPhoto) throws -> [Float] {
         let image = try #require(CIImage(mtlTexture: photo.texture, options: [.colorSpace: RAWRenderer.colorSpace]))

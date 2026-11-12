@@ -1,4 +1,5 @@
 import CoreImage
+import ImageIO
 import Metal
 
 public enum RAWRendererError: Error, Equatable {
@@ -46,9 +47,12 @@ public actor RAWRenderer {
     /// For the histogram only. Float, so sparse bins keep their precision; nonisolated, so
     /// measuring never queues behind the next render on the actor. `CIContext` is thread-safe.
     private nonisolated let histogramContext: CIContext
+    /// Draws the canvas and makes placeholders, on a command queue of its own, so a new photo's
+    /// preview or blank frame never waits behind the decode of the photo before it.
+    private nonisolated let drawContext: CIContext
 
     public init(device: MTLDevice? = MTLCreateSystemDefaultDevice()) throws {
-        guard let device, let commandQueue = device.makeCommandQueue() else {
+        guard let device, let commandQueue = device.makeCommandQueue(), let drawQueue = device.makeCommandQueue() else {
             throw RAWRendererError.noMetalDevice
         }
         self.device = device
@@ -64,6 +68,11 @@ public actor RAWRenderer {
         histogramContext = CIContext(mtlCommandQueue: commandQueue, options: [
             .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
             .workingFormat: CIFormat.RGBAf,
+            .cacheIntermediates: false,
+        ])
+        drawContext = CIContext(mtlCommandQueue: drawQueue, options: [
+            .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
+            .workingFormat: CIFormat.RGBAh,
             .cacheIntermediates: false,
         ])
     }
@@ -283,6 +292,36 @@ public actor RAWRenderer {
         try render(scaleFactor: min(max(scale, 0.01), 1), region: region, recipe: recipe, lut: lut)
     }
 
+    /// The photo's size with `crop` applied at full resolution, as a render of it reports it. It is
+    /// read from the file's header with ImageIO, which on a NAS takes about 7 ms where creating a
+    /// `CIRAWFilter` takes 110–340 ms; for the Leica DNGs checked, the two give the same size and
+    /// orientation. Blocks on file I/O; `nil` if the file isn't an image.
+    public static func photoSize(of url: URL, crop: Crop?) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int, width > 0, height > 0 else { return nil }
+        let orientation = (properties[kCGImagePropertyOrientation] as? UInt32).flatMap(CGImagePropertyOrientation.init) ?? .up
+        return photoSize(nativeSize: CGSize(width: width, height: height), orientation: orientation, crop: crop)
+    }
+
+    /// `image`, a small preview such as a cached thumbnail, made into a photo `draw` can show in
+    /// place of a render that isn't ready yet. It is drawn into the frame of a photo of
+    /// `photoSize`, so the render that replaces it lands in exactly the same place even when the
+    /// preview's own shape is slightly different.
+    public nonisolated func placeholder(_ image: CGImage, photoSize: CGSize) throws -> RenderedPhoto {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: Self.pixelFormat, width: max(image.width, 1), height: max(image.height, 1), mipmapped: false)
+        descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
+        descriptor.storageMode = .private
+        guard let texture = device.makeTexture(descriptor: descriptor) else { throw RAWRendererError.renderFailed }
+        // Not flipped, like a render's texture.
+        let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: nil)
+        destination.colorSpace = Self.colorSpace
+        try drawContext.startTask(toRender: CIImage(cgImage: image), to: destination).waitUntilCompleted()
+        return RenderedPhoto(texture: texture, photoSize: photoSize)
+    }
+
     /// The cropped photo's size at full resolution, in whole pixels as `applyGeometry` makes it.
     static func photoSize(nativeSize: CGSize, orientation: CGImagePropertyOrientation, crop: Crop?) -> CGSize {
         let oriented = oriented(nativeSize, orientation)
@@ -459,7 +498,7 @@ public actor RAWRenderer {
         let destination = CIRenderDestination(mtlTexture: drawable, commandBuffer: commandBuffer)
         destination.colorSpace = Self.colorSpace
         destination.isFlipped = true
-        try context.startTask(toRender: composed, to: destination)
+        try drawContext.startTask(toRender: composed, to: destination)
     }
 
     /// `photo`'s texture scaled onto its region of `frame`, in Core Image's coordinates for a

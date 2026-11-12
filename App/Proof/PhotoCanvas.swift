@@ -24,12 +24,17 @@ struct PhotoCanvas: NSViewRepresentable {
     /// canvas's gestures and sizes.
     var viewport: Viewport
     let zoom: CanvasZoom
+    /// Where a newly opened photo's thumbnail is looked up, to show until its render is ready.
+    let previews: ThumbnailCache
     var onError: (Error) -> Void
     /// Receives the histogram of each render shown, with the photo it belongs to.
     var onHistogram: (Histogram, URL) -> Void = { _, _ in }
+    /// Told `true` while the photo has neither a render nor a preview to show, and `false` once
+    /// it has one, so the view around the canvas can show that it is loading.
+    var onWaiting: (Bool) -> Void = { _ in }
 
     func makeCoordinator() -> PhotoCanvasCoordinator {
-        PhotoCanvasCoordinator(renderer: renderer, zoom: zoom)
+        PhotoCanvasCoordinator(renderer: renderer, zoom: zoom, previews: previews)
     }
 
     func makeNSView(context: Context) -> CanvasView {
@@ -50,6 +55,7 @@ struct PhotoCanvas: NSViewRepresentable {
     func updateNSView(_ view: CanvasView, context: Context) {
         context.coordinator.onError = onError
         context.coordinator.onHistogram = onHistogram
+        context.coordinator.onWaiting = onWaiting
         context.coordinator.setBackdrop(backdropGray)
         context.coordinator.setAngle(angle)
         context.coordinator.setViewport(viewport)
@@ -128,6 +134,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     weak var view: MTKView?
     var onError: (Error) -> Void = { _ in }
     var onHistogram: (Histogram, URL) -> Void = { _, _ in }
+    var onWaiting: (Bool) -> Void = { _ in }
 
     private struct RenderRequest: Equatable {
         var url: URL
@@ -145,6 +152,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
 
     private let renderer: RAWRenderer
     private let zoom: CanvasZoom
+    private let previews: ThumbnailCache
     private let commandQueue: MTLCommandQueue?
     private var url: URL?
     private var size: CGSize = .zero
@@ -157,6 +165,9 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     /// The sharp part of a zoomed photo, drawn over `photo`, and what it was rendered from.
     private var detail: RenderedPhoto?
     private var renderedDetail: DetailRequest?
+    /// The photo's thumbnail, shown fitted to the view until its first render is ready.
+    private var preview: RenderedPhoto?
+    private var previewTask: Task<Void, Never>?
     /// The shown photo still to be measured for the histogram, and whether a measurement is running.
     private var unmeasured: (photo: RenderedPhoto, url: URL)?
     private var isMeasuring = false
@@ -167,9 +178,10 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     private var angle = 0.0
     private static let log = Logger(subsystem: "Proof", category: "render")
 
-    init(renderer: RAWRenderer, zoom: CanvasZoom) {
+    init(renderer: RAWRenderer, zoom: CanvasZoom, previews: ThumbnailCache) {
         self.renderer = renderer
         self.zoom = zoom
+        self.previews = previews
         commandQueue = renderer.device.makeCommandQueue()
     }
 
@@ -200,11 +212,37 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
             photo = nil
             detail = nil
             renderedDetail = nil
+            preview = nil
             view?.needsDisplay = true
+            loadPreview(of: url, recipe: recipe)
         }
         if size == .zero { size = view?.drawableSize ?? .zero }
         self.recipe = recipe
         renderLatest()
+    }
+
+    /// Shows the photo's cached thumbnail with `recipe`, the one the grid and filmstrip show,
+    /// until the render is ready: a thumbnail of the edit has its crop and colors, so the render
+    /// that replaces it only sharpens it. It is fitted to the cropped photo's size, read from the
+    /// file, which is the frame the render fills. Without a cached thumbnail, the canvas waits.
+    private func loadPreview(of url: URL, recipe: EditRecipe) {
+        previewTask?.cancel()
+        previewTask = Task { [renderer, previews] in
+            onWaiting(false)
+            let preview = await Task.detached(priority: .userInitiated) { () -> RenderedPhoto? in
+                guard let image = previews.cachedThumbnail(for: url, edit: recipe),
+                      !Task.isCancelled,
+                      let size = RAWRenderer.photoSize(of: url, crop: recipe.crop) else { return nil }
+                return try? renderer.placeholder(image, photoSize: size)
+            }.value
+            guard !Task.isCancelled, url == self.url, photo == nil else { return }
+            if let preview {
+                self.preview = preview
+                view?.needsDisplay = true
+            } else {
+                onWaiting(true)
+            }
+        }
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -228,7 +266,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
             // A detail rendered before the crop changed would land in the wrong place.
             let detail = renderedDetail?.recipe.crop == rendered?.recipe.crop ? detail : nil
             zoom.shown = photo.map { ($0, frame == nil ? nil : detail) }
-            try renderer.draw(photo, detail: frame == nil ? nil : detail, frame: frame, into: drawable.texture,
+            try renderer.draw(photo ?? preview, detail: frame == nil ? nil : detail, frame: frame, into: drawable.texture,
                               commandBuffer: commandBuffer, background: background, angle: angle)
             commandBuffer.present(drawable)
             commandBuffer.commit()
@@ -278,21 +316,32 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         Task { [renderer] in
             let start = ContinuousClock.now
             do {
+                // A render can't be stopped once it starts, so one for a photo stepped past is
+                // dropped before it opens the file and again before it renders.
+                guard request.url == url else { throw CancellationError() }
                 try await renderer.open(request.url)
                 let lut = await LUTLibrary.shared.lut(for: request.recipe.look)
+                guard request.url == url else { throw CancellationError() }
                 let result = try await renderer.render(fitting: request.size, recipe: request.recipe, lut: lut)
                 let ms = (ContinuousClock.now - start) / .milliseconds(1)
                 Self.log.debug("Rendered \(result.texture.width)×\(result.texture.height) in \(ms, format: .fixed(precision: 1)) ms")
                 if request.url == url {
                     photo = result
+                    preview = nil
+                    previewTask?.cancel()
+                    onWaiting(false)
                     zoom.photoSize = result.photoSize
                     zoom.reclamp()
                     view?.needsDisplay = true
                     unmeasured = (result, request.url)
                     measureLatest()
                 }
+            } catch is CancellationError {
             } catch {
-                onError(error)
+                if request.url == url {
+                    onWaiting(false)
+                    onError(error)
+                }
             }
             rendered = request
             isRendering = false
@@ -305,8 +354,10 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         Task { [renderer] in
             let start = ContinuousClock.now
             do {
+                guard request.url == url else { throw CancellationError() }
                 try await renderer.open(request.url)
                 let lut = await LUTLibrary.shared.lut(for: request.recipe.look)
+                guard request.url == url else { throw CancellationError() }
                 let result = try await renderer.render(region: request.region, scale: request.scale,
                                                        recipe: request.recipe, lut: lut)
                 let ms = (ContinuousClock.now - start) / .milliseconds(1)
@@ -315,8 +366,9 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
                     detail = result
                     view?.needsDisplay = true
                 }
+            } catch is CancellationError {
             } catch {
-                onError(error)
+                if request.url == url { onError(error) }
             }
             renderedDetail = request
             isRendering = false
