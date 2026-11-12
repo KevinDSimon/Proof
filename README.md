@@ -9,7 +9,7 @@ Status: pre-alpha. Nothing to download yet.
 - Folders panel with an All Photos view across every saved folder and its subfolders, and a filmstrip, with a star filter that reads ratings from XMP sidecars (written by Photomator, Lightroom, Capture One and others); ratings and flags set in Proof are saved to the same sidecars
 - Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, Texture, Clarity, Dehaze, vibrance, saturation
 - Selective Color: hue, saturation and brightness for eight color ranges, chosen from a graph of the photo's colors
-- Black & White, chosen as the Color card's Treatment, with red, green and blue filter sliders
+- Black & White, chosen as the Basic card's Treatment, with red, green and blue filter sliders
 - Zoom to 100% and beyond, sharpening and noise reduction
 - Lightroom's post-crop vignette: amount, midpoint, roundness and feather
 - Lens profile corrections, manual distortion, and perspective correction with Upright (Auto, Guided, Level, Vertical, Full)

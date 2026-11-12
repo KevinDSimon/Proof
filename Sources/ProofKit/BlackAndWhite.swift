@@ -1,6 +1,6 @@
 import CoreImage
 
-/// The Color card's Treatment, Color or Black & White, and the black-and-white mix: how much the
+/// The Basic card's Treatment, Color or Black & White, and the black-and-white mix: how much the
 /// photo's red, green and blue channels each contribute to the gray, as color filters do on
 /// black-and-white film. See docs/decisions/0027-black-and-white.md.
 public struct BlackAndWhite: Codable, Equatable, Sendable {

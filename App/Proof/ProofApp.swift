@@ -575,7 +575,7 @@ struct AdjustmentsInspector: View {
             }
             // White balance can't be shown until the camera's has been read from the photo.
             .disabled(library.selectedEdit?.asShot == nil)
-            InspectorCard(title: "Basic", isOn: library.isOnBinding(.light),
+            InspectorCard(title: "Basic", isOn: library.isOnBinding(.basic),
                           canReset: basic.exposure != 0 || basic.contrast != 0 || basic.texture != 0
                               || basic.clarity != 0 || basic.dehaze != 0 || basic.highlights != 0 || basic.shadows != 0
                               || basic.whites != 0 || basic.blacks != 0,
@@ -681,17 +681,6 @@ struct AdjustmentsInspector: View {
                     showsSign: true, track: Self.dehazeTrack,
                     reset: { library.changeEdit { $0.basic.dehaze = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
-            }
-            .disabled(library.selectedEdit == nil)
-            InspectorCard(title: "Color", isOn: library.isOnBinding(.color),
-                          canReset: basic.vibrance != 0 || basic.saturation != 0 || blackAndWhite != BlackAndWhite(),
-                          reset: {
-                              library.changeEdit {
-                                  $0.basic.vibrance = 0
-                                  $0.basic.saturation = 0
-                                  $0.blackAndWhite = BlackAndWhite()
-                              }
-                          }) {
                 // Each treatment shows only the sliders that change it; the other's keep their values.
                 Picker("Treatment", selection: Binding(get: { blackAndWhite.isOn },
                                                        set: { isOn in library.changeEdit { $0.blackAndWhite.isOn = isOn } })) {
@@ -703,6 +692,7 @@ struct AdjustmentsInspector: View {
                 // Flexible segments span the row, as the Curve card's channel picker does.
                 .buttonSizing(.flexible)
                 .frame(maxWidth: .infinity)
+                .padding(.top, 6)
                 if blackAndWhite.isOn {
                     mixSlider("Red", \.red, hue: 0, help: "Lightens or darkens reds, oranges and skin, as a red filter does on film")
                     mixSlider("Green", \.green, hue: 120, help: "Lightens or darkens greens and foliage, as a green filter does on film")
