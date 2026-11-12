@@ -404,6 +404,41 @@ final class Library {
         save(photo)
     }
 
+    // MARK: Copy and paste settings
+
+    /// What Edit › Copy last took, kept until Proof quits.
+    private(set) var copiedSettings: CopiedSettings?
+    /// The Copy Settings sheet is open.
+    var isChoosingSettingsToCopy = false
+
+    var canCopySettings: Bool {
+        isEditing && !isCropping && selectedEdit != nil
+    }
+
+    var canPasteSettings: Bool {
+        canCopySettings && copiedSettings != nil
+    }
+
+    /// Copies `items` of the edit as the canvas shows it.
+    func copySettings(_ items: Set<SettingsItem>) {
+        guard let edit = selectedEdit else { return }
+        copiedSettings = CopiedSettings(from: edit.recipe, items: items)
+    }
+
+    /// Edit › Paste: replaces the copied items of the selected photo's edit as one undo step,
+    /// saves it, and turns on the switches of the cards it changed.
+    func pasteSettings() {
+        guard canPasteSettings, let copied = copiedSettings, let photo = browse.selectedPhoto else { return }
+        commitTask?.cancel()
+        commitEdit(of: photo)
+        showEdited()
+        let recipe = edits[photo]!.recipe.pasting(copied)
+        edits[photo]!.recipe = recipe
+        let pasted = Set(copied.items.compactMap(\.group))
+        offGroups.subtract(pasted.subtracting(AdjustmentGroup.initiallyOff(for: recipe)))
+        commitEdit(of: photo)
+    }
+
     /// The selected photo has an edit to revert, whatever its undo history.
     var canRevertEdit: Bool {
         guard let edit = selectedEdit else { return false }
