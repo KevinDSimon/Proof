@@ -14,7 +14,7 @@ struct FolderSidebar: View {
                     .help("Photos from every saved folder and its subfolders")
                     .tag(SidebarItem.allPhotos)
                 let counts = library.filterCounts
-                ForEach(PhotoFilter.choices, id: \.self) { filter in
+                ForEach(PhotoFilter.allCases, id: \.self) { filter in
                     FilterLabel(filter: filter, count: counts[filter] ?? 0)
                         .tag(SidebarItem.filtered(filter))
                 }
@@ -184,7 +184,6 @@ private struct FilterLabel: View {
 
     static func symbol(for filter: PhotoFilter) -> String {
         switch filter {
-        case .all: "photo.on.rectangle"
         case .flagged: "flag"
         case .rejected: "flag.slash"
         case .edited: "slider.horizontal.3"

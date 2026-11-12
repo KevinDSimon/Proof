@@ -74,8 +74,7 @@ struct ProofApp: App {
                     .disabled(!library.hasSelectedFiles)
             }
             CommandGroup(before: .sidebar) {
-                FilterPicker(library: library, title: "Show")
-                    .pickerStyle(.inline)
+                Menu("Filter") { FilterMenu(library: library) }
                     .disabled(library.selection == nil || library.selection?.filter != nil || library.isEditing)
                 Divider()
                 Button("Reload Folders") { library.refresh() }
@@ -226,6 +225,9 @@ struct ContentView: View {
                     browser
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
+                        // Without a scroll view under it, such as for an empty folder, macOS draws the
+                        // title bar's own background, so the toolbar would change color with the content.
+                        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
                 }
             }
             .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
@@ -296,16 +298,20 @@ struct ContentView: View {
         if library.selection != nil, library.selection?.filter == nil {
             ToolbarItem {
                 Menu {
-                    FilterPicker(library: library, title: "Filter")
-                        .pickerStyle(.inline)
+                    FilterMenu(library: library)
                 } label: {
-                    // Filled while a filter is on, so it reads as on without an accent color.
-                    Label("Filter", systemImage: library.filter == .all ? "line.3.horizontal.decrease.circle"
-                                                                         : "line.3.horizontal.decrease.circle.fill")
+                    // While a filter is on, the button names it and its symbol is filled, so it reads
+                    // as on without an accent color.
+                    if library.filter.isEmpty {
+                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                    } else {
+                        Label(library.filter.summary, systemImage: "line.3.horizontal.decrease.circle.fill")
+                            .labelStyle(.titleAndIcon)
+                    }
                 }
                 .menuIndicator(.hidden)
-                .help(library.filter == .all ? "Show only some of the photos"
-                                             : "Showing \(library.filter.title.lowercased()) photos")
+                .help(library.filter.isEmpty ? "Show only some of the photos" : "Filtered by \(library.filter.summary)")
+                .accessibilityLabel(library.filter.isEmpty ? "Filter" : "Filter: \(library.filter.summary)")
             }
         }
     }
@@ -416,7 +422,8 @@ struct ContentView: View {
                 if library.contents[selection] != nil {
                     if library.visiblePhotos.isEmpty {
                         ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                               description: Text("There are no RAW photos to show in this folder."))
+                                               description: Text(library.filter.isEmpty ? "There are no RAW photos to show in this folder."
+                                                                                        : "No photos in this folder match the filter."))
                     } else {
                         ThumbnailGrid(library: library, photos: library.visiblePhotos, allPhotos: library.listedPhotos)
                     }
@@ -442,7 +449,7 @@ struct ContentView: View {
             ProgressView()
         } else {
             ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                   description: Text(library.activeFilter == .all ? "There are no RAW photos to show in your folders."
+                                   description: Text(library.activeFilter.isEmpty ? "There are no RAW photos to show in your folders."
                                                                                   : "No photos in your folders match."))
         }
     }
@@ -484,7 +491,7 @@ struct ContentView: View {
         let noun = total == 1 ? "photo" : "photos"
         let shown = if library.selection?.filter != nil {
             "\(visible.count) \(visible.count == 1 ? "photo" : "photos")"
-        } else if library.filter != .all {
+        } else if !library.filter.isEmpty {
             "\(visible.count) of \(total) \(noun)"
         } else {
             "\(total) \(noun)"
@@ -498,11 +505,10 @@ struct ContentView: View {
     }
 
     private var emptyTitle: String {
-        let filter = library.activeFilter
-        return switch filter {
-        case .all: "No Photos"
-        default: "No \(filter.rating.map { "\($0)-Star" } ?? filter.title) Photos"
+        if let row = library.selection?.filter {
+            return "No \(row.rating.map { "\($0)-Star" } ?? row.title) Photos"
         }
+        return library.filter.isEmpty ? "No Photos" : "No Matching Photos"
     }
 }
 
@@ -1308,18 +1314,31 @@ struct AdjustmentsInspector: View {
     }
 }
 
-/// All, then every filter choice, for the toolbar's filter menu and View › Show.
-private struct FilterPicker: View {
+/// The toolbar filter's parts, for the toolbar's filter menu and View › Filter: Clear Filter, then
+/// a flag, a rating and edited photos, which combine.
+private struct FilterMenu: View {
     @Bindable var library: Library
-    let title: String
 
     var body: some View {
-        Picker(title, selection: $library.filter) {
-            Text(PhotoFilter.all.title).tag(PhotoFilter.all)
-            Divider()
-            ForEach(PhotoFilter.choices.prefix(3), id: \.self) { Text($0.title).tag($0) }
-            Divider()
-            ForEach(PhotoFilter.choices.dropFirst(3), id: \.self) { Text($0.title).tag($0) }
+        Button("Clear Filter") { library.filter = .none }
+            .disabled(library.filter.isEmpty)
+        Picker("Flag", selection: $library.filter.flag) {
+            Text("Any Flag").tag(PhotoMetadata.Flag?.none)
+            Text("Flagged").tag(PhotoMetadata.Flag?.some(.flagged))
+            Text("Unflagged").tag(PhotoMetadata.Flag?.some(.unflagged))
+            Text("Rejected").tag(PhotoMetadata.Flag?.some(.rejected))
         }
+        .pickerStyle(.inline)
+        Picker("Rating", selection: $library.filter.rating) {
+            Text("Any Rating").tag(Int?.none)
+            ForEach([5, 4, 3, 2, 1], id: \.self) { stars in
+                Text(stars == 1 ? "1 Star" : "\(stars) Stars").tag(Int?.some(stars))
+            }
+        }
+        .pickerStyle(.inline)
+        Toggle("Include Higher Ratings", isOn: $library.filter.includesHigherRatings)
+            .disabled(library.filter.rating == nil || library.filter.rating == 5)
+        Divider()
+        Toggle("Edited Only", isOn: $library.filter.editedOnly)
     }
 }

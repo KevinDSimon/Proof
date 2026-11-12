@@ -90,7 +90,7 @@ final class Library {
     private(set) var isReadingAllPhotos = false
     /// The toolbar filter, which narrows the selected folder or All Photos. Filter rows in the
     /// sidebar apply their own filter instead.
-    var filter: PhotoFilter = .all {
+    var filter = FilterCriteria.none {
         didSet {
             changedPhotos = []
             browse.keep(only: visiblePhotos)
@@ -211,8 +211,8 @@ final class Library {
     }
 
     /// The filter that applies: a filter row's, or the toolbar's.
-    var activeFilter: PhotoFilter {
-        selection?.filter ?? filter
+    var activeFilter: FilterCriteria {
+        selection?.filter?.criteria ?? filter
     }
 
     /// The listed photos that pass the filter.

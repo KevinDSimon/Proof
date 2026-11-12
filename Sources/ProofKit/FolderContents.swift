@@ -128,10 +128,63 @@ public struct FolderContents: Equatable, Sendable {
     }
 }
 
-/// Which photos are shown: all of them, or those with one flag, an edit, or one exact star
-/// rating. The sidebar lists every choice but All across folders; the toolbar narrows one folder.
+/// Which photos the toolbar filter shows. Each part that is set narrows the photos further, so
+/// Flagged and 4 Stars shows flagged photos with four stars.
+public struct FilterCriteria: Equatable, Sendable {
+    public var flag: PhotoMetadata.Flag?
+    /// A star rating from 1 to 5.
+    public var rating: Int?
+    /// Whether `rating` also matches higher ratings.
+    public var includesHigherRatings = false
+    public var editedOnly = false
+
+    public init(flag: PhotoMetadata.Flag? = nil, rating: Int? = nil, includesHigherRatings: Bool = false,
+                editedOnly: Bool = false) {
+        self.flag = flag
+        self.rating = rating
+        self.includesHigherRatings = includesHigherRatings
+        self.editedOnly = editedOnly
+    }
+
+    public static let none = FilterCriteria()
+
+    /// Nothing is narrowed: every photo passes.
+    public var isEmpty: Bool { flag == nil && rating == nil && !editedOnly }
+
+    public func includes(_ photo: FolderContents.Photo) -> Bool {
+        let metadata = photo.metadata
+        if let flag, (metadata?.flag ?? .unflagged) != flag { return false }
+        if let rating {
+            let stars = metadata?.rating ?? 0
+            guard includesHigherRatings ? stars >= rating : stars == rating else { return false }
+            // A rating leaves rejected photos out, unless the flag asks for them.
+            if flag == nil, metadata?.flag == .rejected { return false }
+        }
+        if editedOnly, !photo.isEdited { return false }
+        return true
+    }
+
+    /// The parts that are set, as the toolbar button names them: "Flagged · 4+ Stars · Edited".
+    /// Empty when nothing is set.
+    public var summary: String {
+        var parts: [String] = []
+        switch flag {
+        case .flagged: parts.append("Flagged")
+        case .unflagged: parts.append("Unflagged")
+        case .rejected: parts.append("Rejected")
+        case nil: break
+        }
+        if let rating {
+            let more = includesHigherRatings && rating < 5 ? "+" : ""
+            parts.append("\(rating)\(more) \(rating == 1 && more.isEmpty ? "Star" : "Stars")")
+        }
+        if editedOnly { parts.append("Edited") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// A sidebar filter row: photos with one flag, an edit, or one exact star rating, across folders.
 public enum PhotoFilter: String, CaseIterable, Codable, Sendable {
-    case all
     case flagged
     case rejected
     case edited
@@ -141,10 +194,7 @@ public enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case twoStars
     case oneStar
 
-    /// Every choice but All, in the order the sidebar and menus list them.
-    public static let choices = allCases.filter { $0 != .all }
-
-    /// The exact number of stars a star filter matches.
+    /// The exact number of stars a star row matches.
     public var rating: Int? {
         switch self {
         case .fiveStars: 5
@@ -158,7 +208,6 @@ public enum PhotoFilter: String, CaseIterable, Codable, Sendable {
 
     public var title: String {
         switch self {
-        case .all: "All"
         case .flagged: "Flagged"
         case .rejected: "Rejected"
         case .edited: "Edited"
@@ -166,22 +215,25 @@ public enum PhotoFilter: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    public func includes(_ photo: FolderContents.Photo) -> Bool {
+    /// The same filter as toolbar criteria. A star row leaves rejected photos out.
+    public var criteria: FilterCriteria {
         switch self {
-        case .all: true
-        case .flagged: photo.metadata?.flag == .flagged
-        case .rejected: photo.metadata?.flag == .rejected
-        case .edited: photo.isEdited
-        // A rejected photo is shown only under Rejected, whatever its stars.
-        default: photo.metadata?.rating == rating && photo.metadata?.flag != .rejected
+        case .flagged: FilterCriteria(flag: .flagged)
+        case .rejected: FilterCriteria(flag: .rejected)
+        case .edited: FilterCriteria(editedOnly: true)
+        default: FilterCriteria(rating: rating)
         }
     }
 
-    /// How many of `photos` each choice matches, counted in one pass.
+    public func includes(_ photo: FolderContents.Photo) -> Bool {
+        criteria.includes(photo)
+    }
+
+    /// How many of `photos` each row matches, counted in one pass.
     public static func counts(of photos: some Sequence<FolderContents.Photo>) -> [PhotoFilter: Int] {
-        var counts = Dictionary(uniqueKeysWithValues: choices.map { ($0, 0) })
+        var counts = Dictionary(uniqueKeysWithValues: allCases.map { ($0, 0) })
         for photo in photos {
-            for choice in choices where choice.includes(photo) { counts[choice, default: 0] += 1 }
+            for filter in allCases where filter.includes(photo) { counts[filter, default: 0] += 1 }
         }
         return counts
     }
