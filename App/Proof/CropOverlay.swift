@@ -19,7 +19,7 @@ struct CropOverlay: View {
             let layout = Layout(frame: frame, viewSize: proxy.size)
             ZStack {
                 Canvas { context, size in
-                    draw(in: &context, size: size, box: layout.box)
+                    draw(in: &context, size: size, layout: layout)
                 }
                 .allowsHitTesting(false)
                 // Beneath the rectangle and its handles, so only the part outside each corner turns the photo.
@@ -51,27 +51,125 @@ struct CropOverlay: View {
                         .gesture(drag(layout: layout) { start, delta in start.dragging(handle, by: delta, aspect: aspect) })
                         .accessibilityHidden(true)
                 }
-                // Over the rectangle and its handles, so the drag draws a line wherever it starts.
+                // Over the rectangle and its handles, so the drag draws a line wherever it starts,
+                // or moves the line kept from before or one of its ends.
                 if library.isDrawingLevelLine {
+                    let ends = shownLevelEnds(layout: layout)
                     Color.clear
                         .contentShape(Rectangle())
-                        .pointerStyle(.rectSelection)
-                        .gesture(levelLine)
+                        .pointerStyle(levelDrag.map { if case .drawing = $0 { .rectSelection } else { .grabActive } }
+                                      ?? (hoveredLevelPart == nil ? .rectSelection : .grabIdle))
+                        .onContinuousHover { phase in
+                            if case let .active(location) = phase { hoveredLevelPart = levelPart(at: location, in: ends) } else { hoveredLevelPart = nil }
+                        }
+                        .gesture(levelLine(layout: layout, ends: ends))
                         .accessibilityHidden(true)
+                }
+            }
+        }
+        // What to do, with the ruler's own buttons, as Guided Upright's guides have.
+        .overlay(alignment: .top) {
+            if library.isDrawingLevelLine {
+                ToolPill(message: library.levelLine == nil ? "Drag along something that should be level or upright"
+                                                           : "Drag the line or its ends to adjust",
+                         doneHelp: "Keep the angle and stop drawing (Return)",
+                         done: { library.isDrawingLevelLine = false }) {
+                    Button("Clear") { library.clearLevelLine() }
+                        .disabled(library.levelLine == nil)
+                        .accessibilityLabel("Clear Level Line")
                 }
             }
         }
     }
 
-    /// The line being drawn to level the photo along, in points; `nil` while none is.
-    @State private var drawnLine: (start: CGPoint, end: CGPoint)?
+    private enum LevelDrag {
+        /// A new line, in points.
+        case drawing(start: CGPoint, end: CGPoint)
+        /// An end or all of the kept line, with the line and the straighten angle when the drag started.
+        case moving(LevelPart, line: LevelLine, angle: Double)
+    }
+    /// What part of the kept line a press is on, as for Guided Upright's guides.
+    private enum LevelPart: Equatable {
+        case start, end, line
+    }
+    @State private var levelDrag: LevelDrag?
+    /// The part of the kept line under the pointer.
+    @State private var hoveredLevelPart: LevelPart?
 
-    private var levelLine: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in drawnLine = (value.startLocation, value.location) }
+    /// How close, in points, a press must be to an end of the kept line to take it.
+    private static let levelEndReach = 10.0
+    /// How close, in points, a press must be to the kept line to take all of it.
+    private static let levelLineReach = 6.0
+    private static let levelEndRadius = 4.0
+
+    /// The kept line's ends where they now fall in the view.
+    private func shownLevelEnds(layout: Layout) -> (start: CGPoint, end: CGPoint)? {
+        guard let line = library.levelLine else { return nil }
+        let shown = { point in
+            let offset = LevelLine.shownPoint(of: point, scale: layout.scale, angle: frame.angle)
+            return CGPoint(x: layout.photoCenter.x + offset.x, y: layout.photoCenter.y + offset.y)
+        }
+        return (shown(line.start), shown(line.end))
+    }
+
+    /// The part of the kept line at `point`: the nearer end within reach, before the line.
+    private func levelPart(at point: CGPoint, in ends: (start: CGPoint, end: CGPoint)?) -> LevelPart? {
+        guard let (a, b) = ends else { return nil }
+        let toStart = hypot(a.x - point.x, a.y - point.y)
+        let toEnd = hypot(b.x - point.x, b.y - point.y)
+        if min(toStart, toEnd) <= Self.levelEndReach { return toStart <= toEnd ? .start : .end }
+        let dx = b.x - a.x, dy = b.y - a.y
+        let lengthSquared = dx * dx + dy * dy
+        let t = lengthSquared > 0 ? min(max(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared, 0), 1) : 0
+        return hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy)) <= Self.levelLineReach ? .line : nil
+    }
+
+    /// Draws a new line to level the photo along, or moves an end of the kept one, which turns
+    /// the photo as it goes. The line is kept on the photo, so it stays on what it was drawn along.
+    private func levelLine(layout: Layout, ends: (start: CGPoint, end: CGPoint)?) -> some Gesture {
+        let center = layout.photoCenter
+        return DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if levelDrag == nil {
+                    if let part = levelPart(at: value.startLocation, in: ends), let line = library.levelLine {
+                        levelDrag = .moving(part, line: line, angle: frame.angle)
+                        library.isStraightening = true
+                        library.isAdjusting = true
+                    } else {
+                        levelDrag = .drawing(start: value.startLocation, end: value.location)
+                    }
+                }
+                switch levelDrag {
+                case .drawing?:
+                    levelDrag = .drawing(start: value.startLocation, end: value.location)
+                case let .moving(part, line, angle)?:
+                    // Mapped with the angle from the drag's start, so the photo turning under the
+                    // pointer doesn't feed back into where the end goes. Moving all of the line
+                    // keeps its angle, so the photo stays still.
+                    let shown = CGPoint(x: value.location.x - center.x, y: value.location.y - center.y)
+                    library.level(along: part == .line
+                        ? line.moved(by: CGVector(dx: value.translation.width, dy: value.translation.height), scale: layout.scale, angle: angle)
+                        : line.moving(isStart: part == .start, to: shown, scale: layout.scale, angle: angle))
+                case nil:
+                    break
+                }
+            }
             .onEnded { value in
-                drawnLine = nil
-                library.level(from: value.startLocation, to: value.location)
+                defer { levelDrag = nil }
+                switch levelDrag {
+                case .drawing?:
+                    // A click without a drag changes nothing.
+                    guard hypot(value.translation.width, value.translation.height) >= 8 else { return }
+                    library.level(along: LevelLine(
+                        shownFrom: CGPoint(x: value.startLocation.x - center.x, y: value.startLocation.y - center.y),
+                        to: CGPoint(x: value.location.x - center.x, y: value.location.y - center.y),
+                        scale: layout.scale, angle: frame.angle))
+                case .moving?:
+                    library.isStraightening = false
+                    library.isAdjusting = false
+                case nil:
+                    break
+                }
             }
     }
 
@@ -123,7 +221,8 @@ struct CropOverlay: View {
             }
     }
 
-    private func draw(in context: inout GraphicsContext, size: CGSize, box: CGRect) {
+    private func draw(in context: inout GraphicsContext, size: CGSize, layout: Layout) {
+        let box = layout.box
         // Fades the photo outside the rectangle toward the canvas, in either appearance.
         var outside = Path(CGRect(origin: .zero, size: size))
         outside.addRect(box)
@@ -133,7 +232,7 @@ struct CropOverlay: View {
         var shadowed = context
         shadowed.addFilter(.shadow(color: .black.opacity(0.45), radius: 1))
 
-        let divisions = library.isStraightening || drawnLine != nil ? 8 : dragStart != nil ? 3 : 0
+        let divisions = library.isStraightening || levelDrag != nil ? 8 : dragStart != nil ? 3 : 0
         if divisions > 0 {
             var grid = Path()
             for index in 1..<divisions {
@@ -163,11 +262,29 @@ struct CropOverlay: View {
         handles.move(to: CGPoint(x: right, y: box.midY - length / 2)); handles.addLine(to: CGPoint(x: right, y: box.midY + length / 2))
         shadowed.stroke(handles, with: .color(line), style: StrokeStyle(lineWidth: 3, lineCap: .square))
 
-        if let drawn = drawnLine {
+        // A new line while one is being drawn, otherwise the kept line with a ring at each end.
+        if case let .drawing(start, end)? = levelDrag {
             var path = Path()
-            path.move(to: drawn.start)
-            path.addLine(to: drawn.end)
+            path.move(to: start)
+            path.addLine(to: end)
             shadowed.stroke(path, with: .color(line), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        } else if library.isDrawingLevelLine, let ends = shownLevelEnds(layout: layout) {
+            var path = Path(), rings = Path(), dots = Path()
+            path.move(to: ends.start)
+            path.addLine(to: ends.end)
+            for (point, isStart) in [(ends.start, true), (ends.end, false)] {
+                let radius = Self.levelEndRadius
+                let circle = Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: 2 * radius, height: 2 * radius))
+                let part: LevelPart = isStart ? .start : .end
+                var isHeld = false
+                if case let .moving(held, _, _)? = levelDrag { isHeld = held == part }
+                if isHeld || hoveredLevelPart == part { dots.addPath(circle) } else { rings.addPath(circle) }
+            }
+            shadowed.stroke(path, with: .color(line), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+            // Hollow, as the Transform guides' ends are, so the edge underneath shows through.
+            shadowed.fill(rings, with: .color(.black.opacity(0.35)))
+            shadowed.stroke(rings, with: .color(line), lineWidth: 1.5)
+            shadowed.fill(dots, with: .color(line))
         }
     }
 
@@ -175,9 +292,12 @@ struct CropOverlay: View {
     struct Layout {
         let scale: Double
         let box: CGRect
+        /// The photo's center, which it turns around: the middle of the view.
+        let photoCenter: CGPoint
 
         init(frame: CropFrame, viewSize: CGSize) {
             let image = frame.imageSize
+            photoCenter = CGPoint(x: viewSize.width / 2, y: viewSize.height / 2)
             scale = image.width > 0 && image.height > 0
                 ? min(viewSize.width / image.width, viewSize.height / image.height) : 1
             // The photo turns around its own center; the rectangle's center turns with it.

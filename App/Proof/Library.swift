@@ -472,8 +472,13 @@ final class Library {
     /// The rectangle as it was before straightening shrank it, so it grows back as the angle
     /// returns toward zero.
     private var unstraightenedFrame: CropFrame?
-    /// The next drag on the photo draws a line to level the photo along, instead of moving the rectangle.
-    var isDrawingLevelLine = false
+    /// Drags on the photo draw a line to level the photo along, instead of moving the rectangle.
+    /// The line stays, with its ends draggable, until the ruler is turned off.
+    var isDrawingLevelLine = false {
+        didSet { if !isDrawingLevelLine { keptLevelLine = nil } }
+    }
+    /// The last line drawn with the ruler, and the turn and flips it was drawn on.
+    private var keptLevelLine: (line: LevelLine, turn: Crop)?
     /// Auto is looking for the horizon.
     private(set) var isFindingHorizon = false
     /// Auto found no horizon, which the crop tool shows for a moment.
@@ -557,12 +562,25 @@ final class Library {
         changeCrop { base.straightened(angle).applied(to: $0) }
     }
 
-    /// Straightens so the line drawn from `start` to `end`, in points on the photo as shown,
-    /// becomes level or upright, and ends drawing. A click without a drag changes nothing.
-    func level(from start: CGPoint, to end: CGPoint) {
-        isDrawingLevelLine = false
-        guard let correction = Horizon.correction(from: start, to: end, minimumLength: 8) else { return }
-        setStraighten(selectedCrop.angle + correction)
+    /// The line drawn with the ruler, while the photo is still turned and flipped as it was drawn.
+    var levelLine: LevelLine? {
+        guard let kept = keptLevelLine else { return nil }
+        let crop = selectedCrop
+        guard kept.turn.rotation == crop.rotation, kept.turn.flipHorizontal == crop.flipHorizontal,
+              kept.turn.flipVertical == crop.flipVertical else { return nil }
+        return kept.line
+    }
+
+    /// Removes the drawn line, keeping the angle it set.
+    func clearLevelLine() {
+        keptLevelLine = nil
+    }
+
+    /// Keeps `line` on the photo and straightens so it becomes level or upright.
+    func level(along line: LevelLine) {
+        keptLevelLine = (line, selectedCrop)
+        guard let angle = line.straightenAngle else { return }
+        setStraighten(angle)
     }
 
     /// Sets the selected photo's white balance to the one Auto estimates, labelled Auto.
@@ -840,16 +858,19 @@ final class Library {
     }
 
     func rotate(clockwise: Bool) {
+        keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { var crop = $0; crop.rotate(clockwise: clockwise); return crop }
     }
 
     func flipHorizontally() {
+        keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { var crop = $0; crop.flipHorizontally(); return crop }
     }
 
     func flipVertically() {
+        keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { var crop = $0; crop.flipVertically(); return crop }
     }
@@ -871,6 +892,7 @@ final class Library {
 
     /// Undoes the turn and flips, keeping the rectangle on the same part of the photo.
     func resetCropTurn() {
+        keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { crop in
             var crop = crop
