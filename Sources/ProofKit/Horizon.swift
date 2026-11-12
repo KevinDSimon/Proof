@@ -39,3 +39,58 @@ public enum Horizon {
         return degrees
     }
 }
+
+/// A line drawn along something in the photo that should be level or upright, kept while the
+/// crop tool's ruler is on so dragging an end refines the straighten angle. The ends are on the
+/// photo turned and flipped but not straightened, in pixels from its center with y downward, so
+/// the line stays on what it was drawn along as the photo turns under it.
+public struct LevelLine: Equatable, Sendable {
+    public var start: CGPoint
+    public var end: CGPoint
+
+    public init(start: CGPoint, end: CGPoint) {
+        self.start = start
+        self.end = end
+    }
+
+    /// The line through two points on screen, given from the photo's center at `scale` points per
+    /// pixel, with the photo straightened by `angle` degrees clockwise.
+    public init(shownFrom start: CGPoint, to end: CGPoint, scale: Double, angle: Double) {
+        self.init(start: Self.photoPoint(of: start, scale: scale, angle: angle),
+                  end: Self.photoPoint(of: end, scale: scale, angle: angle))
+    }
+
+    /// The straighten angle that makes the line level, or upright when it is closer to vertical.
+    /// `nil` when the ends are too close together to give an angle.
+    public var straightenAngle: Double? {
+        Horizon.correction(from: start, to: end, minimumLength: 1)
+    }
+
+    /// The line with one end moved to `shown`, a point on screen given as in `init(shownFrom:)`.
+    public func moving(isStart: Bool, to shown: CGPoint, scale: Double, angle: Double) -> LevelLine {
+        let point = Self.photoPoint(of: shown, scale: scale, angle: angle)
+        return isStart ? LevelLine(start: point, end: end) : LevelLine(start: start, end: point)
+    }
+
+    /// The whole line moved by `offset` on screen, which keeps its angle.
+    public func moved(by offset: CGVector, scale: Double, angle: Double) -> LevelLine {
+        let delta = Self.photoPoint(of: CGPoint(x: offset.dx, y: offset.dy), scale: scale, angle: angle)
+        return LevelLine(start: CGPoint(x: start.x + delta.x, y: start.y + delta.y),
+                         end: CGPoint(x: end.x + delta.x, y: end.y + delta.y))
+    }
+
+    /// Where `point` on the photo shows, from the photo's center on screen.
+    public static func shownPoint(of point: CGPoint, scale: Double, angle: Double) -> CGPoint {
+        let radians = angle * .pi / 180
+        return CGPoint(x: scale * (point.x * cos(radians) - point.y * sin(radians)),
+                       y: scale * (point.x * sin(radians) + point.y * cos(radians)))
+    }
+
+    /// The point on the photo that shows at `shown`, the inverse of `shownPoint`.
+    public static func photoPoint(of shown: CGPoint, scale: Double, angle: Double) -> CGPoint {
+        guard scale > 0 else { return .zero }
+        let radians = -angle * .pi / 180
+        return CGPoint(x: (shown.x * cos(radians) - shown.y * sin(radians)) / scale,
+                       y: (shown.x * sin(radians) + shown.y * cos(radians)) / scale)
+    }
+}

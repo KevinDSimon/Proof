@@ -82,11 +82,12 @@ struct ProofApp: App {
                               || library.selectedEdit == nil)
                 Divider()
                 // C opens and closes the crop tool, as R does in Lightroom's.
+                // While the ruler is on, Return and Esc end it instead, from its pill on the photo.
                 if library.isCropping {
                     Button("Done Cropping") { library.finishCropping() }
-                        .keyboardShortcut(.return, modifiers: [])
+                        .keyboardShortcut(library.isDrawingLevelLine ? nil : KeyboardShortcut(.return, modifiers: []))
                     Button("Cancel Cropping") { library.cancelCropping() }
-                        .keyboardShortcut(.escape, modifiers: [])
+                        .keyboardShortcut(library.isDrawingLevelLine ? nil : KeyboardShortcut(.escape, modifiers: []))
                     Button("Swap Crop Orientation") { library.swapCropOrientation() }
                         .keyboardShortcut("x", modifiers: [])
                 } else {
@@ -291,10 +292,10 @@ struct ContentView: View {
                 ToolbarItemGroup {
                     // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
                     Button("Cancel") { library.cancelCropping() }
-                        .keyboardShortcut(.cancelAction)
+                        .keyboardShortcut(library.isDrawingLevelLine ? nil : .cancelAction)
                         .help("Return to the crop from before the tool opened (Esc)")
                     Button("Done") { library.finishCropping() }
-                        .keyboardShortcut(.return, modifiers: [])
+                        .keyboardShortcut(library.isDrawingLevelLine ? nil : KeyboardShortcut(.return, modifiers: []))
                         .help("Keep the crop (Return)")
                 }
             } else {

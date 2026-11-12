@@ -38,6 +38,46 @@ struct HorizonTests {
         #expect(Horizon.correction(from: .zero, to: CGPoint(x: 8, y: 2), minimumLength: 10) == nil)
     }
 
+    @Test("A kept level line maps between the screen and the photo as the photo turns")
+    func levelLineRoundTrip() {
+        let shown = CGPoint(x: 120, y: -45)
+        let point = LevelLine.photoPoint(of: shown, scale: 0.25, angle: 7)
+        let back = LevelLine.shownPoint(of: point, scale: 0.25, angle: 7)
+        #expect(abs(back.x - shown.x) < 1e-9 && abs(back.y - shown.y) < 1e-9)
+    }
+
+    @Test("A level line drawn on a straightened photo gives the angle that levels it")
+    func levelLineOnStraightenedPhoto() throws {
+        // The photo is already turned 4°; a line drawn level on screen needs no further change.
+        let line = LevelLine(shownFrom: CGPoint(x: -100, y: 10), to: CGPoint(x: 100, y: 10), scale: 0.5, angle: 4)
+        #expect(abs(try #require(line.straightenAngle) - 4) < 1e-9)
+    }
+
+    @Test("Moving a whole kept level line keeps its angle and follows the pointer on screen")
+    func movingWholeLevelLine() throws {
+        let line = LevelLine(shownFrom: CGPoint(x: -100, y: 0), to: CGPoint(x: 100, y: 0), scale: 0.5, angle: 6)
+        let moved = line.moved(by: CGVector(dx: 0, dy: 30), scale: 0.5, angle: 6)
+        #expect(abs(try #require(moved.straightenAngle) - 6) < 1e-9)
+        let start = LevelLine.shownPoint(of: moved.start, scale: 0.5, angle: 6)
+        #expect(abs(start.x - -100) < 1e-9 && abs(start.y - 30) < 1e-9)
+    }
+
+    @Test("Moving an end of a kept level line changes the angle by the turn it makes")
+    func movingLevelLineEnd() throws {
+        // Drawn level on an upright photo, then its right end dragged 3° down around its left end.
+        let line = LevelLine(shownFrom: CGPoint(x: -100, y: 0), to: CGPoint(x: 100, y: 0), scale: 0.5, angle: 0)
+        #expect(try #require(line.straightenAngle) == 0)
+        let radians = 3 * Double.pi / 180
+        let dragged = CGPoint(x: -100 + 200 * cos(radians), y: 200 * sin(radians))
+        let moved = line.moving(isStart: false, to: dragged, scale: 0.5, angle: 0)
+        #expect(abs(try #require(moved.straightenAngle) - -3) < 1e-9)
+        #expect(moved.start == line.start)
+        // On screen, the moved line is level once the photo is straightened by that angle.
+        let start = LevelLine.shownPoint(of: moved.start, scale: 0.5, angle: -3)
+        let end = LevelLine.shownPoint(of: moved.end, scale: 0.5, angle: -3)
+        #expect(abs(start.y - end.y) < 1e-9)
+    }
+
     @Test("Dragging outside a corner turns the photo the way the pointer goes around the center")
     func cornerTurn() {
         let center = CGPoint(x: 100, y: 100)

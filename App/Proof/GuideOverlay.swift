@@ -142,34 +142,15 @@ struct GuideOverlay: View {
                         }
                     })
         }
-        // What to do, then how far along, with the tool's own buttons, on the photo where it
-        // happens. Material and the label color keep it gray in either appearance.
+        // What to do, then how far along, with the tool's own buttons, on the photo where it happens.
         .overlay(alignment: .top) {
-            HStack(spacing: 10) {
-                Text(instructions + (transform.guides.isEmpty ? "" : " · \(transform.guides.count) of \(Library.maximumGuides)"))
-                    .monospacedDigit()
+            ToolPill(message: instructions + (transform.guides.isEmpty ? "" : " · \(transform.guides.count) of \(Library.maximumGuides)"),
+                     doneHelp: "Keep the guides and stop drawing (Return)",
+                     done: { library.isDrawingGuides = false }) {
                 Button("Clear All") { library.clearGuides() }
                     .disabled(transform.guides.isEmpty)
                     .accessibilityLabel("Clear All Guides")
-                // Return keeps the guides and closes the tool, as Done does elsewhere; so does Esc.
-                Button("Done") { library.isDrawingGuides = false }
-                    .keyboardShortcut(.return, modifiers: [])
-                    .help("Keep the guides and stop drawing (Return)")
-                    .background {
-                        Button("") { library.isDrawingGuides = false }
-                            .keyboardShortcut(.cancelAction)
-                            .opacity(0)
-                            .accessibilityHidden(true)
-                    }
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .controlSize(.small)
-            .padding(.leading, 14)
-            .padding(.trailing, 6)
-            .padding(.vertical, 5)
-            .background(.regularMaterial, in: Capsule())
-            .padding(.top, 12)
         }
     }
 

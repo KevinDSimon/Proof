@@ -59,12 +59,16 @@ struct CropInspector: View {
                     if library.foundNoHorizon { Text("No horizon found") }
                 } content: {
                     HStack {
-                        Toggle(isOn: Binding(get: { library.isDrawingLevelLine }, set: { library.isDrawingLevelLine = $0 })) {
-                            Label("Draw Line", systemImage: "ruler")
+                        // As Guided Upright's Draw Guides: one button in and out of drawing, with
+                        // Clear and Done on the photo while drawing.
+                        Button {
+                            library.isDrawingLevelLine.toggle()
+                        } label: {
+                            Text(library.isDrawingLevelLine ? "Done" : "Draw Line")
                                 .frame(maxWidth: .infinity, maxHeight: Self.levelButtonHeight)
                         }
-                        .toggleStyle(.button)
-                        .help("Drag along something in the photo that should be level or upright")
+                        .help(library.isDrawingLevelLine ? "Stop drawing the level line (Esc)"
+                              : "Drag along something in the photo that should be level or upright, then drag the line or its ends to adjust")
                         Button {
                             guard let renderer else { return }
                             Task { await library.autoStraighten(with: renderer) }
