@@ -83,7 +83,7 @@ struct Filmstrip: View {
                     .fill(.quaternary)
             }
         }
-        .selectionOutline(isSelected, isEmphasized: isCurrent && library.browse.hasMultipleSelection, padding: 4)
+        .selectionOutline(isSelected, padding: 4)
         .frame(width: Self.height - 12, height: Self.height - 12)
         .contentShape(Rectangle())
         .onTapGesture {
