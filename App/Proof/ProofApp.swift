@@ -227,10 +227,6 @@ struct ContentView: View {
                         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
                 }
             }
-            // Without a scroll view under it, such as for an empty folder or the photo in Edit, macOS
-            // draws the title bar's own background, so the toolbar would change with the content.
-            // Set for both modes: set for one only, the other gets the background.
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
                                             set: { if library.isEditing { library.isInspectorShown = $0 } })) {
                 Group {
