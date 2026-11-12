@@ -2,14 +2,24 @@ import AppKit
 import Observation
 import ProofKit
 
-/// What the sidebar can select: All Photos, or one folder.
+/// What the sidebar can select: All Photos, the photos across folders that pass one filter, or
+/// one folder.
 enum SidebarItem: Codable, Hashable {
     case allPhotos
+    case filtered(PhotoFilter)
     case folder(FileReference)
 
     var folder: FileReference? {
         if case .folder(let folder) = self { folder } else { nil }
     }
+
+    /// The filter of a filter row.
+    var filter: PhotoFilter? {
+        if case .filtered(let filter) = self { filter } else { nil }
+    }
+
+    /// All Photos and the filter rows show photos from every available location.
+    var isAcrossFolders: Bool { folder == nil }
 }
 
 /// One photo's edit while Proof runs. Kept for every photo opened in Edit until Proof quits, so
@@ -75,9 +85,12 @@ final class Library {
             }
         }
     }
-    /// While All Photos is selected, whether folders under the saved locations are still being read.
+    /// While All Photos or a filter row is selected, whether folders under the saved locations are
+    /// still being read.
     private(set) var isReadingAllPhotos = false
-    var filter: PhotoFilter = .all {
+    /// The toolbar filter, which narrows the selected folder or All Photos. Filter rows in the
+    /// sidebar apply their own filter instead.
+    var filter = FilterCriteria.none {
         didSet {
             changedPhotos = []
             browse.keep(only: visiblePhotos)
@@ -188,14 +201,29 @@ final class Library {
     var listedPhotos: [ListedPhoto] {
         switch selection {
         case .folder(let folder): ListedPhoto.photos(of: folder, in: contents)
-        case .allPhotos: availableRoots.flatMap { ListedPhoto.photos(under: $0, in: contents) }
+        case .allPhotos, .filtered: allListedPhotos
         case nil: []
         }
     }
 
+    private var allListedPhotos: [ListedPhoto] {
+        availableRoots.flatMap { ListedPhoto.photos(under: $0, in: contents) }
+    }
+
+    /// The filter that applies: a filter row's, or the toolbar's.
+    var activeFilter: FilterCriteria {
+        selection?.filter?.criteria ?? filter
+    }
+
     /// The listed photos that pass the filter.
     var visiblePhotos: [ListedPhoto] {
-        listedPhotos.filter { filter.includes($0.photo) || changedPhotos.contains($0.id) }
+        let filter = activeFilter
+        return listedPhotos.filter { filter.includes($0.photo) || changedPhotos.contains($0.id) }
+    }
+
+    /// How many photos read so far under the available locations each filter row matches.
+    var filterCounts: [PhotoFilter: Int] {
+        PhotoFilter.counts(of: allListedPhotos.lazy.map(\.photo))
     }
 
     /// Saved locations All Photos leaves out because their drive isn't connected or they can't be found.
@@ -239,13 +267,13 @@ final class Library {
         }
     }
 
-    /// For All Photos, reads every folder under the available locations, one at a time and in
-    /// sidebar order, so the grid fills in folder by folder. Folders the sidebar already read are
-    /// not read again. Reading stops when another item is selected.
+    /// For All Photos and the filter rows, reads every folder under the available locations, one at
+    /// a time and in sidebar order, so the grid fills in folder by folder. Folders the sidebar
+    /// already read are not read again. Reading stops when another item is selected.
     private func readAllPhotos() {
         allPhotosTask?.cancel()
         isReadingAllPhotos = false
-        guard selection == .allPhotos else { return }
+        guard selection?.isAcrossFolders == true else { return }
         isReadingAllPhotos = true
         let roots = availableRoots
         allPhotosTask = Task {
@@ -1196,7 +1224,7 @@ final class Library {
                 try fileAccess.relink(location.id, to: url)
                 contents = contents.filter { $0.key.locationID != location.id }
                 refreshLocations()
-                if selection == .allPhotos { readAllPhotos() }
+                if selection?.isAcrossFolders == true { readAllPhotos() }
             case .grantWrite(let location):
                 try fileAccess.grantWriteAccess(location.id, with: url)
                 refreshLocations()
@@ -1204,7 +1232,7 @@ final class Library {
                 if location.lastKnownURL.standardizedFileURL != url.standardizedFileURL {
                     contents = contents.filter { $0.key.locationID != location.id }
                     Task { await load(FileReference(locationID: location.id, relativePath: []), force: true) }
-                    if selection == .allPhotos { readAllPhotos() }
+                    if selection?.isAcrossFolders == true { readAllPhotos() }
                 }
                 for (photo, edit) in edits where photo.folder.locationID == location.id && edit.unsaved == .noAccess {
                     save(photo)
@@ -1228,7 +1256,7 @@ final class Library {
         contents = contents.filter { $0.key.locationID != location.id }
         if selection?.folder?.locationID == location.id { selection = nil }
         refreshLocations()
-        if selection == .allPhotos { readAllPhotos() }
+        if selection?.isAcrossFolders == true { readAllPhotos() }
     }
 
     /// Reads every folder already read again, on local disks and network volumes, after checking
@@ -1320,7 +1348,7 @@ final class Library {
         contents = contents.filter { isAvailable($0.key.locationID) }
         watchLocalFolders()
         browse.keep(only: visiblePhotos)
-        if selection == .allPhotos { readAllPhotos() }
+        if selection?.isAcrossFolders == true { readAllPhotos() }
         // The sidebar reads the folders it shows, but a selected subfolder may be collapsed out of view.
         if let folder = selection?.folder, isAvailable(folder.locationID) {
             Task { await load(folder) }
@@ -1365,7 +1393,7 @@ final class Library {
         let ordered = folders.sorted { $0.relativePath.count < $1.relativePath.count }
         Task {
             for folder in ordered { await load(folder, force: true) }
-            if selection == .allPhotos { readAllPhotos() }
+            if selection?.isAcrossFolders == true { readAllPhotos() }
         }
     }
 

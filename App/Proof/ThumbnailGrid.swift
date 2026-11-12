@@ -43,6 +43,9 @@ struct ThumbnailGrid: View {
                 }
                 .padding(Self.margin)
             }
+            // A filled title bar with a dividing line, as macOS shows over a view that doesn't
+            // scroll, such as an empty folder, so the bar looks the same with or without photos.
+            .scrollEdgeEffectStyle(.hard, for: .top)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 let usable = width - 2 * Self.margin + Self.spacing
                 columnCount = max(1, Int(usable / (Self.cellSize + Self.spacing)))
@@ -121,7 +124,7 @@ struct ThumbnailGrid: View {
             library.browse.selectedPhoto = photo.id
             library.browse.edit()
         })
-        .help(library.selection == .allPhotos ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
+        .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

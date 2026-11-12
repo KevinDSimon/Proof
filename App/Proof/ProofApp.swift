@@ -74,17 +74,8 @@ struct ProofApp: App {
                     .disabled(!library.hasSelectedFiles)
             }
             CommandGroup(before: .sidebar) {
-                // In Edit, ⌘1 is Actual Size instead.
-                Picker("Show", selection: $library.filter) {
-                    Text("All").tag(PhotoFilter.all)
-                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("1"))
-                    Text("5-Star Photos").tag(PhotoFilter.fiveStars)
-                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("2"))
-                    Text("Edited Photos").tag(PhotoFilter.edited)
-                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("3"))
-                }
-                .pickerStyle(.inline)
-                .disabled(library.selection == nil || library.isEditing)
+                Menu("Filter") { FilterMenu(library: library) }
+                    .disabled(library.selection == nil || library.selection?.filter != nil || library.isEditing)
                 Divider()
                 Button("Reload Folders") { library.refresh() }
                     .keyboardShortcut("r")
@@ -300,15 +291,25 @@ struct ContentView: View {
     }
 
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
-        if library.selection != nil {
+        // A filter row is already filtered.
+        if library.selection != nil, library.selection?.filter == nil {
             ToolbarItem {
-                Picker("Filter", selection: $library.filter) {
-                    Text("All").tag(PhotoFilter.all)
-                    Text("5 Stars").tag(PhotoFilter.fiveStars)
-                    Text("Edited").tag(PhotoFilter.edited)
+                Menu {
+                    FilterMenu(library: library)
+                } label: {
+                    // While a filter is on, the symbol is filled and the button shows how many parts
+                    // are set, so it reads as on without an accent color. The tooltip names them.
+                    if library.filter.isEmpty {
+                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                    } else {
+                        Label("\(library.filter.activeCount)", systemImage: "line.3.horizontal.decrease.circle.fill")
+                            .labelStyle(.titleAndIcon)
+                            .monospacedDigit()
+                    }
                 }
-                .pickerStyle(.segmented)
-                .help("Show all photos in the folder, only 5-star photos, or only edited photos")
+                .menuIndicator(.hidden)
+                .help(library.filter.isEmpty ? "Show only some of the photos" : "Filtered by \(library.filter.summary)")
+                .accessibilityLabel(library.filter.isEmpty ? "Filter" : "Filter: \(library.filter.summary)")
             }
         }
     }
@@ -400,7 +401,7 @@ struct ContentView: View {
             } actions: {
                 Button("Add Folder…") { library.requestFolder(.add) }
             }
-        } else if library.selection == .allPhotos {
+        } else if library.selection?.isAcrossFolders == true {
             allPhotos
         } else if let selection = library.selection?.folder, let location = selectedLocation {
             switch library.status(of: selection.locationID) {
@@ -419,7 +420,8 @@ struct ContentView: View {
                 if library.contents[selection] != nil {
                     if library.visiblePhotos.isEmpty {
                         ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                               description: Text("There are no RAW photos to show in this folder."))
+                                               description: Text(library.filter.isEmpty ? "There are no RAW photos to show in this folder."
+                                                                                        : "No photos in this folder match the filter."))
                     } else {
                         ThumbnailGrid(library: library, photos: library.visiblePhotos, allPhotos: library.listedPhotos)
                     }
@@ -445,7 +447,8 @@ struct ContentView: View {
             ProgressView()
         } else {
             ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                   description: Text("There are no RAW photos to show in your folders."))
+                                   description: Text(library.activeFilter.isEmpty ? "There are no RAW photos to show in your folders."
+                                                                                  : "No photos in your folders match."))
         }
     }
 
@@ -462,6 +465,7 @@ struct ContentView: View {
         if library.isEditing { return library.browse.selectedPhoto?.name ?? "" }
         switch library.selection {
         case .allPhotos: return "All Photos"
+        case .filtered(let filter): return filter.title
         case .folder(let folder): return library.name(of: folder)
         case nil: return ""
         }
@@ -483,21 +487,26 @@ struct ContentView: View {
         if library.selection == nil { return "" }
         let total = library.listedPhotos.count
         let noun = total == 1 ? "photo" : "photos"
-        let shown = library.filter == .all ? "\(total) \(noun)" : "\(visible.count) of \(total) \(noun)"
+        let shown = if library.selection?.filter != nil {
+            "\(visible.count) \(visible.count == 1 ? "photo" : "photos")"
+        } else if !library.filter.isEmpty {
+            "\(visible.count) of \(total) \(noun)"
+        } else {
+            "\(total) \(noun)"
+        }
         let count = [shown, selectedCount].compactMap { $0 }.joined(separator: " · ")
         let unavailable = library.unavailableLocations
-        guard library.selection == .allPhotos, !unavailable.isEmpty else { return count }
+        guard library.selection?.isAcrossFolders == true, !unavailable.isEmpty else { return count }
         let missing = unavailable.count == 1 ? "“\(unavailable[0].name)” isn't available"
                                              : "\(unavailable.count) folders aren't available"
         return "\(count) · \(missing)"
     }
 
     private var emptyTitle: String {
-        switch library.filter {
-        case .all: "No Photos"
-        case .fiveStars: "No 5-Star Photos"
-        case .edited: "No Edited Photos"
+        if let row = library.selection?.filter {
+            return "No \(row.rating.map { "\($0)-Star" } ?? row.title) Photos"
         }
+        return library.filter.isEmpty ? "No Photos" : "No Matching Photos"
     }
 }
 
@@ -1300,5 +1309,34 @@ struct AdjustmentsInspector: View {
         case .unreadable: "This photo's edit file couldn't be read, so changes aren't saved."
         case .failed: "The last change couldn't be saved."
         }
+    }
+}
+
+/// The toolbar filter's parts, for the toolbar's filter menu and View › Filter: Clear Filter, then
+/// a flag, a rating and edited photos, which combine.
+private struct FilterMenu: View {
+    @Bindable var library: Library
+
+    var body: some View {
+        Button("Clear Filter") { library.filter = .none }
+            .disabled(library.filter.isEmpty)
+        Picker("Flag", selection: $library.filter.flag) {
+            Text("Any Flag").tag(PhotoMetadata.Flag?.none)
+            Text("Flagged").tag(PhotoMetadata.Flag?.some(.flagged))
+            Text("Unflagged").tag(PhotoMetadata.Flag?.some(.unflagged))
+            Text("Rejected").tag(PhotoMetadata.Flag?.some(.rejected))
+        }
+        .pickerStyle(.inline)
+        Picker("Rating", selection: $library.filter.rating) {
+            Text("Any Rating").tag(Int?.none)
+            ForEach([5, 4, 3, 2, 1], id: \.self) { stars in
+                Text(stars == 1 ? "1 Star" : "\(stars) Stars").tag(Int?.some(stars))
+            }
+        }
+        .pickerStyle(.inline)
+        Toggle("Include Higher Ratings", isOn: $library.filter.includesHigherRatings)
+            .disabled(library.filter.rating == nil || library.filter.rating == 5)
+        Divider()
+        Toggle("Edited Only", isOn: $library.filter.editedOnly)
     }
 }

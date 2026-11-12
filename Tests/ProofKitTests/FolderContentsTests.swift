@@ -50,18 +50,73 @@ struct FolderContentsTests {
         #expect(contents == FolderContents(subfolders: [], photos: [.init(name: "A.DNG", isEdited: true)]))
     }
 
-    @Test("Filters keep all photos, only 5-star photos that aren't rejected, or only edited photos")
+    @Test("Sidebar rows keep one flag, edited photos, or one exact rating that isn't rejected")
     func filters() {
         let plain = FolderContents.Photo(name: "a", isEdited: false, metadata: .init(rating: 3))
         let edited = FolderContents.Photo(name: "b", isEdited: true)
         let fiveStar = FolderContents.Photo(name: "c", isEdited: false, metadata: .init(rating: 5))
         let rejected = FolderContents.Photo(name: "d", isEdited: false, metadata: .init(rating: 5, flag: .rejected))
-        let photos = [plain, edited, fiveStar, rejected]
+        let flagged = FolderContents.Photo(name: "e", isEdited: false, metadata: .init(rating: 4, flag: .flagged))
+        let photos = [plain, edited, fiveStar, rejected, flagged]
 
-        #expect(photos.filter(PhotoFilter.all.includes) == photos)
         // A rejected photo stays out of 5 Stars even when it has five stars.
         #expect(photos.filter(PhotoFilter.fiveStars.includes) == [fiveStar])
+        #expect(photos.filter(PhotoFilter.fourStars.includes) == [flagged])
+        // Stars match exactly, not "at least".
+        #expect(photos.filter(PhotoFilter.threeStars.includes) == [plain])
+        #expect(photos.filter(PhotoFilter.oneStar.includes).isEmpty)
         #expect(photos.filter(PhotoFilter.edited.includes) == [edited])
+        #expect(photos.filter(PhotoFilter.flagged.includes) == [flagged])
+        #expect(photos.filter(PhotoFilter.rejected.includes) == [rejected])
+    }
+
+    @Test("Toolbar criteria combine: every part that is set must match")
+    func combinedCriteria() {
+        let flaggedFour = FolderContents.Photo(name: "a", isEdited: true, metadata: .init(rating: 4, flag: .flagged))
+        let flaggedTwo = FolderContents.Photo(name: "b", isEdited: false, metadata: .init(rating: 2, flag: .flagged))
+        let five = FolderContents.Photo(name: "c", isEdited: false, metadata: .init(rating: 5))
+        let rejectedFive = FolderContents.Photo(name: "d", isEdited: false, metadata: .init(rating: 5, flag: .rejected))
+        let unrated = FolderContents.Photo(name: "e", isEdited: false)
+        let photos = [flaggedFour, flaggedTwo, five, rejectedFive, unrated]
+
+        #expect(photos.filter(FilterCriteria.none.includes) == photos)
+        #expect(photos.filter(FilterCriteria(flag: .flagged, rating: 4).includes) == [flaggedFour])
+        #expect(photos.filter(FilterCriteria(rating: 4, includesHigherRatings: true).includes) == [flaggedFour, five])
+        #expect(photos.filter(FilterCriteria(flag: .unflagged).includes) == [five, unrated])
+        #expect(photos.filter(FilterCriteria(flag: .flagged, editedOnly: true).includes) == [flaggedFour])
+        // Asking for rejected photos with a rating keeps them.
+        #expect(photos.filter(FilterCriteria(flag: .rejected, rating: 5).includes) == [rejectedFive])
+    }
+
+    @Test("Criteria name and count the parts that are set, in menu order")
+    func criteriaSummary() {
+        #expect(FilterCriteria.none.summary.isEmpty)
+        #expect(FilterCriteria.none.activeCount == 0)
+        #expect(FilterCriteria(flag: .unflagged, rating: 5, editedOnly: true).activeCount == 3)
+        #expect(FilterCriteria(flag: .flagged, rating: 4, includesHigherRatings: true, editedOnly: true).summary
+                == "Flagged · 4+ Stars · Edited")
+        #expect(FilterCriteria(rating: 1).summary == "1 Star")
+        // Five stars and higher is just five stars.
+        #expect(FilterCriteria(rating: 5, includesHigherRatings: true).summary == "5 Stars")
+    }
+
+    @Test("Counts list every row, including those that match nothing")
+    func filterCounts() {
+        let photos = [
+            FolderContents.Photo(name: "a", isEdited: true, metadata: .init(rating: 5)),
+            FolderContents.Photo(name: "b", isEdited: false, metadata: .init(rating: 5, flag: .flagged)),
+        ]
+        let counts = PhotoFilter.counts(of: photos)
+
+        #expect(Set(counts.keys) == Set(PhotoFilter.allCases))
+        #expect(counts[.fiveStars] == 2 && counts[.edited] == 1 && counts[.flagged] == 1)
+        #expect(counts[.rejected] == 0 && counts[.oneStar] == 0)
+    }
+
+    @Test("Row titles name stars in the singular for one")
+    func filterTitles() {
+        #expect(PhotoFilter.allCases.map(\.title)
+                == ["Flagged", "Rejected", "Edited", "5 Stars", "4 Stars", "3 Stars", "2 Stars", "1 Star"])
     }
 
     func sidecar(_ name: String, rating: Int, modified: Date = .now) throws {
