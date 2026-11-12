@@ -30,6 +30,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
     "purple": { "hue": 0, "saturation": 0, "brightness": 0 },
     "magenta": { "hue": 0, "saturation": 0, "brightness": 0 }
   },
+  "blackAndWhite": { "isOn": false, "red": 0, "green": 0, "blue": 0 },
   "curve": {
     "rgb": [[0, 0], [1, 1]], "red": [[0, 0], [1, 1]], "green": [[0, 0], [1, 1]], "blue": [[0, 0], [1, 1]],
     "levels": { "rgb": [0, 0.5, 1], "red": [0, 0.5, 1], "green": [0, 0.5, 1], "blue": [0, 0.5, 1] }
@@ -61,6 +62,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. |
 | `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Texture and clarity raise (positive) or lower (negative) local contrast: texture in fine detail a few pixels across, clarity over larger areas, mostly in the midtones. Both are measured against a share of the photo's size, so they look the same at any render size, and are clamped the same way. Files saved before they existed read both as 0. Dehaze removes (positive) or adds (negative) haze, measured against the photo's own haziest area; it is clamped the same way, and files saved before it existed read it as 0. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
 | `selectiveColor` | Hue, saturation and brightness for each of eight color ranges, described below. |
+| `blackAndWhite` | The Basic card's Treatment and the black-and-white mix, described below. |
 | `curve` | Control points per channel (`rgb`, `red`, `green`, `blue`), each `[input, output]` from 0 to 1 in sRGB-encoded values, sorted by input, at most 16 per channel. The RGB curve applies after Contrast, Whites and Blacks, then each color channel's curve. The curve passes through every point with monotone cubic interpolation and is flat beyond the first and last points. Values outside 0 to 1 are clamped, and a point at the same input as an earlier one is ignored. `levels` holds each channel's black, midtone and white handles as `[black, midtone, white]`, described below. |
 | `detail` | Sharpening and noise reduction, described below. |
 | `look` | The LUT's path in the LUT library and its strength from 0 to 1. The path is relative to the library, with folders separated by `/`, as in `Portra/400.cube`; a LUT outside any folder is its file name alone, as edits saved before folders have it. A path with an empty, hidden or `..` part is skipped. Strength outside 0 to 1 renders as the nearer end. A LUT that can't be found is skipped. `null` for none. |
@@ -95,6 +97,19 @@ Changes the colors of one hue range at a time, after vibrance and saturation and
 | `brightness` | −100 to +100, default 0. Scales the range's colors in linear light by up to 1.5 stops. Lightening eases the brightest channel toward white so colors don't clip, and keeps their hue. |
 
 Values outside −100 to +100 render as the nearer end.
+
+## Black and white
+
+Turns the photo gray after selective color and before the look, so vibrance, saturation and selective color still set how light each color turns out. Each pixel's red, green and blue become the same weighted blend of the three, in linear light. A missing `blackAndWhite`, as in files saved before it existed, or a missing value inside it, means off or 0, so those edits stay in color. See decision 0027.
+
+| Field | Meaning |
+| --- | --- |
+| `isOn` | `true` for the Black & White treatment, `false` for Color. Default `false`. The mix is kept while it is `false` and doesn't render. |
+| `red`, `green`, `blue` | −100 to +100, default 0. The weights start from Rec. 709 luminance (0.2126, 0.7152, 0.0722). Each value ÷ 100 is added to its channel's weight, and the sum of the three values ÷ 100 is then subtracted from the weights in proportion to luminance, so they still add up to 1 and a gray pixel keeps its value. Red +100 alone makes the gray the red channel. A weight can be negative; a result below black renders as black. With all three at 0 the gray is the photo's luminance. |
+
+Values outside −100 to +100 render as the nearer end.
+
+The filter menu isn't saved: choosing Yellow, Orange, Red or Green sets `red`, `green` and `blue` to (15, 0, −15), (45, 0, −15), (80, −20, −30) or (−30, 30, −20), No Filter to 0, and a mix that matches one shows as that filter.
 
 ## Detail
 

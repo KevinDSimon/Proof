@@ -28,8 +28,9 @@ public struct Histogram: Sendable, Equatable {
     /// Counts `image` with `CIAreaHistogram`. The image is first converted from the working
     /// space to `colorSpace`, so the bins hold the encoded values the screen shows rather than
     /// linear light. `context` should work in 32-bit float: in half float, bins that hold a few
-    /// pixels out of millions lose most of their precision.
-    static func measure(_ image: CIImage, colorSpace: CGColorSpace, context: CIContext) -> Histogram? {
+    /// pixels out of millions lose most of their precision. The hues are counted in `hues`
+    /// when given, and otherwise in `image`.
+    static func measure(_ image: CIImage, hues: CIImage? = nil, colorSpace: CGColorSpace, context: CIContext) -> Histogram? {
         guard let encoded = image.matchedFromWorkingSpace(to: colorSpace) else { return nil }
         let counted = encoded.applyingFilter("CIAreaHistogram", parameters: [
             kCIInputExtentKey: CIVector(cgRect: image.extent),
@@ -48,7 +49,7 @@ public struct Histogram: Sendable, Equatable {
             return total > 0 ? values.map { $0 / total } : values
         }
         return Histogram(red: channel(0), green: channel(1), blue: channel(2),
-                         hues: measureHues(image, context: context))
+                         hues: measureHues(hues ?? image, context: context))
     }
 
     /// The long edge of the copy the hues are counted in: enough for the graph's bars, and

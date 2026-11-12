@@ -1,7 +1,6 @@
 import CoreImage
 
-/// One of the eight hue ranges that Selective Color adjusts, and that the Black & White mix
-/// (#100) will weigh. Each is named for the hue at its center.
+/// One of the eight hue ranges that Selective Color adjusts. Each is named for the hue at its center.
 public enum ColorRange: String, Codable, CaseIterable, Sendable {
     case red, orange, yellow, green, aqua, blue, purple, magenta
 

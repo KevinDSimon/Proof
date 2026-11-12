@@ -575,7 +575,7 @@ struct AdjustmentsInspector: View {
             }
             // White balance can't be shown until the camera's has been read from the photo.
             .disabled(library.selectedEdit?.asShot == nil)
-            InspectorCard(title: "Basic", isOn: library.isOnBinding(.light),
+            InspectorCard(title: "Basic", isOn: library.isOnBinding(.basic),
                           canReset: basic.exposure != 0 || basic.contrast != 0 || basic.texture != 0
                               || basic.clarity != 0 || basic.dehaze != 0 || basic.highlights != 0 || basic.shadows != 0
                               || basic.whites != 0 || basic.blacks != 0,
@@ -681,32 +681,49 @@ struct AdjustmentsInspector: View {
                     showsSign: true, track: Self.dehazeTrack,
                     reset: { library.changeEdit { $0.basic.dehaze = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
-            }
-            .disabled(library.selectedEdit == nil)
-            InspectorCard(title: "Color", isOn: library.isOnBinding(.color),
-                          canReset: basic.vibrance != 0 || basic.saturation != 0,
-                          reset: {
-                              library.changeEdit {
-                                  $0.basic.vibrance = 0
-                                  $0.basic.saturation = 0
-                              }
-                          }) {
-                AdjustmentSlider(
-                    title: "Vibrance",
-                    value: Binding(get: { basic.vibrance },
-                                   set: { value in library.changeEdit { $0.basic.vibrance = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.vibranceTrack,
-                    reset: { library.changeEdit { $0.basic.vibrance = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                AdjustmentSlider(
-                    title: "Saturation",
-                    value: Binding(get: { basic.saturation },
-                                   set: { value in library.changeEdit { $0.basic.saturation = value } }),
-                    range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.saturationTrack,
-                    reset: { library.changeEdit { $0.basic.saturation = 0 } },
-                    isAdjusting: { library.isAdjusting = $0 })
+                // Each treatment shows only the sliders that change it; the other's keep their values.
+                Picker("Treatment", selection: Binding(get: { blackAndWhite.isOn },
+                                                       set: { isOn in library.changeEdit { $0.blackAndWhite.isOn = isOn } })) {
+                    Text("Color").tag(false)
+                    Text("Black & White").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                // Flexible segments span the row, as the Curve card's channel picker does.
+                .buttonSizing(.flexible)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 6)
+                if blackAndWhite.isOn {
+                    // Custom is listed only while it is chosen, as in the White Balance menu.
+                    MenuPopUp(title: blackAndWhite.filter?.title ?? "Custom",
+                              items: BlackAndWhite.Filter.allCases.map { filter in
+                                  .action(filter.title, isChecked: filter == blackAndWhite.filter) {
+                                      library.changeEdit { $0.blackAndWhite.choose(filter) }
+                                  }
+                              } + (blackAndWhite.filter == nil ? [.action("Custom", isChecked: true) {}] : []))
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("Filter")
+                    mixSlider("Red", \.red, hue: 0, help: "Lightens or darkens reds, oranges and skin, as a red filter does on film")
+                    mixSlider("Green", \.green, hue: 120, help: "Lightens or darkens greens and foliage, as a green filter does on film")
+                    mixSlider("Blue", \.blue, hue: 240, help: "Lightens or darkens blue skies and water, as a blue filter does on film")
+                } else {
+                    AdjustmentSlider(
+                        title: "Vibrance",
+                        value: Binding(get: { basic.vibrance },
+                                       set: { value in library.changeEdit { $0.basic.vibrance = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.vibranceTrack,
+                        reset: { library.changeEdit { $0.basic.vibrance = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                    AdjustmentSlider(
+                        title: "Saturation",
+                        value: Binding(get: { basic.saturation },
+                                       set: { value in library.changeEdit { $0.basic.saturation = value } }),
+                        range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                        showsSign: true, track: Self.saturationTrack,
+                        reset: { library.changeEdit { $0.basic.saturation = 0 } },
+                        isAdjusting: { library.isAdjusting = $0 })
+                }
             }
             .disabled(library.selectedEdit == nil)
             SelectiveColorCard(library: library)
@@ -740,6 +757,22 @@ struct AdjustmentsInspector: View {
     }
 
     private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }
+    private var blackAndWhite: BlackAndWhite { library.selectedEdit?.recipe.blackAndWhite ?? BlackAndWhite() }
+
+    /// One channel of the black-and-white mix. Its track runs from that channel's color in shadow
+    /// to the color lit, as the channel goes from darkening to lightening it.
+    private func mixSlider(_ title: String, _ keyPath: WritableKeyPath<BlackAndWhite, Double>,
+                           hue: Double, help: String) -> some View {
+        AdjustmentSlider(
+            title: title,
+            value: Binding(get: { blackAndWhite[keyPath: keyPath] },
+                           set: { value in library.changeEdit { $0.blackAndWhite[keyPath: keyPath] = value } }),
+            range: BlackAndWhite.range, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+            showsSign: true, track: SelectiveColorCard.brightnessTrack(hue: hue),
+            reset: { library.changeEdit { $0.blackAndWhite[keyPath: keyPath] = 0 } },
+            isAdjusting: { library.isAdjusting = $0 })
+            .help(help)
+    }
 
     /// Sharpening and noise reduction, which `CIRAWFilter` applies as it decodes. The sliders
     /// start at the camera's values; Reset returns to them, and the switch off shows them.

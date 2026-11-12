@@ -37,6 +37,11 @@ struct AdjustmentGroupTests {
         selectiveOnly.selectiveColor[.green] = ColorRangeAdjustment(hue: 20)
         #expect(AdjustmentGroup.initiallyOff(for: selectiveOnly) == [.curve, .detail, .transform, .vignette, .look])
         #expect(selectiveOnly.without([.selectiveColor]).selectiveColor.isNeutral)
+        var grayOnly = EditRecipe()
+        grayOnly.blackAndWhite = BlackAndWhite(isOn: true, red: 40)
+        #expect(AdjustmentGroup.initiallyOff(for: grayOnly) == [.selectiveColor, .curve, .detail, .transform, .vignette, .look])
+        #expect(grayOnly.without([.basic]).blackAndWhite == BlackAndWhite(isOn: false, red: 40))
+        #expect(grayOnly.without([.basic]).isNeutral)
     }
 
     @Test("Lens Corrections switched off renders without any lens correction, the profile included, and leaves the rest")
@@ -64,22 +69,22 @@ struct AdjustmentGroupTests {
 
         #expect(recipe.without([.transform]).transform.isNeutral && recipe.without([.lens]).transform == recipe.transform)
 
-        let noLight = recipe.without([.light])
-        #expect(noLight.basic.exposure == 0 && noLight.basic.contrast == 0 && noLight.basic.blacks == 0)
-        #expect(noLight.basic.texture == 0 && noLight.basic.clarity == 0 && noLight.basic.dehaze == 0)
-        #expect(noLight.basic.whiteBalance == recipe.basic.whiteBalance)
-        #expect(noLight.basic.vibrance == 30 && noLight.curve == recipe.curve && noLight.look == recipe.look)
+        let noBasic = recipe.without([.basic])
+        #expect(noBasic.basic.exposure == 0 && noBasic.basic.contrast == 0 && noBasic.basic.blacks == 0)
+        #expect(noBasic.basic.texture == 0 && noBasic.basic.clarity == 0 && noBasic.basic.dehaze == 0)
+        #expect(noBasic.basic.vibrance == 0 && noBasic.basic.saturation == 0)
+        #expect(noBasic.basic.whiteBalance == recipe.basic.whiteBalance)
+        #expect(noBasic.curve == recipe.curve && noBasic.look == recipe.look)
 
         let noWhiteBalance = recipe.without([.whiteBalance])
         #expect(noWhiteBalance.basic.whiteBalance == .asShot)
         #expect(noWhiteBalance.basic.exposure == 1)
 
-        let noColorCurveLook = recipe.without([.color, .curve, .look])
-        #expect(noColorCurveLook.basic.vibrance == 0 && noColorCurveLook.basic.saturation == 0)
-        #expect(noColorCurveLook.curve == ToneCurve() && noColorCurveLook.look == nil)
-        #expect(noColorCurveLook.vignette == recipe.vignette)
+        let noCurveLook = recipe.without([.curve, .look])
+        #expect(noCurveLook.curve == ToneCurve() && noCurveLook.look == nil)
+        #expect(noCurveLook.vignette == recipe.vignette)
         #expect(recipe.without([.vignette]).vignette.isNeutral && recipe.without([.vignette]).look == recipe.look)
-        #expect(noColorCurveLook.basic.exposure == 1 && noColorCurveLook.detail == recipe.detail)
+        #expect(noCurveLook.basic.exposure == 1 && noCurveLook.basic.vibrance == 30 && noCurveLook.detail == recipe.detail)
 
         let noDetail = recipe.without([.detail])
         #expect(noDetail.detail == DetailAdjustments() && noDetail.curve == recipe.curve)

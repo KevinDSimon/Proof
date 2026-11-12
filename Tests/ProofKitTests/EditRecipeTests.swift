@@ -291,6 +291,33 @@ struct EditRecipeTests {
         #expect(edited.isNeutral)
     }
 
+    @Test("A file saved before Black & White reads as Color with an even mix; a partial one keeps the rest at 0")
+    func migratesWithoutBlackAndWhite() throws {
+        let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"saturation": 0}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        #expect(recipe.blackAndWhite == BlackAndWhite())
+        #expect(recipe.isNeutral)
+        #expect(recipe.processVersion == 1)
+
+        let partial = #"{"formatVersion": 3, "blackAndWhite": {"isOn": true, "blue": -30}}"#
+        let read = try JSONDecoder().decode(EditRecipe.self, from: Data(partial.utf8))
+        #expect(read.blackAndWhite == BlackAndWhite(isOn: true, blue: -30))
+
+        var edited = recipe
+        edited.blackAndWhite = BlackAndWhite(isOn: true, red: 25, green: -10.5, blue: 0)
+        #expect(!edited.isNeutral)
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        let mix = try #require(written?["blackAndWhite"] as? [String: Any])
+        #expect(mix["isOn"] as? Bool == true)
+        #expect(mix["red"] as? Double == 25 && mix["green"] as? Double == -10.5 && mix["blue"] as? Double == 0)
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
+
+        // Back to Color keeps the mix, which then doesn't render.
+        edited.blackAndWhite.isOn = false
+        #expect(edited.isNeutral)
+        #expect(edited.original.blackAndWhite == BlackAndWhite())
+    }
+
     static let asShot = WhiteBalance(temperature: 6112, tint: 10)
 
     @Test("A preset sets its Kelvin with no tint, and As Shot clears both")

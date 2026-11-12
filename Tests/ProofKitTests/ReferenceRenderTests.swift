@@ -21,6 +21,7 @@ struct ReferenceRenderTests {
         ("contrast-whites-blacks", contrastWhitesBlacks, nil),
         ("color", color, nil),
         ("selective-color", selectiveColor, nil),
+        ("black-and-white", blackAndWhite, nil),
         ("crop", crop, nil),
         ("curve", curve, nil),
         ("look", look, PreparedLUT(lookTable)),
@@ -157,6 +158,17 @@ struct ReferenceRenderTests {
         recipe.selectiveColor[.green] = ColorRangeAdjustment(hue: 30, saturation: -60, brightness: -30)
         recipe.selectiveColor[.blue] = ColorRangeAdjustment(hue: -30, saturation: 60, brightness: -40)
         recipe.selectiveColor[.aqua] = ColorRangeAdjustment(saturation: -100)
+        return recipe
+    }()
+
+    /// A red-filter mix with green held back, over warm tones lifted and blues darkened in
+    /// Selective Color, so a change to the weights, their normalizing or the stage's place after
+    /// Selective Color shows.
+    static let blackAndWhite: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.blackAndWhite = BlackAndWhite(isOn: true, red: 60, green: -20, blue: -40)
+        recipe.selectiveColor[.orange] = ColorRangeAdjustment(brightness: 30)
+        recipe.selectiveColor[.blue] = ColorRangeAdjustment(brightness: -40)
         return recipe
     }()
 

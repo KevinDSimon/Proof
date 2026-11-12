@@ -1,6 +1,6 @@
 /// A group of adjustments that the inspector shows on one card with its own switch.
 public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
-    case whiteBalance, light, color, selectiveColor, curve, detail, lens, transform, vignette, look
+    case whiteBalance, basic, selectiveColor, curve, detail, lens, transform, vignette, look
 
     /// The groups whose switches start off when `recipe` opens: Selective Color, Curve, Detail,
     /// Transform, Vignette and Looks, so their controls stay closed, unless the recipe has a
@@ -24,7 +24,7 @@ extension EditRecipe {
     public func without(_ groups: Set<AdjustmentGroup>) -> EditRecipe {
         var recipe = self
         if groups.contains(.whiteBalance) { recipe.basic.resetWhiteBalance() }
-        if groups.contains(.light) {
+        if groups.contains(.basic) {
             recipe.basic.exposure = 0
             recipe.basic.contrast = 0
             recipe.basic.texture = 0
@@ -34,10 +34,9 @@ extension EditRecipe {
             recipe.basic.shadows = 0
             recipe.basic.whites = 0
             recipe.basic.blacks = 0
-        }
-        if groups.contains(.color) {
             recipe.basic.vibrance = 0
             recipe.basic.saturation = 0
+            recipe.blackAndWhite.isOn = false
         }
         if groups.contains(.selectiveColor) { recipe.selectiveColor = SelectiveColor() }
         if groups.contains(.curve) { recipe.curve = ToneCurve() }
