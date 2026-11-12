@@ -29,6 +29,9 @@ struct ReferenceRenderTests {
         ("clarity", clarity, nil),
         ("dehaze", dehaze, nil),
         ("vignette", vignette, nil),
+        ("grain", grain, nil),
+        ("halation", halation, nil),
+        ("bloom", bloom, nil),
         ("chromatic-aberration", chromaticAberration, nil),
         ("lens-manual", lensManual, nil),
         ("perspective", perspective, nil),
@@ -177,6 +180,31 @@ struct ReferenceRenderTests {
     static let vignette: EditRecipe = {
         var recipe = crop
         recipe.vignette = VignetteAdjustments(amount: -100)
+        return recipe
+    }()
+
+    /// Strong, rough grain. At this size each pixel averages many grains, so the render shows
+    /// the grain an export shrunk to 400 pixels would have.
+    static let grain: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.grain = GrainAdjustments(amount: 100, size: 100, roughness: 100)
+        return recipe
+    }()
+
+    /// The sample has no lights, so it is pushed until the sky clips: halation then shows as a
+    /// red fringe where the sky meets the rock, and not inside the sky.
+    static let halation: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.basic.exposure = 1.5
+        recipe.halation = GlowAdjustments(amount: 100, size: 100)
+        return recipe
+    }()
+
+    /// The same clipped sky with Bloom, which spreads it over the rock in every color.
+    static let bloom: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.basic.exposure = 1.5
+        recipe.bloom = GlowAdjustments(amount: 100, size: 100)
         return recipe
     }()
 

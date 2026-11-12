@@ -736,7 +736,7 @@ struct AdjustmentsInspector: View {
             detailCard
             lensCard
             transformCard
-            vignetteCard
+            effectsCard
             LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
                 InspectorCard {
@@ -1054,39 +1054,63 @@ struct AdjustmentsInspector: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Lightroom's post-crop vignette: it centers on the cropped frame and follows any crop.
-    private var vignetteCard: some View {
-        let vignette = library.selectedEdit?.recipe.vignette ?? VignetteAdjustments()
-        return InspectorCard(title: "Vignette", isOn: library.isOnBinding(.vignette), canReset: !vignette.isNeutral,
-                             reset: { library.changeEdit { $0.vignette = VignetteAdjustments() } }) {
-            vignetteSlider("Amount", spoken: "Vignette Amount", \.amount, range: VignetteAdjustments.amountRange,
-                           showsSign: true, track: Self.vignetteAmountTrack,
-                           help: "Darkens the edges of the photo, or lightens them")
-            // The shape does nothing without an amount, as in Lightroom.
+    /// Vignette, then the film effects, under one switch as in Lightroom's Effects panel. The
+    /// vignette is Lightroom's post-crop one: it centers on the cropped frame and follows any crop.
+    private var effectsCard: some View {
+        let recipe = library.selectedEdit?.recipe ?? EditRecipe()
+        return InspectorCard(title: "Effects", isOn: library.isOnBinding(.effects), canReset: !recipe.hasNoEffects,
+                             reset: { library.changeEdit { $0.removeEffects() } }) {
+            sectionHeading("Vignette")
+            effectSlider("Amount", spoken: "Vignette Amount", \.vignette.amount, range: VignetteAdjustments.amountRange,
+                         showsSign: true, track: Self.vignetteAmountTrack,
+                         help: "Darkens the edges of the photo, or lightens them")
+            // Each effect's other sliders do nothing without an amount, as in Lightroom.
             Group {
-                vignetteSlider("Midpoint", spoken: "Vignette Midpoint", \.midpoint, range: VignetteAdjustments.midpointRange,
-                               help: "How far toward the center the vignette reaches")
-                vignetteSlider("Roundness", spoken: "Vignette Roundness", \.roundness, range: VignetteAdjustments.roundnessRange,
-                               showsSign: true, help: "From the frame's rectangle to a circle")
-                vignetteSlider("Feather", spoken: "Vignette Feather", \.feather, range: VignetteAdjustments.featherRange,
-                               help: "How gradually the vignette fades in. At 0 it has a hard edge")
+                effectSlider("Midpoint", spoken: "Vignette Midpoint", \.vignette.midpoint, range: VignetteAdjustments.midpointRange,
+                             help: "How far toward the center the vignette reaches")
+                effectSlider("Roundness", spoken: "Vignette Roundness", \.vignette.roundness, range: VignetteAdjustments.roundnessRange,
+                             showsSign: true, help: "From the frame's rectangle to a circle")
+                effectSlider("Feather", spoken: "Vignette Feather", \.vignette.feather, range: VignetteAdjustments.featherRange,
+                             help: "How gradually the vignette fades in. At 0 it has a hard edge")
             }
-            .disabled(vignette.amount == 0)
+            .disabled(recipe.vignette.amount == 0)
+            sectionHeading("Grain")
+            effectSlider("Amount", spoken: "Grain Amount", \.grain.amount, range: GrainAdjustments.amountRange,
+                         help: "Adds film grain. Judge it at 100%; smaller views show it as a shrunk export would")
+            Group {
+                effectSlider("Size", spoken: "Grain Size", \.grain.size, range: GrainAdjustments.sizeRange,
+                             help: "How large the grains are, relative to the photo")
+                effectSlider("Roughness", spoken: "Grain Roughness", \.grain.roughness, range: GrainAdjustments.roughnessRange,
+                             help: "From soft, even grain to a mix of finer, sharper grains")
+            }
+            .disabled(recipe.grain.amount == 0)
+            sectionHeading("Halation")
+            effectSlider("Amount", spoken: "Halation Amount", \.halation.amount, range: GlowAdjustments.amountRange,
+                         help: "A red glow around bright lights, as film shows where light reflects off its base")
+            effectSlider("Size", spoken: "Halation Size", \.halation.size, range: GlowAdjustments.sizeRange,
+                         help: "How far the glow spreads from the lights")
+                .disabled(recipe.halation.amount == 0)
+            sectionHeading("Bloom")
+            effectSlider("Amount", spoken: "Bloom Amount", \.bloom.amount, range: GlowAdjustments.amountRange,
+                         help: "A soft glow around highlights, as a diffusion filter gives")
+            effectSlider("Size", spoken: "Bloom Size", \.bloom.size, range: GlowAdjustments.sizeRange,
+                         help: "How far the glow spreads from the highlights")
+                .disabled(recipe.bloom.amount == 0)
         }
         .disabled(library.selectedEdit == nil)
     }
 
-    private func vignetteSlider(_ title: String, spoken: String, _ keyPath: WritableKeyPath<VignetteAdjustments, Double>,
-                                range: ClosedRange<Double>, showsSign: Bool = false, track: [Color] = [],
-                                help: String) -> some View {
+    private func effectSlider(_ title: String, spoken: String, _ keyPath: WritableKeyPath<EditRecipe, Double>,
+                              range: ClosedRange<Double>, showsSign: Bool = false, track: [Color] = [],
+                              help: String) -> some View {
         AdjustmentSlider(
             title: title,
             spokenTitle: spoken,
-            value: Binding(get: { library.selectedEdit?.recipe.vignette[keyPath: keyPath] ?? VignetteAdjustments()[keyPath: keyPath] },
-                           set: { value in library.changeEdit { $0.vignette[keyPath: keyPath] = value } }),
+            value: Binding(get: { library.selectedEdit?.recipe[keyPath: keyPath] ?? EditRecipe()[keyPath: keyPath] },
+                           set: { value in library.changeEdit { $0[keyPath: keyPath] = value } }),
             range: range, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
             showsSign: showsSign, track: track,
-            reset: { library.changeEdit { $0.vignette[keyPath: keyPath] = VignetteAdjustments()[keyPath: keyPath] } },
+            reset: { library.changeEdit { $0[keyPath: keyPath] = EditRecipe()[keyPath: keyPath] } },
             isAdjusting: { library.isAdjusting = $0 })
             .help(help)
     }

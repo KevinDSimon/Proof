@@ -1,10 +1,10 @@
 /// A group of adjustments that the inspector shows on one card with its own switch.
 public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
-    case whiteBalance, basic, selectiveColor, curve, detail, lens, transform, vignette, look
+    case whiteBalance, basic, selectiveColor, curve, detail, lens, transform, effects, look
 
     /// The groups whose switches start off when `recipe` opens: Selective Color, Curve, Detail,
-    /// Transform, Vignette and Looks, so their controls stay closed, unless the recipe has a
-    /// selective color adjustment, a curve, changed detail, a perspective correction, a vignette
+    /// Transform, Effects and Looks, so their controls stay closed, unless the recipe has a
+    /// selective color adjustment, a curve, changed detail, a perspective correction, an effect
     /// or a look. Detail is judged at 100% zoom, so most photos never need it open.
     public static func initiallyOff(for recipe: EditRecipe?) -> Set<AdjustmentGroup> {
         var off: Set<AdjustmentGroup> = []
@@ -12,7 +12,7 @@ public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
         if recipe?.curve.isIdentity ?? true { off.insert(.curve) }
         if recipe?.detail.isNeutral ?? true { off.insert(.detail) }
         if recipe?.transform.isNeutral ?? true { off.insert(.transform) }
-        if recipe?.vignette.isNeutral ?? true { off.insert(.vignette) }
+        if recipe?.hasNoEffects ?? true { off.insert(.effects) }
         if recipe?.look == nil { off.insert(.look) }
         return off
     }
@@ -45,8 +45,23 @@ extension EditRecipe {
         // applies it by default, so the switch shows the lens as it drew the photo.
         if groups.contains(.lens) { recipe.lens = LensCorrections(profile: false) }
         if groups.contains(.transform) { recipe.transform = PerspectiveTransform() }
-        if groups.contains(.vignette) { recipe.vignette = VignetteAdjustments() }
+        if groups.contains(.effects) { recipe.removeEffects() }
         if groups.contains(.look) { recipe.look = nil }
         return recipe
+    }
+}
+
+extension EditRecipe {
+    /// Whether the Effects card is at its defaults: no vignette, grain, halation or bloom.
+    public var hasNoEffects: Bool {
+        vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral
+    }
+
+    /// Sets the Effects card back to its defaults.
+    public mutating func removeEffects() {
+        vignette = VignetteAdjustments()
+        grain = GrainAdjustments()
+        halation = GlowAdjustments()
+        bloom = GlowAdjustments()
     }
 }

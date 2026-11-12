@@ -22,24 +22,24 @@ struct AdjustmentGroupTests {
         return recipe
     }
 
-    @Test("Selective Color, Curve, Detail, Transform, Vignette and Looks start off, unless the recipe has that adjustment")
+    @Test("Selective Color, Curve, Detail, Transform, Effects and Looks start off, unless the recipe has that adjustment")
     func initiallyOff() {
-        #expect(AdjustmentGroup.initiallyOff(for: nil) == [.selectiveColor, .curve, .detail, .transform, .vignette, .look])
-        #expect(AdjustmentGroup.initiallyOff(for: EditRecipe()) == [.selectiveColor, .curve, .detail, .transform, .vignette, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: nil) == [.selectiveColor, .curve, .detail, .transform, .effects, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: EditRecipe()) == [.selectiveColor, .curve, .detail, .transform, .effects, .look])
         #expect(AdjustmentGroup.initiallyOff(for: Self.edited).isEmpty)
         var lookOnly = EditRecipe()
         lookOnly.look = Look(lut: "Mono.cube")
-        #expect(AdjustmentGroup.initiallyOff(for: lookOnly) == [.selectiveColor, .curve, .detail, .transform, .vignette])
+        #expect(AdjustmentGroup.initiallyOff(for: lookOnly) == [.selectiveColor, .curve, .detail, .transform, .effects])
         var vignetteOnly = EditRecipe()
         vignetteOnly.vignette.amount = 25
         #expect(AdjustmentGroup.initiallyOff(for: vignetteOnly) == [.selectiveColor, .curve, .detail, .transform, .look])
         var selectiveOnly = EditRecipe()
         selectiveOnly.selectiveColor[.green] = ColorRangeAdjustment(hue: 20)
-        #expect(AdjustmentGroup.initiallyOff(for: selectiveOnly) == [.curve, .detail, .transform, .vignette, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: selectiveOnly) == [.curve, .detail, .transform, .effects, .look])
         #expect(selectiveOnly.without([.selectiveColor]).selectiveColor.isNeutral)
         var grayOnly = EditRecipe()
         grayOnly.blackAndWhite = BlackAndWhite(isOn: true, red: 40)
-        #expect(AdjustmentGroup.initiallyOff(for: grayOnly) == [.selectiveColor, .curve, .detail, .transform, .vignette, .look])
+        #expect(AdjustmentGroup.initiallyOff(for: grayOnly) == [.selectiveColor, .curve, .detail, .transform, .effects, .look])
         #expect(grayOnly.without([.basic]).blackAndWhite == BlackAndWhite(isOn: false, red: 40))
         #expect(grayOnly.without([.basic]).isNeutral)
     }
@@ -53,7 +53,7 @@ struct AdjustmentGroupTests {
         #expect(noLens.lens == LensCorrections(profile: false))
         #expect(!noLens.lens.appliesProfile(for: CameraLens(hasProfile: true, profileIsOnByDefault: true)))
         #expect(noLens.basic == recipe.basic && noLens.vignette == recipe.vignette && noLens.crop == recipe.crop)
-        #expect(recipe.without([.vignette]).lens == recipe.lens)
+        #expect(recipe.without([.effects]).lens == recipe.lens)
         // Lens Corrections starts on, so a photo whose profile applies by default opens as before.
         #expect(!AdjustmentGroup.initiallyOff(for: EditRecipe()).contains(.lens))
     }
@@ -83,7 +83,7 @@ struct AdjustmentGroupTests {
         let noCurveLook = recipe.without([.curve, .look])
         #expect(noCurveLook.curve == ToneCurve() && noCurveLook.look == nil)
         #expect(noCurveLook.vignette == recipe.vignette)
-        #expect(recipe.without([.vignette]).vignette.isNeutral && recipe.without([.vignette]).look == recipe.look)
+        #expect(recipe.without([.effects]).vignette.isNeutral && recipe.without([.effects]).look == recipe.look)
         #expect(noCurveLook.basic.exposure == 1 && noCurveLook.basic.vibrance == 30 && noCurveLook.detail == recipe.detail)
 
         let noDetail = recipe.without([.detail])

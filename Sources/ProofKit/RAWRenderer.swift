@@ -108,8 +108,9 @@ public actor RAWRenderer {
         guard let filter else { throw RAWRendererError.noPhotoOpen }
         var recipe = recipe
         recipe.crop = recipe.crop?.turnedOnly
-        // Its darkened edges could read as lines; they aren't part of the scene.
-        recipe.vignette = VignetteAdjustments()
+        // A vignette's darkened edges, grain and glow could read as lines or hide them; they
+        // aren't part of the scene.
+        recipe.removeEffects()
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: targetSize))
         guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens, lut: lut),
@@ -510,9 +511,12 @@ public actor RAWRenderer {
         // Then perspective, on lines the lens corrections have made straight, and before the
         // crop's turns, so it stays with the photo as it is turned.
         let decoded = PerspectiveTransform.apply(recipe.transform, to: undistorted)
+        // Then halation and bloom, light spreading from the highlights as it reached the film,
+        // over the whole photo so light from outside the crop still spreads into it.
+        let glowing = Glow.apply(halation: recipe.halation, bloom: recipe.bloom, to: decoded)
         // 2. Tone: highlights and shadows first, then texture and clarity, then dehaze, then
         // contrast, whites, blacks and the tone curve as one lookup.
-        let shaded = HighlightsShadows.apply(to: decoded, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)
+        let shaded = HighlightsShadows.apply(to: glowing, highlights: recipe.basic.highlights, shadows: recipe.basic.shadows)
         let detailed = TextureClarity.apply(to: shaded, texture: recipe.basic.texture, clarity: recipe.basic.clarity)
         let dehazed = Dehaze.apply(to: detailed, amount: recipe.basic.dehaze)
         let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks,
@@ -528,8 +532,8 @@ public actor RAWRenderer {
         // 5. Layers follow here when masks are built.
         // 6. Turn, flip, straighten and crop.
         let framed = recipe.crop.map { Self.applyGeometry($0, to: looked) } ?? looked
-        // 7. Vignette, on the cropped frame so it follows the crop.
-        return Vignette.apply(recipe.vignette, to: framed)
+        // 7. Vignette, then grain, on the cropped frame so they follow the crop.
+        return Grain.apply(recipe.grain, to: Vignette.apply(recipe.vignette, to: framed))
     }
 
     /// Turns and flips `image`, then straightens and crops it, as `Crop` describes. The result
