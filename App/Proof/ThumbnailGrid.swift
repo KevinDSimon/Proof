@@ -2,8 +2,9 @@ import ProofKit
 import SwiftUI
 
 /// The selected folder's photos, or All Photos, as thumbnails, each shown as soon as `ThumbnailCache` has it, so a
-/// folder on a NAS fills in while it is read. Click selects a photo, the arrow keys move the
-/// selection, and double-click opens the photo in Edit. Return is handled by the Photo menu.
+/// folder on a NAS fills in while it is read. Click selects a photo, ⌘-click and ⇧-click select
+/// several, the arrow keys move the selection, and double-click opens the photo in Edit. Return
+/// is handled by the Photo menu.
 struct ThumbnailGrid: View {
     @Bindable var library: Library
     /// The photos that pass the filter.
@@ -75,7 +76,8 @@ struct ThumbnailGrid: View {
     }
 
     private func cell(for photo: ListedPhoto) -> some View {
-        let isSelected = library.browse.selectedPhoto == photo.id
+        let isSelected = library.browse.selectedPhotos.contains(photo.id)
+        let isEmphasized = library.browse.hasMultipleSelection && library.browse.selectedPhoto == photo.id
         return VStack(spacing: 4) {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
@@ -108,12 +110,13 @@ struct ThumbnailGrid: View {
         }
         // The outline wraps the photo and its name, as on a card, but not the empty part of the
         // square above a landscape photo.
-        .selectionOutline(isSelected)
+        .selectionOutline(isSelected, isEmphasized: isEmphasized)
         .contentShape(Rectangle())
         .onTapGesture {
-            library.browse.selectedPhoto = photo.id
+            library.click(photo.id, in: photos)
             isFocused = true
         }
+        .contextMenu { PhotoContextMenu(library: library, photo: photo.id) }
         .simultaneousGesture(TapGesture(count: 2).onEnded {
             library.browse.selectedPhoto = photo.id
             library.browse.edit()
@@ -125,6 +128,9 @@ struct ThumbnailGrid: View {
         .accessibilityAction(named: "Edit") {
             library.browse.selectedPhoto = photo.id
             library.browse.edit()
+        }
+        .accessibilityAction(named: isSelected ? "Remove from Selection" : "Add to Selection") {
+            library.browse.toggle(photo.id, in: photos)
         }
     }
 

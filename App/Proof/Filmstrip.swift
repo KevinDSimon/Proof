@@ -3,7 +3,8 @@ import SwiftUI
 
 /// One row of thumbnails under the photo in Edit, showing the photos that pass the filter. The
 /// current photo is marked with an outline. Click or the left and right arrow keys
-/// switch to another photo without leaving Edit.
+/// switch to another photo without leaving Edit. ⌘-click and ⇧-click select several photos
+/// to paste settings to or rate together, keeping the photo shown.
 struct Filmstrip: View {
     @Bindable var library: Library
     let photos: [ListedPhoto]
@@ -65,6 +66,7 @@ struct Filmstrip: View {
 
     private func cell(for photo: ListedPhoto) -> some View {
         let isCurrent = library.browse.selectedPhoto == photo.id
+        let isSelected = library.browse.selectedPhotos.contains(photo.id)
         return ZStack {
             if let image = library.editedThumbnails[photo.id] ?? images[photo.id] {
                 Image(nsImage: image)
@@ -81,16 +83,21 @@ struct Filmstrip: View {
                     .fill(.quaternary)
             }
         }
-        .selectionOutline(isCurrent, padding: 4)
+        .selectionOutline(isSelected, isEmphasized: isCurrent && library.browse.hasMultipleSelection, padding: 4)
         .frame(width: Self.height - 12, height: Self.height - 12)
         .contentShape(Rectangle())
         .onTapGesture {
-            library.browse.selectedPhoto = photo.id
+            library.click(photo.id, in: photos)
             isFocused = true
         }
+        .contextMenu { PhotoContextMenu(library: library, photo: photo.id) }
         .help(photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata))
-        .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityValue(isCurrent && library.browse.hasMultipleSelection ? "Shown" : "")
+        .accessibilityAction(named: isSelected ? "Remove from Selection" : "Add to Selection") {
+            library.browse.toggle(photo.id, in: photos)
+        }
     }
 }

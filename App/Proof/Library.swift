@@ -298,25 +298,41 @@ final class Library {
         return contents[photo.folder]?.photos.first { $0.name == photo.name }?.metadata
     }
 
-    /// Sets the selected photo's stars and saves them to its XMP sidecar.
-    func setRating(_ rating: Int) {
-        changeSelectedMetadata { $0.rating = rating }
+    /// Sets the stars of `photos`, every selected photo by default, and saves them to their XMP sidecars.
+    func setRating(_ rating: Int, of photos: [PhotoReference]? = nil) {
+        changeMetadata(of: photos ?? Array(browse.selectedPhotos)) { $0.rating = rating }
     }
 
-    /// Sets the selected photo's flag and saves it to its XMP sidecar.
-    func setFlag(_ flag: PhotoMetadata.Flag) {
-        changeSelectedMetadata { $0.flag = flag }
+    /// Sets the flag of `photos`, every selected photo by default, and saves it to their XMP sidecars.
+    func setFlag(_ flag: PhotoMetadata.Flag, of photos: [PhotoReference]? = nil) {
+        changeMetadata(of: photos ?? Array(browse.selectedPhotos)) { $0.flag = flag }
     }
 
-    private func changeSelectedMetadata(_ change: (inout PhotoMetadata) -> Void) {
-        guard let photo = browse.selectedPhoto,
-              let index = contents[photo.folder]?.photos.firstIndex(where: { $0.name == photo.name })
-        else { return }
-        var metadata = contents[photo.folder]?.photos[index].metadata ?? .unrated
-        change(&metadata)
-        contents[photo.folder]?.photos[index].metadata = metadata
-        changedPhotos.insert(photo)
-        saveMetadata(of: photo)
+    /// The rating all `photos` share, or `nil` when they differ.
+    func commonRating(of photos: [PhotoReference]) -> Int? {
+        let ratings = Set(photos.map { metadata(of: $0)?.rating ?? 0 })
+        return ratings.count == 1 ? ratings.first : nil
+    }
+
+    /// The flag all `photos` share, or `nil` when they differ.
+    func commonFlag(of photos: [PhotoReference]) -> PhotoMetadata.Flag? {
+        let flags = Set(photos.map { metadata(of: $0)?.flag ?? .unflagged })
+        return flags.count == 1 ? flags.first : nil
+    }
+
+    private func metadata(of photo: PhotoReference) -> PhotoMetadata? {
+        contents[photo.folder]?.photos.first { $0.name == photo.name }?.metadata
+    }
+
+    private func changeMetadata(of photos: [PhotoReference], _ change: (inout PhotoMetadata) -> Void) {
+        for photo in photos {
+            guard let index = contents[photo.folder]?.photos.firstIndex(where: { $0.name == photo.name }) else { continue }
+            var metadata = contents[photo.folder]?.photos[index].metadata ?? .unrated
+            change(&metadata)
+            contents[photo.folder]?.photos[index].metadata = metadata
+            changedPhotos.insert(photo)
+            saveMetadata(of: photo)
+        }
     }
 
     /// Writes the photo's rating and flag to its XMP sidecar off the main thread (decision 0022).
@@ -411,52 +427,109 @@ final class Library {
     /// The Copy Settings sheet is open.
     var isChoosingSettingsToCopy = false
 
+    /// The selected photos in the order shown, for the menu bar's actions on the selection.
+    var selectedPhotosInOrder: [PhotoReference] {
+        browse.selected(in: visiblePhotos)
+    }
+
+    /// The photos a right-click on `photo` acts on: the whole selection when the photo is in it,
+    /// as in Finder, and otherwise only that photo.
+    func menuTargets(for photo: PhotoReference) -> [PhotoReference] {
+        browse.selectedPhotos.contains(photo) ? selectedPhotosInOrder : [photo]
+    }
+
+    /// Copies from the photo Edit shows, in Browse too, or from a right-clicked photo.
     var canCopySettings: Bool {
-        isEditing && !isCropping && selectedEdit != nil
+        !isCropping && browse.selectedPhoto != nil && (!isEditing || selectedEdit != nil)
     }
 
     var canPasteSettings: Bool {
         canCopySettings && copiedSettings != nil
     }
 
+    /// The photo the Copy Settings sheet copies from.
+    private var copySource: PhotoReference?
+
+    /// Edit › Copy Settings…: opens the sheet for `photo`, the photo Edit shows by default, after
+    /// reading its edit if it hasn't been opened.
+    func chooseSettingsToCopy(from photo: PhotoReference? = nil) {
+        guard !isCropping, let photo = photo ?? browse.selectedPhoto, loadEdit(of: photo) else { return }
+        copySource = photo
+        isChoosingSettingsToCopy = true
+    }
+
     /// Copies `items` of the edit as the canvas shows it.
     func copySettings(_ items: Set<SettingsItem>) {
-        guard let edit = selectedEdit else { return }
+        guard let photo = copySource ?? browse.selectedPhoto, let edit = edits[photo] else { return }
         copiedSettings = CopiedSettings(from: edit.recipe, items: items)
     }
 
-    /// Edit › Paste: replaces the copied items of the selected photo's edit as one undo step,
-    /// saves it, and turns on the switches of the cards it changed.
-    func pasteSettings() {
-        guard canPasteSettings, let copied = copiedSettings, let photo = browse.selectedPhoto else { return }
+    /// Edit › Paste: replaces the copied items of the edit of `photos`, every selected photo by
+    /// default, as one undo step in each photo's own history, and saves them. When the photo in
+    /// Edit is among them, it turns on the switches of the cards it changed.
+    func pasteSettings(to photos: [PhotoReference]? = nil) {
+        guard !isCropping, let copied = copiedSettings else { return }
+        let photos = photos ?? selectedPhotosInOrder
         commitTask?.cancel()
-        commitEdit(of: photo)
         showEdited()
-        let recipe = edits[photo]!.recipe.pasting(copied)
-        edits[photo]!.recipe = recipe
-        let pasted = Set(copied.items.compactMap(\.group))
-        offGroups.subtract(pasted.subtracting(AdjustmentGroup.initiallyOff(for: recipe)))
-        commitEdit(of: photo)
+        for photo in photos where loadEdit(of: photo) {
+            commitEdit(of: photo)
+            edits[photo]!.recipe = edits[photo]!.recipe.pasting(copied)
+            commitEdit(of: photo)
+        }
+        if isEditing, let shown = browse.selectedPhoto, photos.contains(shown), let recipe = selectedEdit?.recipe {
+            let pasted = Set(copied.items.compactMap(\.group))
+            offGroups.subtract(pasted.subtracting(AdjustmentGroup.initiallyOff(for: recipe)))
+        }
     }
 
-    /// The selected photo has an edit to revert, whatever its undo history.
-    var canRevertEdit: Bool {
-        guard let edit = selectedEdit else { return false }
-        return !edit.recipe.isNeutral || edit.sidecar != nil
+    /// Those of `photos`, every selected photo by default, that have an edit to revert, whatever
+    /// their undo history. Photos not opened since Proof started count when they have a sidecar.
+    func photosToRevert(among photos: [PhotoReference]? = nil) -> [PhotoReference] {
+        guard !isCropping else { return [] }
+        return (photos ?? selectedPhotosInOrder).filter { photo in
+            if let edit = edits[photo] { return !edit.recipe.isNeutral || edit.sidecar != nil }
+            return contents[photo.folder]?.photos.first { $0.name == photo.name }?.isEdited == true
+        }
     }
 
-    /// Photo › Revert to Original: makes the edit neutral as one undo step, without asking, and
-    /// deletes the sidecar (decision 0007). Undo writes the edit back as a new sidecar.
-    func revertEdit() {
-        guard let photo = browse.selectedPhoto else { return }
+    /// The photos the revert confirmation is asking about.
+    private(set) var photosPendingRevert: [PhotoReference] = []
+    /// Revert to Original asks first when it would revert more than one photo.
+    var isConfirmingRevert = false {
+        didSet { if !isConfirmingRevert { photosPendingRevert = [] } }
+    }
+
+    /// Photo › Revert to Original, or the right-click menu's: reverts at once for one photo, and
+    /// asks first for several.
+    func requestRevert(of photos: [PhotoReference]? = nil) {
+        let photos = photosToRevert(among: photos)
+        if photos.count > 1 {
+            photosPendingRevert = photos
+            isConfirmingRevert = true
+        } else {
+            revertEdit(of: photos)
+        }
+    }
+
+    /// The confirmation's Revert button.
+    func revertPendingPhotos() {
+        revertEdit(of: photosPendingRevert)
+    }
+
+    /// Makes the edit of each photo neutral, as one undo step in its own history, and deletes its
+    /// sidecar (decision 0007). Undo writes the edit back as a new sidecar.
+    private func revertEdit(of photos: [PhotoReference]) {
         commitTask?.cancel()
-        commitEdit(of: photo)
-        guard var edit = edits[photo] else { return }
         showEdited()
-        edit.history.record(EditRecipe())
-        edit.recipe = EditRecipe()
-        edits[photo] = edit
-        save(photo, reverting: true)
+        for photo in photos where loadEdit(of: photo) {
+            commitEdit(of: photo)
+            guard var edit = edits[photo] else { continue }
+            edit.history.record(EditRecipe())
+            edit.recipe = EditRecipe()
+            edits[photo] = edit
+            save(photo, reverting: true)
+        }
     }
 
     /// Photo › Show Original (backslash): the photo without its edit, to compare. Any change to
@@ -471,10 +544,12 @@ final class Library {
         if browse.isShowingOriginal { browse.showEdited() }
     }
 
-    /// Reads the selected photo's sidecar the first time it is opened in Edit. Later visits keep
-    /// the edit and its undo history from memory.
-    private func openSelectedEdit() {
-        guard isEditing, let photo = browse.selectedPhoto, edits[photo] == nil, let url = selectedPhotoURL else { return }
+    /// Reads the photo's sidecar the first time it is opened in Edit, or copied from, pasted to
+    /// or reverted in Browse. Later the edit and its undo history are kept in memory. Returns
+    /// whether the photo has an edit in `edits`; a photo whose file can't be found has none.
+    @discardableResult private func loadEdit(of photo: PhotoReference) -> Bool {
+        if edits[photo] != nil { return true }
+        guard let url = url(ofPhoto: photo.name, in: photo.folder) else { return false }
         do {
             let sidecar = try Sidecar.read(for: url)
             let recipe = sidecar?.recipe ?? EditRecipe()
@@ -482,6 +557,42 @@ final class Library {
         } catch {
             edits[photo] = PhotoEdit(recipe: EditRecipe(), history: EditHistory(EditRecipe()), unsaved: .unreadable)
         }
+        return true
+    }
+
+    /// A click on a thumbnail in the grid or the filmstrip: ⌘ adds or removes the photo, ⇧ selects
+    /// a range, and a plain click selects only that photo.
+    func click(_ photo: PhotoReference, in photos: [ListedPhoto]) {
+        // The click's own modifiers, rather than the keys held now, which can differ by the time a
+        // tap gesture ends.
+        let modifiers = NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
+        if modifiers.contains(.command) {
+            browse.toggle(photo, in: photos)
+        } else if modifiers.contains(.shift) {
+            browse.extend(to: photo, in: photos)
+        } else {
+            browse.selectedPhoto = photo
+        }
+    }
+
+    /// ⌘A selects the photos shown in the grid or the filmstrip.
+    var canSelectPhotos: Bool {
+        selection != nil && !isCropping && !visiblePhotos.isEmpty
+    }
+
+    /// Edit › Deselect All: in Browse, deselects every photo; in Edit, all but the photo shown.
+    func deselectAll() {
+        if isEditing { browse.selectOnlyCurrent() } else { browse.selectedPhoto = nil }
+    }
+
+    /// Photos whose camera details have been read, which happens the first time Edit shows them.
+    private var openedPhotos: Set<PhotoReference> = []
+
+    /// Opens the photo Edit shows: reads its edit, and what the camera recorded, the first time.
+    private func openSelectedEdit() {
+        guard isEditing, let photo = browse.selectedPhoto, let url = selectedPhotoURL,
+              !openedPhotos.contains(photo), loadEdit(of: photo) else { return }
+        openedPhotos.insert(photo)
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.
         Task {
             let (asShot, cameraDetail, cameraLens, settings, size) = await Task.detached {
