@@ -232,7 +232,7 @@ struct LookSection: View {
     }
 
     /// The shown folder's LUTs as a grid of previews of the whole photo. The chosen one has the
-    /// filmstrip's ring, and its name is the pop-up's title; each tile's name is in its help tag.
+    /// filmstrip's outline, and its name is the pop-up's title; each tile's name is in its help tag.
     /// With the grid focused, the arrow keys move between tiles and choose as they go.
     private var grid: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -259,7 +259,7 @@ struct LookSection: View {
     private func tile(_ path: String) -> some View {
         let isSelected = look?.lut == path
         return preview(of: path)
-            .selectionRing(isSelected, lineWidth: 2, gap: 2)
+            .selectionOutline(isSelected, padding: 4)
             .contentShape(Rectangle())
             .onTapGesture {
                 isGridFocused = true
@@ -296,6 +296,7 @@ struct LookSection: View {
                     .aspectRatio(3 / 2, contentMode: .fit)
             }
         }
+        .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
         .frame(minWidth: 0, maxWidth: .infinity)
     }
 

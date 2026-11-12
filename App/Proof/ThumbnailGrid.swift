@@ -83,17 +83,18 @@ struct ThumbnailGrid: View {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFit()
+                        .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
                         .ratingBadges(photo.photo.metadata, size: 10)
                 } else if finished.contains(photo.id) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
                         .help("This photo couldn't be read.")
                 } else {
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: SelectionOutline.photoCornerRadius)
                         .fill(.quaternary)
                 }
             }
-            .selectionRing(isSelected)
+            .outlined()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .aspectRatio(1, contentMode: .fit)
             Text(photo.name)
@@ -101,7 +102,13 @@ struct ThumbnailGrid: View {
                 .foregroundStyle(isSelected ? .primary : .secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                // Full width, so every card in a row is as wide as the cell.
+                .frame(maxWidth: .infinity)
+                .outlined()
         }
+        // The outline wraps the photo and its name, as on a card, but not the empty part of the
+        // square above a landscape photo.
+        .selectionOutline(isSelected)
         .contentShape(Rectangle())
         .onTapGesture {
             library.browse.selectedPhoto = photo.id

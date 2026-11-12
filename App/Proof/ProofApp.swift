@@ -877,7 +877,7 @@ struct AdjustmentsInspector: View {
                     }),
                     help: "Corrects the lens's distortion and darkened corners with the profile in the photo")
             } else if let lens {
-                lensRow("Profile", value: "None in this photo")
+                lensRow("Profile", value: "None for this photo")
                     .help(lens.name == nil ? "The photo carries no lens correction data"
                                            : "The photo carries no correction data for this lens")
             }
