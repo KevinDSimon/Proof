@@ -68,11 +68,11 @@ extension BlackAndWhite {
 
         public var title: String {
             switch self {
-            case .none: "No Filter"
-            case .yellow: "Yellow Filter"
-            case .orange: "Orange Filter"
-            case .red: "Red Filter"
-            case .green: "Green Filter"
+            case .none: "None"
+            case .yellow: "Yellow"
+            case .orange: "Orange"
+            case .red: "Red"
+            case .green: "Green"
             }
         }
 

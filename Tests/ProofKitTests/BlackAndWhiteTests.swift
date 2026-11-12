@@ -65,6 +65,7 @@ struct BlackAndWhiteTests {
         #expect(mix.filter == BlackAndWhite.Filter.none)
         mix.choose(.red)
         #expect(mix.filter == .red && mix.red == 80 && mix.isOn)
+        #expect(BlackAndWhite.Filter.allCases.map(\.title) == ["None", "Yellow", "Orange", "Red", "Green"])
         mix.blue += 1
         #expect(mix.filter == nil)
         // From Yellow to Red each darkens a blue sky more.

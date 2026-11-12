@@ -109,7 +109,7 @@ Turns the photo gray after selective color and before the look, so vibrance, sat
 
 Values outside −100 to +100 render as the nearer end.
 
-The filter menu isn't saved: choosing Yellow, Orange, Red or Green sets `red`, `green` and `blue` to (15, 0, −15), (45, 0, −15), (80, −20, −30) or (−30, 30, −20), No Filter to 0, and a mix that matches one shows as that filter.
+The Filter row isn't saved: choosing Yellow, Orange, Red or Green sets `red`, `green` and `blue` to (15, 0, −15), (45, 0, −15), (80, −20, −30) or (−30, 30, −20), None to 0, and a mix that matches one shows as that filter.
 
 ## Detail
 
