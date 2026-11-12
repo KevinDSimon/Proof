@@ -113,8 +113,10 @@ enum BlackAndWhiteStage {
             "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 0),
         ]).applyingFilter("CIColorClamp", parameters: [
             "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
-            "inputMaxComponents": CIVector(x: .greatestFiniteMagnitude, y: .greatestFiniteMagnitude,
-                                           z: .greatestFiniteMagnitude, w: 1),
+            // The largest half float, so highlights past white are kept. Finite, because
+            // `greatestFiniteMagnitude` becomes infinity in a 32-bit kernel argument, which the
+            // test runners' software renderer is not known to handle.
+            "inputMaxComponents": CIVector(x: 65504, y: 65504, z: 65504, w: 1),
         ])
     }
 }
