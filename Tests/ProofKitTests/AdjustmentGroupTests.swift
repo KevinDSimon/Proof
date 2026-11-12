@@ -37,6 +37,11 @@ struct AdjustmentGroupTests {
         selectiveOnly.selectiveColor[.green] = ColorRangeAdjustment(hue: 20)
         #expect(AdjustmentGroup.initiallyOff(for: selectiveOnly) == [.curve, .detail, .transform, .vignette, .look])
         #expect(selectiveOnly.without([.selectiveColor]).selectiveColor.isNeutral)
+        var grayOnly = EditRecipe()
+        grayOnly.blackAndWhite = BlackAndWhite(isOn: true, red: 40)
+        #expect(AdjustmentGroup.initiallyOff(for: grayOnly) == [.selectiveColor, .curve, .detail, .transform, .vignette, .look])
+        #expect(grayOnly.without([.color]).blackAndWhite == BlackAndWhite(isOn: false, red: 40))
+        #expect(grayOnly.without([.color]).isNeutral)
     }
 
     @Test("Lens Corrections switched off renders without any lens correction, the profile included, and leaves the rest")

@@ -16,6 +16,9 @@ public struct RenderedPhoto: @unchecked Sendable {
     public var region = CGRect(x: 0, y: 0, width: 1, height: 1)
     /// The whole cropped photo's size at full resolution, in pixels.
     public var photoSize: CGSize = .zero
+    /// The whole photo before the black-and-white mix, while it is on, so the hue graph keeps
+    /// showing the colors Selective Color adjusts. Rendered only when the histogram is measured.
+    var colors: CIImage?
 }
 
 /// Decodes one RAW file with `CIRAWFilter` and renders it into Metal textures sized for the screen.
@@ -332,9 +335,16 @@ public actor RAWRenderer {
         try context.startTask(toRender: origin, to: destination).waitUntilCompleted()
         let shown = CGRect(x: (extent.minX - full.minX) / full.width, y: (full.maxY - extent.maxY) / full.height,
                            width: extent.width / full.width, height: extent.height / full.height)
+        var colors: CIImage?
+        if recipe.blackAndWhite.isOn {
+            var colored = recipe
+            colored.blackAndWhite.isOn = false
+            colors = Self.apply(colored, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens, lut: lut)
+        }
         return RenderedPhoto(texture: texture, region: shown,
                              photoSize: Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation,
-                                                       crop: recipe.crop))
+                                                       crop: recipe.crop),
+                             colors: colors)
     }
 
     /// A thumbnail of `url` with `recipe` applied, at most `maxPixelSize` on the long edge, for
@@ -368,10 +378,11 @@ public actor RAWRenderer {
     }
 
     /// The histogram of a photo from `render(fitting:)`: what the canvas shows, at screen size,
-    /// not the full-resolution photo. It reads the finished texture and renders nothing again.
+    /// not the full-resolution photo. It reads the finished texture and renders nothing again,
+    /// except a small copy in color for the hues while the photo is black and white.
     public nonisolated func histogram(of photo: RenderedPhoto) throws -> Histogram {
         guard let image = CIImage(mtlTexture: photo.texture, options: [.colorSpace: Self.colorSpace]),
-              let histogram = Histogram.measure(image, colorSpace: Self.colorSpace, context: histogramContext)
+              let histogram = Histogram.measure(image, hues: photo.colors, colorSpace: Self.colorSpace, context: histogramContext)
         else { throw RAWRendererError.renderFailed }
         return histogram
     }
@@ -507,9 +518,11 @@ public actor RAWRenderer {
         let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks,
                                curve: recipe.curve)
             .apply(to: dehazed)
-        // 3. Color: vibrance, then saturation, then selective color.
+        // 3. Color: vibrance, then saturation, then selective color, then the black-and-white
+        // mix, so the colors the others shape still set how light each turns out in gray.
         let saturated = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
-        let colored = SelectiveColorStage.apply(recipe.selectiveColor, to: saturated)
+        let colored = BlackAndWhiteStage.apply(recipe.blackAndWhite,
+                                               to: SelectiveColorStage.apply(recipe.selectiveColor, to: saturated))
         // 4. LUT, blended by strength.
         let looked = recipe.look.map { LUTStage.apply(lut, strength: $0.strength, to: colored) } ?? colored
         // 5. Layers follow here when masks are built.

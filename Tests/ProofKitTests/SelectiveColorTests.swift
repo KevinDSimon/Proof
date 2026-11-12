@@ -9,7 +9,7 @@ struct SelectiveColorTests {
     static let blue = linear(0.15, 0.35, 0.9)
     static let gray = linear(0.5, 0.5, 0.5)
 
-    @Test("The eight ranges match the Black & White mix's, in order around the hue circle")
+    @Test("The eight ranges are Lightroom's, in order around the hue circle")
     func ranges() {
         #expect(ColorRange.allCases.map(\.title) == ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"])
         let hues = ColorRange.allCases.map(\.hue)

@@ -15,15 +15,19 @@ struct SelectiveColorCard: View {
 
     var body: some View {
         let selective = library.selectedEdit?.recipe.selectiveColor ?? SelectiveColor()
+        let isBlackAndWhite = library.selectedEdit?.recipe.blackAndWhite.isOn ?? false
         InspectorCard(title: "Selective Color", isOn: library.isOnBinding(.selectiveColor),
                       canReset: !selective.isNeutral,
                       reset: { library.changeEdit { $0.selectiveColor = SelectiveColor() } }) {
             HueGraph(hues: library.selectedHistogram?.hues ?? [], selected: $selected)
             RangePicker(selected: $selected, edited: Set(ColorRange.allCases.filter { !selective[$0].isNeutral }))
-            slider("Hue", \.hue, track: Self.hueTrack(selected),
-                   help: "Turns the \(selected.title.lowercased()) colors toward \(selected.previous.title.lowercased()) or \(selected.next.title.lowercased())")
-            slider("Saturation", \.saturation, track: Self.saturationTrack(selected),
-                   help: "Mutes the \(selected.title.lowercased()) colors, or makes them more intense")
+            // In black and white only Brightness shows; Hue and Saturation keep their values.
+            if !isBlackAndWhite {
+                slider("Hue", \.hue, track: Self.hueTrack(selected),
+                       help: "Turns the \(selected.title.lowercased()) colors toward \(selected.previous.title.lowercased()) or \(selected.next.title.lowercased())")
+                slider("Saturation", \.saturation, track: Self.saturationTrack(selected),
+                       help: "Mutes the \(selected.title.lowercased()) colors, or makes them more intense")
+            }
             slider("Brightness", \.brightness, track: Self.brightnessTrack(selected),
                    help: "Darkens or lightens the \(selected.title.lowercased()) colors")
         }
@@ -64,9 +68,12 @@ struct SelectiveColorCard: View {
     }
 
     /// The range's color, dark to light.
-    static func brightnessTrack(_ range: ColorRange) -> [Color] {
-        [color(hue: range.hue, saturation: 0.6, brightness: 0.3), color(hue: range.hue, saturation: 0.6, brightness: 0.75),
-         color(hue: range.hue, saturation: 0.3, brightness: 1)]
+    static func brightnessTrack(_ range: ColorRange) -> [Color] { brightnessTrack(hue: range.hue) }
+
+    /// A hue from dark to light, for a slider that darkens or lightens it.
+    static func brightnessTrack(hue: Double) -> [Color] {
+        [color(hue: hue, saturation: 0.6, brightness: 0.3), color(hue: hue, saturation: 0.6, brightness: 0.75),
+         color(hue: hue, saturation: 0.3, brightness: 1)]
     }
 }
 

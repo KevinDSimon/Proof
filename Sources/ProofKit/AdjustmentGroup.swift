@@ -38,6 +38,7 @@ extension EditRecipe {
         if groups.contains(.color) {
             recipe.basic.vibrance = 0
             recipe.basic.saturation = 0
+            recipe.blackAndWhite.isOn = false
         }
         if groups.contains(.selectiveColor) { recipe.selectiveColor = SelectiveColor() }
         if groups.contains(.curve) { recipe.curve = ToneCurve() }
