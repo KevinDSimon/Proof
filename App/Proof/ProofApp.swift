@@ -468,15 +468,25 @@ struct EditCanvas: View {
     let url: URL
     let renderer: RAWRenderer
     @Environment(\.colorScheme) private var colorScheme
+    /// The photo has neither its render nor a cached thumbnail to show yet.
+    @State private var isWaiting = false
 
     var body: some View {
         let backdrop = PhotoCanvas.backdropGray(for: colorScheme)
         PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdropGray: backdrop,
                     angle: library.isCropping ? library.selectedCrop.angle : 0,
-                    viewport: library.zoom.viewport, zoom: library.zoom) { error in
+                    viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailGrid.cache) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
         } onHistogram: { histogram, url in
             library.showHistogram(histogram, of: url)
+        } onWaiting: { isWaiting = $0 }
+        // A temporary indicator, so it may sit where the photo will appear.
+        .overlay {
+            if isWaiting {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Loading photo")
+            }
         }
         .overlay {
             if library.isCropping, let frame = library.selectedCropFrame {

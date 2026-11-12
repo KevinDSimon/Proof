@@ -66,6 +66,14 @@ public final class ThumbnailCache: Sendable {
         return Self.readImage(at: entry.file, embeddedOnly: false)
     }
 
+    /// The cached thumbnail of `url` showing `edit`, or `nil` if none is stored for the file as it
+    /// is now and that edit. Never renders and never reads more of `url` than its size and
+    /// modification date, so it is quick enough to show while the photo itself is rendered.
+    public func cachedThumbnail(for url: URL, edit: EditRecipe?) -> CGImage? {
+        guard let entry = entry(for: url, edit: edit) else { return nil }
+        return Self.readImage(at: entry.file, embeddedOnly: false)
+    }
+
     /// Thumbnails for `urls`. Cached thumbnails arrive first, then the rest as they are made, a few
     /// at a time. Each URL arrives once; its image is `nil` if the file can't be read. Photos in
     /// `edited` have their sidecar read and show their edit. Cancelling the consuming task stops
