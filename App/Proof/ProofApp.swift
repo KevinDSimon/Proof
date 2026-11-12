@@ -74,17 +74,9 @@ struct ProofApp: App {
                     .disabled(!library.hasSelectedFiles)
             }
             CommandGroup(before: .sidebar) {
-                // In Edit, ⌘1 is Actual Size instead.
-                Picker("Show", selection: $library.filter) {
-                    Text("All").tag(PhotoFilter.all)
-                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("1"))
-                    Text("5-Star Photos").tag(PhotoFilter.fiveStars)
-                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("2"))
-                    Text("Edited Photos").tag(PhotoFilter.edited)
-                        .keyboardShortcut(library.isEditing ? nil : KeyboardShortcut("3"))
-                }
-                .pickerStyle(.inline)
-                .disabled(library.selection == nil || library.isEditing)
+                FilterPicker(library: library, title: "Show")
+                    .pickerStyle(.inline)
+                    .disabled(library.selection?.folder == nil || library.isEditing)
                 Divider()
                 Button("Reload Folders") { library.refresh() }
                     .keyboardShortcut("r")
@@ -300,15 +292,20 @@ struct ContentView: View {
     }
 
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
-        if library.selection != nil {
+        // Filter rows and All Photos are already their own view across folders.
+        if library.selection?.folder != nil {
             ToolbarItem {
-                Picker("Filter", selection: $library.filter) {
-                    Text("All").tag(PhotoFilter.all)
-                    Text("5 Stars").tag(PhotoFilter.fiveStars)
-                    Text("Edited").tag(PhotoFilter.edited)
+                Menu {
+                    FilterPicker(library: library, title: "Filter")
+                        .pickerStyle(.inline)
+                } label: {
+                    // Filled while a filter is on, so it reads as on without an accent color.
+                    Label("Filter", systemImage: library.filter == .all ? "line.3.horizontal.decrease.circle"
+                                                                         : "line.3.horizontal.decrease.circle.fill")
                 }
-                .pickerStyle(.segmented)
-                .help("Show all photos in the folder, only 5-star photos, or only edited photos")
+                .menuIndicator(.hidden)
+                .help(library.filter == .all ? "Show only some of the folder's photos"
+                                             : "Showing \(library.filter.title.lowercased()) photos")
             }
         }
     }
@@ -400,7 +397,7 @@ struct ContentView: View {
             } actions: {
                 Button("Add Folder…") { library.requestFolder(.add) }
             }
-        } else if library.selection == .allPhotos {
+        } else if library.selection?.isAcrossFolders == true {
             allPhotos
         } else if let selection = library.selection?.folder, let location = selectedLocation {
             switch library.status(of: selection.locationID) {
@@ -445,7 +442,8 @@ struct ContentView: View {
             ProgressView()
         } else {
             ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                   description: Text("There are no RAW photos to show in your folders."))
+                                   description: Text(library.activeFilter == .all ? "There are no RAW photos to show in your folders."
+                                                                                  : "No photos in your folders match."))
         }
     }
 
@@ -462,6 +460,7 @@ struct ContentView: View {
         if library.isEditing { return library.browse.selectedPhoto?.name ?? "" }
         switch library.selection {
         case .allPhotos: return "All Photos"
+        case .filtered(let filter): return filter.title
         case .folder(let folder): return library.name(of: folder)
         case nil: return ""
         }
@@ -483,20 +482,24 @@ struct ContentView: View {
         if library.selection == nil { return "" }
         let total = library.listedPhotos.count
         let noun = total == 1 ? "photo" : "photos"
-        let shown = library.filter == .all ? "\(total) \(noun)" : "\(visible.count) of \(total) \(noun)"
+        let shown = switch library.selection {
+        case .folder where library.filter != .all: "\(visible.count) of \(total) \(noun)"
+        case .filtered: "\(visible.count) \(visible.count == 1 ? "photo" : "photos")"
+        default: "\(total) \(noun)"
+        }
         let count = [shown, selectedCount].compactMap { $0 }.joined(separator: " · ")
         let unavailable = library.unavailableLocations
-        guard library.selection == .allPhotos, !unavailable.isEmpty else { return count }
+        guard library.selection?.isAcrossFolders == true, !unavailable.isEmpty else { return count }
         let missing = unavailable.count == 1 ? "“\(unavailable[0].name)” isn't available"
                                              : "\(unavailable.count) folders aren't available"
         return "\(count) · \(missing)"
     }
 
     private var emptyTitle: String {
-        switch library.filter {
+        let filter = library.activeFilter
+        return switch filter {
         case .all: "No Photos"
-        case .fiveStars: "No 5-Star Photos"
-        case .edited: "No Edited Photos"
+        default: "No \(filter.rating.map { "\($0)-Star" } ?? filter.title) Photos"
         }
     }
 }
@@ -1299,6 +1302,22 @@ struct AdjustmentsInspector: View {
         case .noAccess: "Not saved. Proof needs permission to save edits in this photo's folder."
         case .unreadable: "This photo's edit file couldn't be read, so changes aren't saved."
         case .failed: "The last change couldn't be saved."
+        }
+    }
+}
+
+/// All, then every filter choice, for the toolbar's filter menu and View › Show.
+private struct FilterPicker: View {
+    @Bindable var library: Library
+    let title: String
+
+    var body: some View {
+        Picker(title, selection: $library.filter) {
+            Text(PhotoFilter.all.title).tag(PhotoFilter.all)
+            Divider()
+            ForEach(PhotoFilter.choices.prefix(3), id: \.self) { Text($0.title).tag($0) }
+            Divider()
+            ForEach(PhotoFilter.choices.dropFirst(3), id: \.self) { Text($0.title).tag($0) }
         }
     }
 }

@@ -1,7 +1,7 @@
 import ProofKit
 import SwiftUI
 
-/// All Photos, then the saved folders and their subfolders, exactly as they are on disk.
+/// All Photos and the filter rows, then the saved folders and their subfolders, exactly as they are on disk.
 struct FolderSidebar: View {
     @Bindable var library: Library
     @State private var removing: SavedLocation?
@@ -13,6 +13,11 @@ struct FolderSidebar: View {
                 SidebarLabel(name: "All Photos", systemImage: "photo.on.rectangle")
                     .help("Photos from every saved folder and its subfolders")
                     .tag(SidebarItem.allPhotos)
+                let counts = library.filterCounts
+                ForEach(PhotoFilter.choices, id: \.self) { filter in
+                    FilterLabel(filter: filter, count: counts[filter] ?? 0)
+                        .tag(SidebarItem.filtered(filter))
+                }
             }
             Section("Folders") {
                 ForEach(library.locations) { location in
@@ -141,6 +146,53 @@ private struct FolderContextMenu: View {
 
 /// A row's name with a gray symbol instead of the accent-colored one a sidebar gives it, so the
 /// sidebar stays neutral.
+/// A filter row: its symbol and name, with stars drawn as star glyphs, and how many photos match,
+/// zero included.
+private struct FilterLabel: View {
+    let filter: PhotoFilter
+    let count: Int
+    @Environment(\.backgroundProminence) private var prominence
+
+    var body: some View {
+        Label {
+            if let rating = filter.rating {
+                HStack(spacing: 1) {
+                    ForEach(0..<rating, id: \.self) { _ in Image(systemName: "star.fill") }
+                }
+                .imageScale(.small)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(filter.title)
+            } else {
+                Text(filter.title)
+            }
+        } icon: {
+            Image(systemName: Self.symbol(for: filter))
+                .foregroundStyle(prominence == .increased ? AnyShapeStyle(.foreground) : AnyShapeStyle(.secondary))
+        }
+        .badge(Text(count, format: .number))
+        .help(help)
+    }
+
+    private var help: String {
+        switch filter {
+        case .flagged: "Flagged photos from every saved folder"
+        case .rejected: "Rejected photos from every saved folder"
+        case .edited: "Edited photos from every saved folder"
+        default: "Photos rated exactly \(filter.title.lowercased()) from every saved folder, except rejected ones"
+        }
+    }
+
+    static func symbol(for filter: PhotoFilter) -> String {
+        switch filter {
+        case .all: "photo.on.rectangle"
+        case .flagged: "flag"
+        case .rejected: "flag.slash"
+        case .edited: "slider.horizontal.3"
+        default: "star"
+        }
+    }
+}
+
 private struct SidebarLabel: View {
     let name: String
     var systemImage = "folder"

@@ -128,17 +128,61 @@ public struct FolderContents: Equatable, Sendable {
     }
 }
 
-/// The library filters shown above the photos.
+/// Which photos are shown: all of them, or those with one flag, an edit, or one exact star
+/// rating. The sidebar lists every choice but All across folders; the toolbar narrows one folder.
 public enum PhotoFilter: String, CaseIterable, Codable, Sendable {
     case all
-    case fiveStars
+    case flagged
+    case rejected
     case edited
+    case fiveStars
+    case fourStars
+    case threeStars
+    case twoStars
+    case oneStar
+
+    /// Every choice but All, in the order the sidebar and menus list them.
+    public static let choices = allCases.filter { $0 != .all }
+
+    /// The exact number of stars a star filter matches.
+    public var rating: Int? {
+        switch self {
+        case .fiveStars: 5
+        case .fourStars: 4
+        case .threeStars: 3
+        case .twoStars: 2
+        case .oneStar: 1
+        default: nil
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .all: "All"
+        case .flagged: "Flagged"
+        case .rejected: "Rejected"
+        case .edited: "Edited"
+        default: rating == 1 ? "1 Star" : "\(rating ?? 0) Stars"
+        }
+    }
 
     public func includes(_ photo: FolderContents.Photo) -> Bool {
         switch self {
         case .all: true
-        case .fiveStars: photo.metadata?.rating == 5 && photo.metadata?.flag != .rejected
+        case .flagged: photo.metadata?.flag == .flagged
+        case .rejected: photo.metadata?.flag == .rejected
         case .edited: photo.isEdited
+        // A rejected photo is shown only under Rejected, whatever its stars.
+        default: photo.metadata?.rating == rating && photo.metadata?.flag != .rejected
         }
+    }
+
+    /// How many of `photos` each choice matches, counted in one pass.
+    public static func counts(of photos: some Sequence<FolderContents.Photo>) -> [PhotoFilter: Int] {
+        var counts = Dictionary(uniqueKeysWithValues: choices.map { ($0, 0) })
+        for photo in photos {
+            for choice in choices where choice.includes(photo) { counts[choice, default: 0] += 1 }
+        }
+        return counts
     }
 }

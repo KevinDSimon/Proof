@@ -121,7 +121,7 @@ struct ThumbnailGrid: View {
             library.browse.selectedPhoto = photo.id
             library.browse.edit()
         })
-        .help(library.selection == .allPhotos ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
+        .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
