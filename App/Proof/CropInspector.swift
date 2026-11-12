@@ -160,10 +160,13 @@ struct CropInspector: View {
     }
 
     private func iconButton(_ title: String, systemImage: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(title, systemImage: systemImage, action: action)
-            .labelStyle(.iconOnly)
-            .help(help)
-            .frame(maxWidth: .infinity)
+        // The frame goes on the label so the bezel itself stretches, not only the space around it.
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+                .frame(maxWidth: .infinity)
+        }
+        .help(help)
     }
 }
 
