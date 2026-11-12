@@ -700,6 +700,8 @@ struct AdjustmentsInspector: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                // Flexible segments span the row, as the Curve card's channel picker does.
+                .buttonSizing(.flexible)
                 .frame(maxWidth: .infinity)
                 if blackAndWhite.isOn {
                     mixSlider("Red", \.red, hue: 0, help: "Lightens or darkens reds, oranges and skin, as a red filter does on film")
