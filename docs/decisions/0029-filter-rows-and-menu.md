@@ -10,11 +10,11 @@ Browse filtered the selected folder with a segmented control of All, 5 Stars and
 - Under All Photos, the sidebar lists Flagged, Rejected, Edited, then 5 to 1 stars. Each row is a view across every available saved folder, read like All Photos (decision 0006). Like All Photos, it changes nothing on disk.
 - Each row shows how many photos read so far match, zero included, so the list keeps its shape.
 - Star rows match the exact rating, not "at least", and leave out rejected photos, as 5 Stars did. A rejected photo appears only under Rejected.
-- For a folder, a toolbar button with `line.3.horizontal.decrease.circle` opens a menu of All and the same choices. Its symbol is filled while a filter is on, so the state shows without an accent color. View › Show lists the same choices and is bound to the same value.
-- The toolbar button is hidden for All Photos and the filter rows. All Photos is unfiltered, and a filter row is already filtered.
+- For a folder or All Photos, a toolbar button with `line.3.horizontal.decrease.circle` opens a menu of All and the same choices. Its symbol is filled while a filter is on, so the state shows without an accent color. View › Show lists the same choices and is bound to the same value.
+- The toolbar button is hidden while a filter row is selected, since that view is already filtered.
 - ⌘1–⌘3 are removed.
 
 ## Consequences
 - Counts reflect the folders read so far. Until All Photos or a filter row has been opened, folders the sidebar hasn't shown are not counted, and ratings stored only inside photos without a sidecar are read only for what is selected. A count can rise when a row is opened.
 - Counting walks every read photo each time the sidebar redraws. That is fast for tens of thousands of photos; a cached count can replace it if libraries grow larger.
-- A filter row is remembered between launches, like All Photos and folders. The folder filter is not.
+- A filter row is remembered between launches, like All Photos and folders. The toolbar filter is not.

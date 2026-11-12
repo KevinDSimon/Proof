@@ -88,8 +88,8 @@ final class Library {
     /// While All Photos or a filter row is selected, whether folders under the saved locations are
     /// still being read.
     private(set) var isReadingAllPhotos = false
-    /// The toolbar filter, which narrows the selected folder. Filter rows in the sidebar apply
-    /// their own filter instead.
+    /// The toolbar filter, which narrows the selected folder or All Photos. Filter rows in the
+    /// sidebar apply their own filter instead.
     var filter: PhotoFilter = .all {
         didSet {
             changedPhotos = []
@@ -210,13 +210,9 @@ final class Library {
         availableRoots.flatMap { ListedPhoto.photos(under: $0, in: contents) }
     }
 
-    /// The filter that applies: a filter row's, or the toolbar's for a folder.
+    /// The filter that applies: a filter row's, or the toolbar's.
     var activeFilter: PhotoFilter {
-        switch selection {
-        case .filtered(let filter): filter
-        case .folder: filter
-        case .allPhotos, nil: .all
-        }
+        selection?.filter ?? filter
     }
 
     /// The listed photos that pass the filter.

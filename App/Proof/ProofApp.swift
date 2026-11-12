@@ -76,7 +76,7 @@ struct ProofApp: App {
             CommandGroup(before: .sidebar) {
                 FilterPicker(library: library, title: "Show")
                     .pickerStyle(.inline)
-                    .disabled(library.selection?.folder == nil || library.isEditing)
+                    .disabled(library.selection == nil || library.selection?.filter != nil || library.isEditing)
                 Divider()
                 Button("Reload Folders") { library.refresh() }
                     .keyboardShortcut("r")
@@ -292,8 +292,8 @@ struct ContentView: View {
     }
 
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
-        // Filter rows and All Photos are already their own view across folders.
-        if library.selection?.folder != nil {
+        // A filter row is already filtered.
+        if library.selection != nil, library.selection?.filter == nil {
             ToolbarItem {
                 Menu {
                     FilterPicker(library: library, title: "Filter")
@@ -304,7 +304,7 @@ struct ContentView: View {
                                                                          : "line.3.horizontal.decrease.circle.fill")
                 }
                 .menuIndicator(.hidden)
-                .help(library.filter == .all ? "Show only some of the folder's photos"
+                .help(library.filter == .all ? "Show only some of the photos"
                                              : "Showing \(library.filter.title.lowercased()) photos")
             }
         }
@@ -482,10 +482,12 @@ struct ContentView: View {
         if library.selection == nil { return "" }
         let total = library.listedPhotos.count
         let noun = total == 1 ? "photo" : "photos"
-        let shown = switch library.selection {
-        case .folder where library.filter != .all: "\(visible.count) of \(total) \(noun)"
-        case .filtered: "\(visible.count) \(visible.count == 1 ? "photo" : "photos")"
-        default: "\(total) \(noun)"
+        let shown = if library.selection?.filter != nil {
+            "\(visible.count) \(visible.count == 1 ? "photo" : "photos")"
+        } else if library.filter != .all {
+            "\(visible.count) of \(total) \(noun)"
+        } else {
+            "\(total) \(noun)"
         }
         let count = [shown, selectedCount].compactMap { $0 }.joined(separator: " · ")
         let unavailable = library.unavailableLocations
