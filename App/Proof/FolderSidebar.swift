@@ -16,13 +16,7 @@ struct FolderSidebar: View {
             }
             Section("Folders") {
                 ForEach(library.locations) { location in
-                    LocationRow(library: library, location: location)
-                        .contextMenu {
-                            if library.status(of: location.id) == .missing {
-                                Button("Locate…") { library.requestFolder(.locate(location)) }
-                            }
-                            Button("Remove Folder…") { removing = location }
-                        }
+                    LocationRow(library: library, location: location) { removing = $0 }
                 }
             }
         }
@@ -56,17 +50,19 @@ struct FolderSidebar: View {
 private struct LocationRow: View {
     let library: Library
     let location: SavedLocation
+    let remove: (SavedLocation) -> Void
 
     var body: some View {
+        let root = FileReference(locationID: location.id, relativePath: [])
         switch library.status(of: location.id) {
         case .available:
-            FolderRow(library: library, folder: FileReference(locationID: location.id, relativePath: []),
-                      name: location.name)
+            FolderRow(library: library, folder: root, name: location.name, remove: remove)
         case .offline:
             SidebarLabel(name: location.name)
                 .foregroundStyle(.secondary)
                 .help("The drive or network volume this folder is on isn't connected.")
-                .tag(SidebarItem.folder(FileReference(locationID: location.id, relativePath: [])))
+                .tag(SidebarItem.folder(root))
+                .contextMenu { FolderContextMenu(library: library, folder: root, remove: remove) }
         case .missing:
             HStack {
                 SidebarLabel(name: location.name)
@@ -76,7 +72,8 @@ private struct LocationRow: View {
                     .controlSize(.small)
             }
             .help("Proof can't find this folder. It was last at \(location.lastKnownURL.path).")
-            .tag(SidebarItem.folder(FileReference(locationID: location.id, relativePath: [])))
+            .tag(SidebarItem.folder(root))
+            .contextMenu { FolderContextMenu(library: library, folder: root, remove: remove) }
         }
     }
 }
@@ -87,6 +84,7 @@ private struct FolderRow: View {
     let library: Library
     let folder: FileReference
     let name: String
+    let remove: (SavedLocation) -> Void
     @State private var isExpanded = false
 
     var body: some View {
@@ -97,7 +95,7 @@ private struct FolderRow: View {
                         FolderRow(library: library,
                                   folder: FileReference(locationID: folder.locationID,
                                                         relativePath: folder.relativePath + [subfolder]),
-                                  name: subfolder)
+                                  name: subfolder, remove: remove)
                     }
                 } label: {
                     label
@@ -112,6 +110,32 @@ private struct FolderRow: View {
     private var label: some View {
         SidebarLabel(name: name, count: library.contents[folder]?.photos.count ?? 0)
             .tag(SidebarItem.folder(folder))
+            .contextMenu { FolderContextMenu(library: library, folder: folder, remove: remove) }
+    }
+}
+
+/// The right-click menu of a folder in the sidebar. Remove Folder… and Locate… are for saved
+/// folders only, since subfolders are part of the saved folder they're in.
+private struct FolderContextMenu: View {
+    let library: Library
+    let folder: FileReference
+    let remove: (SavedLocation) -> Void
+
+    var body: some View {
+        let url = library.url(of: folder)
+        Button("Show in Finder") { if let url { library.showInFinder([url]) } }
+            .disabled(url == nil)
+        Button("Copy Path") { if let url { library.copyPaths([url]) } }
+            .disabled(url == nil)
+        Button("Refresh") { library.refresh(folder) }
+            .disabled(url == nil)
+        if folder.relativePath.isEmpty, let location = library.locations.first(where: { $0.id == folder.locationID }) {
+            Divider()
+            if library.status(of: location.id) == .missing {
+                Button("Locate…") { library.requestFolder(.locate(location)) }
+            }
+            Button("Remove Folder…") { remove(location) }
+        }
     }
 }
 

@@ -314,3 +314,17 @@ final class FakeBookmarks: BookmarkSystem {
         !(unmounted && volume.map { url.path.hasPrefix($0.path) } == true)
     }
 }
+
+struct FileReferenceTests {
+    @Test("A folder contains itself and everything below it, and nothing beside it or in another location")
+    func containment() {
+        let location = UUID()
+        let trip = FileReference(locationID: location, relativePath: ["2026", "Trip"])
+        #expect(trip.contains(trip))
+        #expect(trip.contains(FileReference(locationID: location, relativePath: ["2026", "Trip", "Day 1"])))
+        #expect(!trip.contains(FileReference(locationID: location, relativePath: ["2026"])))
+        #expect(!trip.contains(FileReference(locationID: location, relativePath: ["2026", "Trips"])))
+        #expect(!trip.contains(FileReference(locationID: UUID(), relativePath: ["2026", "Trip"])))
+        #expect(FileReference(locationID: location, relativePath: []).contains(trip))
+    }
+}

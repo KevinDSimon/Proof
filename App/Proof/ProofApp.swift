@@ -65,6 +65,13 @@ struct ProofApp: App {
             CommandGroup(after: .newItem) {
                 Button("Add Folder…") { library.requestFolder(.add) }
                     .keyboardShortcut("o")
+                Divider()
+                // The selected photos, or the selected folder when no photo is selected.
+                Button("Show in Finder") { library.showInFinder(library.selectedFileURLs) }
+                    .disabled(!library.hasSelectedFiles)
+                Button("Copy Path") { library.copyPaths(library.selectedFileURLs) }
+                    .keyboardShortcut("c", modifiers: [.command, .option])
+                    .disabled(!library.hasSelectedFiles)
             }
             CommandGroup(before: .sidebar) {
                 // In Edit, ⌘1 is Actual Size instead.
