@@ -10,6 +10,7 @@ struct Navigator: View {
     let backdropGray: Double
     /// The long edge, in points.
     private static let length: CGFloat = 160
+    private static let padding: CGFloat = 5
 
     var body: some View {
         let size = fittedSize
@@ -28,15 +29,19 @@ struct Navigator: View {
                         .offset(x: region.minX * size.width, y: region.minY * size.height)
                 }
             }
-            .clipped()
+            .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
             .contentShape(.rect)
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                 zoom.center(on: CGPoint(x: value.location.x / size.width, y: value.location.y / size.height))
             })
-            // A square edge in the canvas gray, one point (two pixels on a Retina display), so it
-            // separates from the photo underneath without a plate around it.
-            .padding(1)
-            .background(Color(white: backdropGray))
+            // The selection outline, filled with the canvas gray, so it reads as a frame that
+            // separates the small copy from the photo underneath.
+            .padding(Self.padding)
+            .background {
+                let plate = RoundedRectangle(cornerRadius: SelectionOutline.cornerRadius(padding: Self.padding))
+                plate.fill(Color(white: backdropGray))
+                    .overlay(plate.strokeBorder(SelectionOutline.color, lineWidth: SelectionOutline.lineWidth))
+            }
             .help("Click or drag to move around the photo")
             .accessibilityElement()
             .accessibilityLabel("Navigator")

@@ -2,7 +2,7 @@ import ProofKit
 import SwiftUI
 
 /// One row of thumbnails under the photo in Edit, showing the photos that pass the filter. The
-/// current photo is marked with a ring. Click or the left and right arrow keys
+/// current photo is marked with an outline. Click or the left and right arrow keys
 /// switch to another photo without leaving Edit.
 struct Filmstrip: View {
     @Bindable var library: Library
@@ -70,17 +70,18 @@ struct Filmstrip: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
+                    .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
                     .ratingBadges(photo.photo.metadata, size: 8)
             } else if finished.contains(photo.id) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
                     .help("This photo couldn't be read.")
             } else {
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: SelectionOutline.photoCornerRadius)
                     .fill(.quaternary)
             }
         }
-        .selectionRing(isCurrent, lineWidth: 2, gap: 2)
+        .selectionOutline(isCurrent, padding: 4)
         .frame(width: Self.height - 12, height: Self.height - 12)
         .contentShape(Rectangle())
         .onTapGesture {
