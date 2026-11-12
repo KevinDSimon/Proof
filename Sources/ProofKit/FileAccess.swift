@@ -66,6 +66,11 @@ public struct FileReference: Codable, Hashable, Sendable {
         self.locationID = locationID
         self.relativePath = relativePath
     }
+
+    /// Whether `other` is this file or folder, or inside it.
+    public func contains(_ other: FileReference) -> Bool {
+        other.locationID == locationID && other.relativePath.starts(with: relativePath)
+    }
 }
 
 /// How grants are turned into bookmarks and back. The Mac uses security-scoped bookmarks;

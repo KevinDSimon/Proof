@@ -32,6 +32,9 @@ struct PhotoContextMenu: View {
             }
         }
         Divider()
+        Button("Show in Finder") { library.showInFinder(library.urls(of: photos)) }
+        Button("Copy Path" + (photos.count > 1 ? "s" : "")) { library.copyPaths(library.urls(of: photos)) }
+        Divider()
         // Always from the photo clicked, the one whose settings are in view.
         Button("Copy Settings…") { library.chooseSettingsToCopy(from: photo) }
             .disabled(library.isCropping)

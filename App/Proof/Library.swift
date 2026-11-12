@@ -1238,6 +1238,50 @@ final class Library {
         reload(contents.keys.filter { isAvailable($0.locationID) })
     }
 
+    /// Reads `folder` and the subfolders of it already read again, for the sidebar's Refresh.
+    func refresh(_ folder: FileReference) {
+        recheckLocations()
+        guard isAvailable(folder.locationID) else { return }
+        reload(contents.keys.filter { folder.contains($0) } + [folder])
+    }
+
+    /// The files of the selected photos, or of the selected folder when no photo is selected, for the menu
+    /// bar's Show in Finder and Copy Path. Photos or folders that can't be reached are left out.
+    var selectedFileURLs: [URL] {
+        let photos = selectedPhotosInOrder
+        if !photos.isEmpty { return urls(of: photos) }
+        if case .folder(let folder) = selection, let url = fileAccess?.url(for: folder) { return [url] }
+        return []
+    }
+
+    /// Whether a photo or a folder is selected, without looking up their files, for the menu bar.
+    var hasSelectedFiles: Bool {
+        if !browse.selectedPhotos.isEmpty { return true }
+        if case .folder = selection { return true }
+        return false
+    }
+
+    func urls(of photos: [PhotoReference]) -> [URL] {
+        photos.compactMap { url(ofPhoto: $0.name, in: $0.folder) }
+    }
+
+    func url(of folder: FileReference) -> URL? {
+        fileAccess?.url(for: folder)
+    }
+
+    /// Opens a Finder window with the files selected, so their location is visible.
+    func showInFinder(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    /// Puts the paths on the pasteboard, one per line, as Finder's Copy as Pathname does.
+    func copyPaths(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
+    }
+
     /// Follows changes Proof is told about: drives and shares connecting and disconnecting, and
     /// Proof becoming the active app, when folders on network volumes are read again.
     private func observeSystem() {
