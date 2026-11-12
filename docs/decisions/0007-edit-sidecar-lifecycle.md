@@ -44,3 +44,6 @@ Decision 0002 stores each edit in `<original file name>.proof` next to the origi
 
 ## Amendment, 2026-11-09
 Building Revert to Original in issue #61 changed one point. Revert deletes the sidecar directly instead of moving it to the Trash, including a sidecar with fields this version doesn't recognize. Network volumes such as a NAS share often have no Trash, so moving the file failed there. Undo already restores the edit from memory on any volume, which makes a confirmation dialog unnecessary. A reverted edit can no longer be recovered once Proof quits; that tradeoff was accepted to keep Revert immediate and the same on every volume.
+
+## Amendment, 2026-11-12
+Selecting several photos in issue #67 adds one exception. Revert to Original still acts at once on one photo, where Undo brings the edit back in place. When it would revert more than one photo, it asks first, because some of them may be out of sight and each one's undo is in its own history, reached by opening that photo in Edit.

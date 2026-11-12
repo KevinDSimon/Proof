@@ -22,15 +22,15 @@ struct ProofApp: App {
                     .keyboardShortcut("z", modifiers: [.command, .shift])
                     .disabled(!library.isEditing || !library.canRedoEdit)
             }
-            // In Edit, ⌘C and ⌘V copy and paste the photo's settings, as in Lightroom, except while
-            // a field is being typed in. Their titles can't follow the focus, so the Settings
-            // items below name what they do.
+            // ⌘C and ⌘V copy and paste the photos' settings, as in Lightroom, and ⌘A selects every
+            // photo shown, except while a field is being typed in. Their titles can't follow the
+            // focus, so the Settings items below name what they do.
             CommandGroup(replacing: .pasteboard) {
                 Button("Cut") { Self.sendToTextField(#selector(NSText.cut(_:))) }
                     .keyboardShortcut("x")
                 Button("Copy") {
                     if library.canCopySettings && !Self.isTyping {
-                        library.isChoosingSettingsToCopy = true
+                        library.chooseSettingsToCopy()
                     } else {
                         Self.sendToTextField(#selector(NSText.copy(_:)))
                     }
@@ -44,10 +44,20 @@ struct ProofApp: App {
                     }
                 }
                 .keyboardShortcut("v")
-                Button("Select All") { Self.sendToTextField(#selector(NSText.selectAll(_:))) }
-                    .keyboardShortcut("a")
+                Button("Select All") {
+                    if library.canSelectPhotos && !Self.isTyping {
+                        library.browse.selectAll(library.visiblePhotos)
+                    } else {
+                        Self.sendToTextField(#selector(NSText.selectAll(_:)))
+                    }
+                }
+                .keyboardShortcut("a")
+                // In Edit, the photo shown stays selected.
+                Button("Deselect All") { library.deselectAll() }
+                    .keyboardShortcut("a", modifiers: [.command, .option])
+                    .disabled(library.browse.selectedPhoto == nil || library.isEditing && !library.browse.hasMultipleSelection)
                 Divider()
-                Button("Copy Settings…") { library.isChoosingSettingsToCopy = true }
+                Button("Copy Settings…") { library.chooseSettingsToCopy() }
                     .disabled(!library.canCopySettings)
                 Button("Paste Settings") { library.pasteSettings() }
                     .disabled(!library.canPasteSettings)
@@ -98,13 +108,17 @@ struct ProofApp: App {
                 Button("Edit") { library.browse.edit() }
                     .keyboardShortcut(.return, modifiers: [])
                     .disabled(library.isEditing || library.browse.selectedPhoto == nil)
-                // While cropping, Esc cancels the crop instead.
+                // ⌘↑, as Finder's Enclosing Folder. Esc only closes tools, such as the crop tool, so it
+                // never leaves Edit by surprise.
                 Button("Back to Folder") { library.browse.finishEditing() }
-                    .keyboardShortcut(library.isCropping || library.isPickingWhiteBalance
-                                      ? nil : KeyboardShortcut(.escape, modifiers: []))
+                    .keyboardShortcut(.upArrow)
                     .disabled(!library.isEditing)
-                Button("Revert to Original") { library.revertEdit() }
-                    .disabled(!library.isEditing || !library.canRevertEdit)
+                // Like every action in the menu bar and the right-click menu, it acts on all selected photos.
+                let toRevert = library.photosToRevert()
+                Button(toRevert.count > 1 ? "Revert \(toRevert.count) Photos to Original…" : "Revert to Original") {
+                    library.requestRevert()
+                }
+                .disabled(toRevert.isEmpty)
                 // Backslash, as in Lightroom. A toggle, so the menu marks it while the original shows.
                 Toggle("Show Original", isOn: Binding(get: { library.browse.isShowingOriginal },
                                                       set: { _ in library.toggleOriginal() }))
@@ -155,7 +169,8 @@ struct ProofApp: App {
                     .disabled(!library.canStepLook)
                 Divider()
                 // Lightroom's keys: 0 to 5 for stars, P, U and X for the flag.
-                Picker("Rating", selection: Binding(get: { library.selectedPhotoMetadata?.rating ?? 0 },
+                // Checked when every selected photo shares the rating or flag.
+                Picker("Rating", selection: Binding(get: { library.commonRating(of: library.selectedPhotosInOrder) ?? -1 },
                                                     set: { library.setRating($0) })) {
                     ForEach(0...5, id: \.self) { rating in
                         Text(RatingBadges.title(ofRating: rating)).tag(rating)
@@ -165,12 +180,12 @@ struct ProofApp: App {
                 .pickerStyle(.inline)
                 .disabled(library.browse.selectedPhoto == nil)
                 Divider()
-                Picker("Flag", selection: Binding(get: { library.selectedPhotoMetadata?.flag ?? .unflagged },
-                                                  set: { library.setFlag($0) })) {
-                    Text("Flagged").tag(PhotoMetadata.Flag.flagged).keyboardShortcut("p", modifiers: [])
-                    Text("Unflagged").tag(PhotoMetadata.Flag.unflagged).keyboardShortcut("u", modifiers: [])
+                Picker("Flag", selection: Binding(get: { library.commonFlag(of: library.selectedPhotosInOrder) },
+                                                  set: { if let flag = $0 { library.setFlag(flag) } })) {
+                    Text("Flagged").tag(PhotoMetadata.Flag?.some(.flagged)).keyboardShortcut("p", modifiers: [])
+                    Text("Unflagged").tag(PhotoMetadata.Flag?.some(.unflagged)).keyboardShortcut("u", modifiers: [])
                     // While cropping, X swaps the crop's orientation instead, as in Lightroom.
-                    Text("Rejected").tag(PhotoMetadata.Flag.rejected)
+                    Text("Rejected").tag(PhotoMetadata.Flag?.some(.rejected))
                         .keyboardShortcut(library.isCropping ? nil : KeyboardShortcut("x", modifiers: []))
                 }
                 .pickerStyle(.inline)
@@ -251,6 +266,14 @@ struct ContentView: View {
         .sheet(isPresented: $library.isChoosingSettingsToCopy) {
             CopySettingsSheet(library: library)
         }
+        // A single photo reverts without asking, as Undo brings it back right there. Several may
+        // include photos out of sight, each with its own undo history.
+        .confirmationDialog("Revert \(library.photosPendingRevert.count) photos to their originals?",
+                            isPresented: $library.isConfirmingRevert) {
+            Button("Revert \(library.photosPendingRevert.count) Photos", role: .destructive) { library.revertPendingPhotos() }
+        } message: {
+            Text("Their edits are removed. To bring one back, open it in Edit and choose Undo before quitting Proof.")
+        }
         .alert("Something Went Wrong", isPresented: Binding(
             get: { library.errorMessage != nil },
             set: { if !$0 { library.errorMessage = nil } }
@@ -285,10 +308,8 @@ struct ContentView: View {
 
     @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
-            // Esc reaches the window before the menu bar, so the button holds it as well as the Photo menu.
             Button("Back to Folder", systemImage: "chevron.backward") { library.browse.finishEditing() }
-                .keyboardShortcut(library.isCropping || library.isPickingWhiteBalance ? nil : .cancelAction)
-                .help("Return to the folder")
+                .help("Return to the folder (⌘↑)")
         }
     }
 
@@ -318,12 +339,18 @@ struct ContentView: View {
         .toolbar {
             // Stars and flags are separate groups, as in Lightroom, at the trailing end so the
             // title stands on its own.
+            // They rate the photo shown only. The menu bar, its keys and the right-click menu act on
+            // every selected photo.
             ToolbarItem {
-                StarButtons(rating: library.selectedPhotoMetadata?.rating ?? 0, setRating: library.setRating)
+                StarButtons(rating: library.selectedPhotoMetadata?.rating ?? 0) { rating in
+                    library.setRating(rating, of: library.browse.selectedPhoto.map { [$0] } ?? [])
+                }
             }
             ToolbarSpacer(.fixed)
             ToolbarItem {
-                FlagButtons(flag: library.selectedPhotoMetadata?.flag ?? .unflagged, setFlag: library.setFlag)
+                FlagButtons(flag: library.selectedPhotoMetadata?.flag ?? .unflagged) { flag in
+                    library.setFlag(flag, of: library.browse.selectedPhoto.map { [$0] } ?? [])
+                }
             }
             ToolbarSpacer(.fixed)
             // Just left of the crop tool, with the navigator below it while zoomed.
@@ -419,6 +446,11 @@ struct ContentView: View {
         library.locations.first { $0.id == library.selection?.folder?.locationID }
     }
 
+    /// "3 selected", while more than one photo is.
+    private var selectedCount: String? {
+        library.browse.hasMultipleSelection ? "\(library.browse.selectedPhotos.count) selected" : nil
+    }
+
     private var title: String {
         if library.isEditing { return library.browse.selectedPhoto?.name ?? "" }
         switch library.selection {
@@ -438,13 +470,14 @@ struct ContentView: View {
             let folder = library.browse.selectedPhoto.map { library.name(of: $0.folder) }
             let shownFolder = folder == library.browse.selectedPhoto?.name ? nil : folder
             let original = library.browse.isShowingOriginal ? "Original" : nil
-            return [original, shownFolder, position].compactMap { $0 }.joined(separator: " · ")
+            return [original, shownFolder, position, selectedCount].compactMap { $0 }.joined(separator: " · ")
         }
         if let folder = library.selection?.folder, library.contents[folder] == nil { return "" }
         if library.selection == nil { return "" }
         let total = library.listedPhotos.count
         let noun = total == 1 ? "photo" : "photos"
-        let count = library.filter == .all ? "\(total) \(noun)" : "\(visible.count) of \(total) \(noun)"
+        let shown = library.filter == .all ? "\(total) \(noun)" : "\(visible.count) of \(total) \(noun)"
+        let count = [shown, selectedCount].compactMap { $0 }.joined(separator: " · ")
         let unavailable = library.unavailableLocations
         guard library.selection == .allPhotos, !unavailable.isEmpty else { return count }
         let missing = unavailable.count == 1 ? "“\(unavailable[0].name)” isn't available"
