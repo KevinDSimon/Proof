@@ -11,7 +11,7 @@ Status: pre-alpha. Nothing to download yet.
 - Selective Color: hue, saturation and brightness for eight color ranges, chosen from a graph of the photo's colors
 - Black & White, chosen as the Basic card's Treatment, with red, green and blue filter sliders
 - Zoom to 100% and beyond, sharpening and noise reduction
-- Lightroom's post-crop vignette: amount, midpoint, roundness and feather
+- Effects: Lightroom's post-crop vignette, film grain, halation and bloom
 - Lens profile corrections, manual distortion, and perspective correction with Upright (Auto, Guided, Level, Vertical, Full)
 - HSL color mixer and black and white
 - Tone curve (RGB and per channel) and a histogram

@@ -38,6 +38,9 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
   "detail": { "sharpening": 70, "noiseReduction": null, "noiseReductionDetail": null, "colorNoiseReduction": 40 },
   "look": { "lut": "Portra.cube", "strength": 0.7 },
   "vignette": { "amount": -30, "midpoint": 50, "roundness": 0, "feather": 50 },
+  "grain": { "amount": 25, "size": 25, "roughness": 50 },
+  "halation": { "amount": 40, "size": 50 },
+  "bloom": { "amount": 0, "size": 50 },
   "lens": {
     "profile": null, "chromaticAberration": { "red": 1.00012, "blue": 0.99994 },
     "distortion": 6, "vignetting": { "amount": 35, "midpoint": 50 }
@@ -67,6 +70,9 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `detail` | Sharpening and noise reduction, described below. |
 | `look` | The LUT's path in the LUT library and its strength from 0 to 1. The path is relative to the library, with folders separated by `/`, as in `Portra/400.cube`; a LUT outside any folder is its file name alone, as edits saved before folders have it. A path with an empty, hidden or `..` part is skipped. Strength outside 0 to 1 renders as the nearer end. A LUT that can't be found is skipped. `null` for none. |
 | `vignette` | Darkened or lightened edges, centered on the cropped frame, described below. |
+| `grain` | Film grain on the cropped frame, described below. |
+| `halation` | A red glow around bright lights, described below. |
+| `bloom` | A glow around highlights in every color, described below. |
 | `lens` | Lens corrections, described below. |
 | `transform` | Perspective correction, described below. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
@@ -132,6 +138,25 @@ Lightroom's post-crop vignetting. It applies after the crop, so it centers on th
 | `midpoint` | 0 to 100, default 50. Where the effect is half, from close to the center (0) to near the corners (100). |
 | `roundness` | −100 to +100, default 0. 0 is an oval matching the frame, +100 a circle of the same area, −100 a rounded rectangle following the frame's corners. |
 | `feather` | 0 to 100, default 50. How gradually the effect fades in; 0 is a hard edge. |
+
+## Grain
+
+Film grain, added after the vignette on the cropped frame and sized relative to it, so the same values give the same grain at any resolution. Values outside their ranges render as the nearer end. With `amount` at 0 nothing changes, whatever the other two hold. A missing `grain`, as in files saved before it existed, means no grain; a missing field inside it takes the default below. See decision 0028.
+
+| Field | Meaning |
+| --- | --- |
+| `amount` | 0 to 100, default 0. How strong the grain is. It is strongest in the low midtones and weakest in the highlights. |
+| `size` | 0 to 100, default 25. How large each grain is: from about 1/7500 of the frame's long edge at 0 to 1/1000 at 100. |
+| `roughness` | 0 to 100, default 50. How much of a second, finer grain is mixed in. |
+
+## Halation and bloom
+
+Light from the photo's highlights spread over the area around them, added in linear light right after perspective, before the tone stage, on the whole photo before the crop. Both fields have the same layout. Values outside their ranges render as the nearer end. With `amount` at 0 nothing changes, whatever `size` holds. A missing `halation` or `bloom`, as in files saved before they existed, means none; a missing field inside one takes the default below. See decision 0028.
+
+| Field | Meaning |
+| --- | --- |
+| `amount` | 0 to 100, default 0. How much light spreads. Halation adds it mostly to red, with a little to green and none to blue; bloom adds it in the light's own color and also blends in a little of the whole photo, blurred, which lowers contrast. |
+| `size` | 0 to 100, default 50. How far the light spreads, as a share of the photo's long edge: halation from 0.4% to 4%, bloom from 1% to 10% (the blur's standard deviation). |
 
 ## Lens corrections
 

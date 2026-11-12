@@ -51,7 +51,7 @@ struct SidecarTests {
 
     @Test("Reverting deletes the sidecar, even one with unrecognized fields")
     func revertDeletes() throws {
-        let json = #"{"formatVersion": 1, "basic": {"exposure": 1}, "grain": {"amount": 30}}"#
+        let json = #"{"formatVersion": 1, "basic": {"exposure": 1}, "lightLeak": {"amount": 30}}"#
         try Data(json.utf8).write(to: sidecarURL)
         try Sidecar.delete(for: photo)
         #expect(!sidecarExists)
@@ -74,7 +74,7 @@ struct SidecarTests {
 
     @Test("A sidecar with unrecognized fields is kept when the edit returns to neutral")
     func unrecognizedKeptWhenNeutral() throws {
-        let json = #"{"formatVersion": 1, "basic": {"exposure": 1, "texture": 20}, "grain": {"amount": 30}}"#
+        let json = #"{"formatVersion": 1, "basic": {"exposure": 1, "texture": 20}, "lightLeak": {"amount": 30}}"#
         try Data(json.utf8).write(to: sidecarURL)
         let read = try #require(try Sidecar.read(for: photo))
         #expect(read.hasUnrecognizedFields)
@@ -87,7 +87,7 @@ struct SidecarTests {
     @Test("Saving keeps fields this version doesn't recognize, at any depth")
     func unrecognizedSurviveSave() throws {
         let json = #"""
-        {"formatVersion": 1, "basic": {"exposure": 1, "texture": 20}, "grain": {"amount": 30},
+        {"formatVersion": 1, "basic": {"exposure": 1, "texture": 20}, "lightLeak": {"amount": 30},
          "layers": [{"name": "Sky", "isEnabled": true, "basic": {"exposure": -1}, "mask": {"kind": "sky"}}]}
         """#
         try Data(json.utf8).write(to: sidecarURL)
@@ -100,7 +100,7 @@ struct SidecarTests {
         let basic = try #require(object["basic"] as? [String: Any])
         #expect(basic["exposure"] as? Double == 0.5)
         #expect(basic["texture"] as? Double == 20)
-        #expect((object["grain"] as? [String: Any])?["amount"] as? Double == 30)
+        #expect((object["lightLeak"] as? [String: Any])?["amount"] as? Double == 30)
         let layer = try #require((object["layers"] as? [[String: Any]])?.first)
         #expect((layer["basic"] as? [String: Any])?["exposure"] as? Double == -0.5)
         #expect((layer["mask"] as? [String: Any])?["kind"] as? String == "sky")

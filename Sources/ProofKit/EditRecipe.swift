@@ -16,13 +16,16 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var detail: DetailAdjustments
     public var look: Look?
     public var vignette: VignetteAdjustments
+    public var grain: GrainAdjustments
+    public var halation: GlowAdjustments
+    public var bloom: GlowAdjustments
     public var lens: LensCorrections
     public var transform: PerspectiveTransform
     public var crop: Crop?
     public var layers: [Layer]
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, lens, transform, crop, layers
+        case formatVersion, processVersion, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, layers
     }
 
     public init(
@@ -33,6 +36,9 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         detail: DetailAdjustments = DetailAdjustments(),
         look: Look? = nil,
         vignette: VignetteAdjustments = VignetteAdjustments(),
+        grain: GrainAdjustments = GrainAdjustments(),
+        halation: GlowAdjustments = GlowAdjustments(),
+        bloom: GlowAdjustments = GlowAdjustments(),
         lens: LensCorrections = LensCorrections(),
         transform: PerspectiveTransform = PerspectiveTransform(),
         crop: Crop? = nil,
@@ -47,6 +53,9 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         self.detail = detail
         self.look = look
         self.vignette = vignette
+        self.grain = grain
+        self.halation = halation
+        self.bloom = bloom
         self.lens = lens
         self.transform = transform
         self.crop = crop
@@ -69,6 +78,10 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         look = try c.decodeIfPresent(Look.self, forKey: .look)
         // Edits saved before the Vignette card have none.
         vignette = try c.decodeIfPresent(VignetteAdjustments.self, forKey: .vignette) ?? VignetteAdjustments()
+        // Edits saved before Grain, Halation and Bloom have none.
+        grain = try c.decodeIfPresent(GrainAdjustments.self, forKey: .grain) ?? GrainAdjustments()
+        halation = try c.decodeIfPresent(GlowAdjustments.self, forKey: .halation) ?? GlowAdjustments()
+        bloom = try c.decodeIfPresent(GlowAdjustments.self, forKey: .bloom) ?? GlowAdjustments()
         // Edits saved before Lens Corrections keep the decoder's default, as they always rendered.
         lens = try c.decodeIfPresent(LensCorrections.self, forKey: .lens) ?? LensCorrections()
         // Edits saved before Transform have none.
@@ -99,6 +112,9 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(detail, forKey: .detail)
         try c.encode(look, forKey: .look)
         try c.encode(vignette, forKey: .vignette)
+        try c.encode(grain, forKey: .grain)
+        try c.encode(halation, forKey: .halation)
+        try c.encode(bloom, forKey: .bloom)
         try c.encode(lens, forKey: .lens)
         try c.encode(transform, forKey: .transform)
         try c.encode(crop, forKey: .crop)
@@ -107,7 +123,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
     }
 
     /// The photo without its adjustments, for Show Original: lens corrections, the perspective
