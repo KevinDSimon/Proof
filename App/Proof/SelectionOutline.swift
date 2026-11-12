@@ -8,8 +8,6 @@ enum SelectionOutline {
     /// Thumbnails' own corners, small enough that the photo still reads as a rectangle.
     static let photoCornerRadius: CGFloat = 4
     static let lineWidth: CGFloat = 1
-    /// Among several selected photos, the one Edit shows.
-    static let emphasizedLineWidth: CGFloat = 2.5
 
     static let color = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .white : NSColor(white: 0.77, alpha: 1)
@@ -38,8 +36,7 @@ extension View {
 
     /// Outlines this view when it is selected. The padding is kept whether or not it is, so
     /// selecting a thumbnail doesn't move it.
-    /// `isEmphasized` marks the photo Edit shows among several selected ones.
-    func selectionOutline(_ isSelected: Bool, isEmphasized: Bool = false, padding: CGFloat = 6) -> some View {
+    func selectionOutline(_ isSelected: Bool, padding: CGFloat = 6) -> some View {
         self.padding(padding)
             .overlayPreferenceValue(OutlinedPartsKey.self) { parts in
                 if isSelected {
@@ -49,8 +46,7 @@ extension View {
                             : parts.map { proxy[$0] }.reduce(CGRect.null) { $0.union($1) }
                                 .insetBy(dx: -padding, dy: -padding).intersection(whole)
                         RoundedRectangle(cornerRadius: SelectionOutline.cornerRadius(padding: padding))
-                            .strokeBorder(SelectionOutline.color, lineWidth: isEmphasized
-                                          ? SelectionOutline.emphasizedLineWidth : SelectionOutline.lineWidth)
+                            .strokeBorder(SelectionOutline.color, lineWidth: SelectionOutline.lineWidth)
                             .frame(width: frame.width, height: frame.height)
                             .offset(x: frame.minX, y: frame.minY)
                     }

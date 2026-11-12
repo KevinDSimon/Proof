@@ -80,7 +80,6 @@ struct ThumbnailGrid: View {
 
     private func cell(for photo: ListedPhoto) -> some View {
         let isSelected = library.browse.selectedPhotos.contains(photo.id)
-        let isEmphasized = library.browse.hasMultipleSelection && library.browse.selectedPhoto == photo.id
         return VStack(spacing: 4) {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
@@ -113,7 +112,7 @@ struct ThumbnailGrid: View {
         }
         // The outline wraps the photo and its name, as on a card, but not the empty part of the
         // square above a landscape photo.
-        .selectionOutline(isSelected, isEmphasized: isEmphasized)
+        .selectionOutline(isSelected)
         .contentShape(Rectangle())
         .onTapGesture {
             library.click(photo.id, in: photos)
