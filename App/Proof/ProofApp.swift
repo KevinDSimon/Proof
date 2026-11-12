@@ -694,7 +694,15 @@ struct AdjustmentsInspector: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 6)
                 if blackAndWhite.isOn {
-                    filterRow
+                    // Custom is listed only while it is chosen, as in the White Balance menu.
+                    MenuPopUp(title: blackAndWhite.filter?.title ?? "Custom",
+                              items: BlackAndWhite.Filter.allCases.map { filter in
+                                  .action(filter.title, isChecked: filter == blackAndWhite.filter) {
+                                      library.changeEdit { $0.blackAndWhite.choose(filter) }
+                                  }
+                              } + (blackAndWhite.filter == nil ? [.action("Custom", isChecked: true) {}] : []))
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("Filter")
                     mixSlider("Red", \.red, hue: 0, help: "Lightens or darkens reds, oranges and skin, as a red filter does on film")
                     mixSlider("Green", \.green, hue: 120, help: "Lightens or darkens greens and foliage, as a green filter does on film")
                     mixSlider("Blue", \.blue, hue: 240, help: "Lightens or darkens blue skies and water, as a blue filter does on film")
@@ -750,39 +758,6 @@ struct AdjustmentsInspector: View {
 
     private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }
     private var blackAndWhite: BlackAndWhite { library.selectedEdit?.recipe.blackAndWhite ?? BlackAndWhite() }
-
-    /// Film filters as one row, as Silver Efex and film cameras present them. A choice sets the
-    /// three sliders; once they are moved off it, no segment is chosen and the row reads Custom.
-    private var filterRow: some View {
-        let chosen = blackAndWhite.filter
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text("Filter")
-                    .foregroundStyle(InspectorCard<EmptyView>.labelColor)
-                Spacer()
-                if chosen == nil {
-                    Text("Custom")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityHidden(true)
-            Picker("Filter", selection: Binding<BlackAndWhite.Filter?>(
-                get: { chosen },
-                set: { filter in if let filter { library.changeEdit { $0.blackAndWhite.choose(filter) } } })) {
-                ForEach(BlackAndWhite.Filter.allCases, id: \.self) { filter in
-                    Text(filter.title).tag(Optional(filter))
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            // Small, with flexible segments, so five fit across the default inspector, as the
-            // Curve card's channel picker does.
-            .controlSize(.small)
-            .buttonSizing(.flexible)
-            .frame(maxWidth: .infinity)
-            .accessibilityValue(chosen?.title ?? "Custom")
-        }
-    }
 
     /// One channel of the black-and-white mix. Its track runs from that channel's color in shadow
     /// to the color lit, as the channel goes from darkening to lightening it.
