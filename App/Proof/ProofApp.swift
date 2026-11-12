@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ProofKit
 
@@ -20,6 +21,36 @@ struct ProofApp: App {
                 Button("Redo") { library.redoEdit() }
                     .keyboardShortcut("z", modifiers: [.command, .shift])
                     .disabled(!library.isEditing || !library.canRedoEdit)
+            }
+            // In Edit, ⌘C and ⌘V copy and paste the photo's settings, as in Lightroom, except while
+            // a field is being typed in. Their titles can't follow the focus, so the Settings
+            // items below name what they do.
+            CommandGroup(replacing: .pasteboard) {
+                Button("Cut") { Self.sendToTextField(#selector(NSText.cut(_:))) }
+                    .keyboardShortcut("x")
+                Button("Copy") {
+                    if library.canCopySettings && !Self.isTyping {
+                        library.isChoosingSettingsToCopy = true
+                    } else {
+                        Self.sendToTextField(#selector(NSText.copy(_:)))
+                    }
+                }
+                .keyboardShortcut("c")
+                Button("Paste") {
+                    if library.canPasteSettings && !Self.isTyping {
+                        library.pasteSettings()
+                    } else {
+                        Self.sendToTextField(#selector(NSText.paste(_:)))
+                    }
+                }
+                .keyboardShortcut("v")
+                Button("Select All") { Self.sendToTextField(#selector(NSText.selectAll(_:))) }
+                    .keyboardShortcut("a")
+                Divider()
+                Button("Copy Settings…") { library.isChoosingSettingsToCopy = true }
+                    .disabled(!library.canCopySettings)
+                Button("Paste Settings") { library.pasteSettings() }
+                    .disabled(!library.canPasteSettings)
             }
             CommandGroup(after: .newItem) {
                 Button("Add Folder…") { library.requestFolder(.add) }
@@ -147,6 +178,15 @@ struct ProofApp: App {
             }
         }
     }
+
+    /// A text field is being typed in, so the pasteboard commands act on its text.
+    private static var isTyping: Bool {
+        NSApp.keyWindow?.firstResponder is NSText
+    }
+
+    private static func sendToTextField(_ action: Selector) {
+        NSApp.sendAction(action, to: nil, from: nil)
+    }
 }
 
 /// Browse shows the sidebar and a grid of the selected folder; Edit shows one photo on a plain
@@ -208,6 +248,9 @@ struct ContentView: View {
         .fileDialogDefaultDirectory(library.folderPickerDirectory)
         .fileDialogMessage(Text(library.folderPickerMessage))
         .fileDialogConfirmationLabel(Text(library.folderPickerConfirmation))
+        .sheet(isPresented: $library.isChoosingSettingsToCopy) {
+            CopySettingsSheet(library: library)
+        }
         .alert("Something Went Wrong", isPresented: Binding(
             get: { library.errorMessage != nil },
             set: { if !$0 { library.errorMessage = nil } }
