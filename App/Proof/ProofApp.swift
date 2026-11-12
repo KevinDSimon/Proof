@@ -693,14 +693,14 @@ struct AdjustmentsInspector: View {
                               }
                           }) {
                 // Each treatment shows only the sliders that change it; the other's keep their values.
-                MenuPopUp(title: blackAndWhite.isOn ? "Black & White" : "Color",
-                          items: [false, true].map { isOn in
-                              .action(isOn ? "Black & White" : "Color", isChecked: isOn == blackAndWhite.isOn) {
-                                  library.changeEdit { $0.blackAndWhite.isOn = isOn }
-                              }
-                          })
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel("Treatment")
+                Picker("Treatment", selection: Binding(get: { blackAndWhite.isOn },
+                                                       set: { isOn in library.changeEdit { $0.blackAndWhite.isOn = isOn } })) {
+                    Text("Color").tag(false)
+                    Text("Black & White").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
                 if blackAndWhite.isOn {
                     mixSlider("Red", \.red, hue: 0, help: "Lightens or darkens reds, oranges and skin, as a red filter does on film")
                     mixSlider("Green", \.green, hue: 120, help: "Lightens or darkens greens and foliage, as a green filter does on film")
