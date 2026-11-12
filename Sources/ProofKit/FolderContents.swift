@@ -149,7 +149,12 @@ public struct FilterCriteria: Equatable, Sendable {
     public static let none = FilterCriteria()
 
     /// Nothing is narrowed: every photo passes.
-    public var isEmpty: Bool { flag == nil && rating == nil && !editedOnly }
+    public var isEmpty: Bool { activeCount == 0 }
+
+    /// How many parts are set, from 0 to 3, which the toolbar button shows.
+    public var activeCount: Int {
+        [flag != nil, rating != nil, editedOnly].filter { $0 }.count
+    }
 
     public func includes(_ photo: FolderContents.Photo) -> Bool {
         let metadata = photo.metadata

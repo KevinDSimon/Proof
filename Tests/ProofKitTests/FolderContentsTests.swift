@@ -88,9 +88,11 @@ struct FolderContentsTests {
         #expect(photos.filter(FilterCriteria(flag: .rejected, rating: 5).includes) == [rejectedFive])
     }
 
-    @Test("Criteria name the parts that are set, in menu order")
+    @Test("Criteria name and count the parts that are set, in menu order")
     func criteriaSummary() {
         #expect(FilterCriteria.none.summary.isEmpty)
+        #expect(FilterCriteria.none.activeCount == 0)
+        #expect(FilterCriteria(flag: .unflagged, rating: 5, editedOnly: true).activeCount == 3)
         #expect(FilterCriteria(flag: .flagged, rating: 4, includesHigherRatings: true, editedOnly: true).summary
                 == "Flagged · 4+ Stars · Edited")
         #expect(FilterCriteria(rating: 1).summary == "1 Star")

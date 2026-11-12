@@ -300,13 +300,14 @@ struct ContentView: View {
                 Menu {
                     FilterMenu(library: library)
                 } label: {
-                    // While a filter is on, the button names it and its symbol is filled, so it reads
-                    // as on without an accent color.
+                    // While a filter is on, the symbol is filled and the button shows how many parts
+                    // are set, so it reads as on without an accent color. The tooltip names them.
                     if library.filter.isEmpty {
                         Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
                     } else {
-                        Label(library.filter.summary, systemImage: "line.3.horizontal.decrease.circle.fill")
+                        Label("\(library.filter.activeCount)", systemImage: "line.3.horizontal.decrease.circle.fill")
                             .labelStyle(.titleAndIcon)
+                            .monospacedDigit()
                     }
                 }
                 .menuIndicator(.hidden)
