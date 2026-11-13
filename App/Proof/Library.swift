@@ -138,6 +138,9 @@ final class Library {
     var isInspectorShown = true
     /// The Info panel beside the grid in Browse (#151).
     var isInfoShown = false
+    /// The Info panel's width when last open, so the grid can lay out for the width it will have
+    /// once the panel has slid in or out.
+    var infoPanelWidth: CGFloat = 320
     /// The Info card below the histogram in Edit, collapsed until opened.
     var isInfoCardExpanded = false
     /// How far the photo in Edit is zoomed and where; back to Fit for each photo and for the crop tool.

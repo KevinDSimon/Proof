@@ -232,6 +232,9 @@ struct ContentView: View {
                 } else {
                     browser
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Declared on the grid's column, as Edit's are on the photo's, so the
+                        // toolbar keeps its groups apart.
+                        .toolbar { browseToolbar }
                         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
                 }
             }
@@ -240,6 +243,10 @@ struct ContentView: View {
                 Group {
                     if !library.isEditing {
                         InfoInspector(library: library)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                                // Only once fully open; while sliding it may be narrower.
+                                if width >= 300 { library.infoPanelWidth = width }
+                            }
                     } else if library.isCropping {
                         CropInspector(library: library, renderer: renderer)
                     } else {
@@ -258,8 +265,6 @@ struct ContentView: View {
         .toolbar {
             if library.isEditing {
                 editToolbar
-            } else {
-                browseToolbar
             }
         }
         .fileImporter(isPresented: $library.isChoosingFolder, allowedContentTypes: [.folder]) { result in
@@ -311,12 +316,13 @@ struct ContentView: View {
                 Menu {
                     FilterMenu(library: library)
                 } label: {
-                    // While a filter is on, the symbol is filled and the button shows how many parts
-                    // are set, so it reads as on without an accent color. The tooltip names them.
+                    // While a filter is on, the button shows how many parts are set, so it reads as
+                    // on without an accent color. The tooltip names them. The symbol has no circle
+                    // around it, so it is as large as the other toolbar symbols.
                     if library.filter.isEmpty {
-                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                        Label("Filter", systemImage: "line.3.horizontal.decrease")
                     } else {
-                        Label("\(library.filter.activeCount)", systemImage: "line.3.horizontal.decrease.circle.fill")
+                        Label("\(library.filter.activeCount)", systemImage: "line.3.horizontal.decrease")
                             .labelStyle(.titleAndIcon)
                             .monospacedDigit()
                     }
@@ -332,11 +338,13 @@ struct ContentView: View {
                 ExportProgressButton(exports: library.exports)
             }
         }
-        if library.selection != nil {
+        // Only while the Info panel is open; View › Show Info, ⌘I and a photo's right-click menu
+        // open it. The same symbol as the inspector button in Edit, which also hides a side panel.
+        if library.isInfoShown {
             ToolbarSpacer(.fixed)
             ToolbarItem {
-                Button("Info", systemImage: "info.circle") { library.isInfoShown.toggle() }
-                    .help(library.isInfoShown ? "Hide the photo's info (⌘I)" : "Show the photo's info (⌘I)")
+                Button("Hide Info", systemImage: "sidebar.trailing") { library.isInfoShown = false }
+                    .help("Hide the photo's info (⌘I)")
             }
         }
     }

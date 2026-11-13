@@ -16,6 +16,13 @@ struct PhotoContextMenu: View {
                 if library.browse.selectedPhoto != photo { library.browse.selectedPhoto = photo }
                 library.browse.edit()
             }
+            // The panel describes one photo, so showing it selects only the photo clicked.
+            Button(library.isInfoShown ? "Hide Info" : "Show Info") {
+                if !library.isInfoShown, library.browse.selectedPhotos != [photo] {
+                    library.browse.selectedPhoto = photo
+                }
+                library.isInfoShown.toggle()
+            }
             Divider()
         }
         // A rating or flag the photos share is checked.
