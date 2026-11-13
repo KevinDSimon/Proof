@@ -18,7 +18,14 @@ struct ThumbnailGrid: View {
     @State private var finished: Set<PhotoReference> = []
     /// The LUT library's generation the thumbnails were loaded at.
     @State private var lutGeneration = 0
-    @State private var columnCount = 1
+    /// The grid's width on screen.
+    @State private var viewWidth: CGFloat = 0
+    /// The width the photos are laid out for. It is the view's width, except while the Info panel
+    /// slides in or out: then it is the width the grid will have, so the photos move once to their
+    /// new places instead of growing and shrinking with every frame of the slide.
+    @State private var layoutWidth: CGFloat = 0
+    /// The width the grid is sliding to, while the Info panel moves.
+    @State private var slideTarget: CGFloat?
     @FocusState private var isFocused: Bool
 
     /// Its own renderer, so making thumbnails never waits behind, or evicts, the photo in Edit.
@@ -34,7 +41,7 @@ struct ThumbnailGrid: View {
     var body: some View {
         ScrollViewReader { scroller in
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.spacing), count: columnCount),
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellWidth), spacing: Self.spacing), count: columnCount),
                           spacing: Self.spacing) {
                     ForEach(photos) { photo in
                         cell(for: photo)
@@ -42,13 +49,40 @@ struct ThumbnailGrid: View {
                     }
                 }
                 .padding(Self.margin)
+                .frame(width: max(layoutWidth, 1), alignment: .leading)
+                // Pinned to the leading edge, so the panel slides over or away from the photos' right side.
+                // A minimum of zero, so the photos' layout never holds the grid wider than the window.
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
             // A filled title bar with a dividing line, as macOS shows over a view that doesn't
             // scroll, such as an empty folder, so the bar looks the same with or without photos.
             .scrollEdgeEffectStyle(.hard, for: .top)
+            // The grid's width comes from the window, never from the photos inside it.
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                let usable = width - 2 * Self.margin + Self.spacing
-                columnCount = max(1, Int(usable / (Self.cellSize + Self.spacing)))
+                viewWidth = width
+                if let target = slideTarget {
+                    // Done when the grid reaches the width it was sliding to.
+                    guard abs(width - target) < 1 else { return }
+                    slideTarget = nil
+                }
+                // Resizing the window follows the pointer, without animation.
+                if abs(layoutWidth - width) >= 1 { layoutWidth = width }
+            }
+            .onChange(of: library.isInfoShown) { _, shown in
+                guard viewWidth > 0 else { return }
+                let target = viewWidth + (shown ? -library.infoPanelWidth : library.infoPanelWidth)
+                slideTarget = target
+                withAnimation(.smooth(duration: 0.3)) { layoutWidth = target }
+            }
+            // If the grid never reaches the width expected, as when the panel's width changed
+            // while it was closed, it lays out for the width it has.
+            .task(id: slideTarget) {
+                guard slideTarget != nil else { return }
+                try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled, slideTarget != nil else { return }
+                slideTarget = nil
+                withAnimation(.smooth(duration: 0.25)) { layoutWidth = viewWidth }
             }
             .onChange(of: library.browse.selectedPhoto) { _, photo in
                 guard let photo else { return }
@@ -76,6 +110,17 @@ struct ThumbnailGrid: View {
         .task(id: ThumbnailLoad(photos: allPhotos.map(\.id), lutGeneration: library.looks.generation)) {
             await loadThumbnails()
         }
+    }
+
+    private var columnCount: Int {
+        let usable = layoutWidth - 2 * Self.margin + Self.spacing
+        return max(1, Int(usable / (Self.cellSize + Self.spacing)))
+    }
+
+    /// The columns share the layout width, as flexible columns would.
+    private var cellWidth: CGFloat {
+        let count = CGFloat(columnCount)
+        return max(1, (layoutWidth - 2 * Self.margin - (count - 1) * Self.spacing) / count)
     }
 
     private func cell(for photo: ListedPhoto) -> some View {
