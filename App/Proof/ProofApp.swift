@@ -76,6 +76,7 @@ struct ProofApp: App {
                 Button("Export…") { library.requestExport() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(!library.canExport)
+                ExportToMenu(library: library, isDisabled: !library.canExport)
             }
             CommandGroup(before: .sidebar) {
                 Menu("Filter") { FilterMenu(library: library) }
