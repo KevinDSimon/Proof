@@ -3,13 +3,20 @@ import SwiftUI
 
 extension View {
     /// Marks a thumbnail with what other apps recorded in XMP: the flag in the top-right corner
-    /// and the stars in the bottom-left, as Lightroom does. Apply it to the image itself so the
+    /// and the stars in the bottom-left, as Lightroom does. A pencil in the top-left shows the
+    /// photo has an edit, which is the Edited filter's test. Apply it to the image itself so the
     /// badges sit on the photo's corners rather than the cell's. White on a dark backing keeps
     /// them readable on any photo without adding color. Stars are one star and the count, which
     /// fits even a narrow portrait thumbnail in the filmstrip. Only a flagged photo shows a flag;
     /// a rejected photo is dimmed instead, badges and all, as Lightroom does.
-    func ratingBadges(_ metadata: PhotoMetadata?, size: CGFloat) -> some View {
-        overlay(alignment: .topTrailing) {
+    func ratingBadges(_ metadata: PhotoMetadata?, isEdited: Bool, size: CGFloat) -> some View {
+        overlay(alignment: .topLeading) {
+            if isEdited {
+                Image(systemName: "pencil")
+                    .badgeStyle(size: size)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
             if metadata?.flag == .flagged {
                 FlagIcon(flag: .flagged, size: size)
                     .badgeStyle(size: size)
@@ -66,16 +73,18 @@ struct FlagIcon: View {
 }
 
 enum RatingBadges {
-    /// The photo's name followed by its rating and flag, for VoiceOver.
-    static func accessibilityLabel(name: String, metadata: PhotoMetadata?) -> String {
-        guard let metadata else { return name }
+    /// The photo's name followed by its rating, flag and whether it is edited, for VoiceOver.
+    static func accessibilityLabel(name: String, metadata: PhotoMetadata?, isEdited: Bool) -> String {
         var parts = [name]
-        if metadata.rating > 0 { parts.append(metadata.rating == 1 ? "1 star" : "\(metadata.rating) stars") }
-        switch metadata.flag {
-        case .flagged: parts.append("flagged")
-        case .rejected: parts.append("rejected")
-        case .unflagged: break
+        if let metadata {
+            if metadata.rating > 0 { parts.append(metadata.rating == 1 ? "1 star" : "\(metadata.rating) stars") }
+            switch metadata.flag {
+            case .flagged: parts.append("flagged")
+            case .rejected: parts.append("rejected")
+            case .unflagged: break
+            }
         }
+        if isEdited { parts.append("edited") }
         return parts.joined(separator: ", ")
     }
 
