@@ -136,6 +136,11 @@ final class Library {
     /// The Distortion slider or a Transform slider is being dragged, which shows a grid over the photo.
     var isAdjustingGeometry = false
     var isInspectorShown = true
+    /// The filmstrip under the photo in Edit (#159), remembered across launches.
+    var isFilmstripShown = UserDefaults.standard.object(forKey: Library.filmstripKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(isFilmstripShown, forKey: Self.filmstripKey) }
+    }
+    private static let filmstripKey = "filmstripShown"
     /// The Info panel beside the grid in Browse (#151).
     var isInfoShown = false
     /// The Info panel's width when last open, so the grid can lay out for the width it will have

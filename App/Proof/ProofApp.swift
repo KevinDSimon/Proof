@@ -96,6 +96,11 @@ struct ProofApp: App {
                 }
                 .keyboardShortcut("i", modifiers: [.command, .control])
                 .disabled(!library.isEditing)
+                Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip") {
+                    library.isFilmstripShown.toggle()
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(!library.isEditing)
                 Divider()
                 Button("Zoom In") { library.zoom.zoomIn() }
                     .keyboardShortcut("+")
@@ -356,17 +361,48 @@ struct ContentView: View {
         }
     }
 
+    /// A chevron in the gap between the photo and the filmstrip that hides or shows it, as
+    /// View › Hide Filmstrip does. It sits beside the photo, never on it.
+    private var filmstripToggle: some View {
+        let title = library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip"
+        return Button {
+            library.isFilmstripShown.toggle()
+        } label: {
+            Image(systemName: library.isFilmstripShown ? "chevron.down" : "chevron.up")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(width: 44, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(title) (⌥⌘F)")
+        .accessibilityLabel(title)
+    }
+
     @ViewBuilder private var editor: some View {
         Group {
             if let renderer, let url = library.selectedPhotoURL {
                 VStack(spacing: 0) {
                     // The same margin while cropping, so the photo doesn't shrink when the tool opens: the
-                    // handles are drawn inside the crop border, and their 12 pt reach fits in 24.
+                    // handles are drawn inside the crop border, and their 12 pt reach fits in the
+                    // 16 pt below the photo too.
                     EditCanvas(library: library, url: url, renderer: renderer)
-                        .padding(24)
-                    Filmstrip(library: library, photos: library.visiblePhotos)
-                        .padding(.bottom, 8)
+                        .padding([.top, .horizontal], 24)
+                        .padding(.bottom, 16)
+                    filmstripToggle
+                    if library.isFilmstripShown {
+                        Filmstrip(library: library, photos: library.visiblePhotos)
+                            .background(RoundedRectangle(cornerRadius: InspectorCard<EmptyView>.cornerRadius,
+                                                         style: .continuous)
+                                .fill(Color(white: InspectorCard<EmptyView>.fillGray(for: colorScheme))))
+                            .clipShape(.rect(cornerRadius: InspectorCard<EmptyView>.cornerRadius, style: .continuous))
+                            .padding([.horizontal, .bottom], 24)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        Spacer().frame(height: 8)
+                    }
                 }
+                .animation(.snappy(duration: 0.25), value: library.isFilmstripShown)
             } else {
                 ContentUnavailableView("Metal Isn't Available", systemImage: "exclamationmark.triangle",
                                        description: Text("Proof needs a Mac with a Metal GPU to show photos."))
