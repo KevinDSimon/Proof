@@ -39,6 +39,27 @@ public enum XMPSidecar {
     /// Returns the sidecar's URL. Blocks on file I/O.
     @discardableResult
     public static func save(_ metadata: PhotoMetadata, for photo: URL) throws -> URL {
+        try write(for: photo, updating: { try updated($0, to: metadata) }, creating: {
+            var metadata = metadata
+            if metadata.label == nil { metadata.label = PhotoMetadata.embedded(in: photo)?.label }
+            return try updated(new(metadata), to: PhotoDescription.embedded(in: photo))
+        })
+    }
+
+    /// Writes `description` to `photo`'s sidecar with `NSFileCoordinator`, leaving every other tag
+    /// as it was. A new sidecar also holds `metadata`'s rating, flag and label, which it would
+    /// otherwise hide in other apps. Returns the sidecar's URL. Blocks on file I/O.
+    @discardableResult
+    public static func save(_ description: PhotoDescription, keeping metadata: PhotoMetadata, for photo: URL) throws -> URL {
+        try write(for: photo, updating: { try updated($0, to: description) }, creating: {
+            var metadata = metadata
+            if metadata.label == nil { metadata.label = PhotoMetadata.embedded(in: photo)?.label }
+            return try updated(new(metadata), to: description)
+        })
+    }
+
+    private static func write(for photo: URL, updating update: (Data) throws -> Data,
+                              creating create: () throws -> Data) throws -> URL {
         let url = existing(for: photo) ?? newURL(for: photo)
         var result: Result<Void, Error> = .success(())
         var coordinatorError: NSError?
@@ -47,12 +68,10 @@ public enum XMPSidecar {
                 let data: Data
                 if FileManager.default.fileExists(atPath: url.path) {
                     let original = try Data(contentsOf: url)
-                    data = try updated(original, to: metadata)
+                    data = try update(original)
                     guard data != original else { return }
                 } else {
-                    var metadata = metadata
-                    if metadata.label == nil { metadata.label = PhotoMetadata.embedded(in: photo)?.label }
-                    data = new(metadata)
+                    data = try create()
                 }
                 try data.write(to: url, options: .atomic)
             }
@@ -77,6 +96,31 @@ public enum XMPSidecar {
         let data = Data(editor.text.utf8)
         let expected = PhotoMetadata(rating: metadata.rating, flag: metadata.flag, label: before.label)
         guard PhotoMetadata(xmp: data) == expected else { throw SaveError.unrecognized }
+        return data
+    }
+
+    /// `xmp` with its description set to `description` and nothing else changed. Throws
+    /// `unrecognized` when the result wouldn't read back as intended.
+    static func updated(_ xmp: Data, to description: PhotoDescription) throws -> Data {
+        guard let text = String(data: xmp, encoding: .utf8), let before = PhotoMetadata(xmp: xmp) else {
+            throw SaveError.unrecognized
+        }
+        let description = description.normalized
+        var editor = Editor(text: text)
+        func simple(_ value: String) -> String? { value.isEmpty ? nil : escaped(value) }
+        try editor.set(Namespace.iptcCore, "Location", to: simple(description.sublocation))
+        try editor.set(Namespace.photoshop, "City", to: simple(description.city))
+        try editor.set(Namespace.photoshop, "State", to: simple(description.state))
+        try editor.set(Namespace.photoshop, "Country", to: simple(description.country))
+        try editor.setList(Namespace.dc, "title", .alternative, description.title.isEmpty ? [] : [description.title])
+        try editor.setList(Namespace.dc, "description", .alternative, description.caption.isEmpty ? [] : [description.caption])
+        try editor.setList(Namespace.dc, "creator", .ordered, description.creators)
+        try editor.setList(Namespace.dc, "rights", .alternative, description.copyright.isEmpty ? [] : [description.copyright])
+        try editor.setList(Namespace.dc, "subject", .unordered, description.keywords)
+        let data = Data(editor.text.utf8)
+        guard PhotoDescription(xmp: data) == description, PhotoMetadata(xmp: data) == before else {
+            throw SaveError.unrecognized
+        }
         return data
     }
 
@@ -122,18 +166,25 @@ public enum XMPSidecar {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
 
     enum Namespace {
         static let rdf = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         static let xmp = "http://ns.adobe.com/xap/1.0/"
         static let xmpDM = "http://ns.adobe.com/xmp/1.0/DynamicMedia/"
+        static let dc = PhotoDescription.dc
+        static let photoshop = PhotoDescription.photoshop
+        static let iptcCore = PhotoDescription.iptcCore
 
         /// The prefix written when a sidecar has none for the namespace.
         static func preferredPrefix(for uri: String) -> String {
             switch uri {
             case xmp: "xmp"
             case xmpDM: "xmpDM"
+            case dc: "dc"
+            case photoshop: "photoshop"
+            case iptcCore: "Iptc4xmpCore"
             default: "ns"
             }
         }
@@ -202,6 +253,67 @@ public enum XMPSidecar {
                     ?? "\n" + start.indent + " "
                 text.insert(contentsOf: "\(indent)<\(prefix):\(name)>\(value)</\(prefix):\(name)>", at: start.end)
             }
+        }
+
+        enum List: String {
+            case alternative = "Alt", ordered = "Seq", unordered = "Bag"
+        }
+
+        /// Sets a list property such as `dc:subject`, or removes it when `items` is empty. The
+        /// whole element is replaced, so a title in other languages gives way to the one written.
+        /// Lists are always elements; one written as an attribute by mistake is replaced by one.
+        mutating func setList(_ namespace: String, _ name: String, _ kind: List, _ items: [String]) throws {
+            for prefix in prefixes(for: namespace) {
+                let qualified = Self.escapedForRegex(prefix + ":" + name)
+                let element = try Regex(#"(\r?\n[ \t]*)?<\#(qualified)(?:\s[^<>]*?)?(?:/>|>[\s\S]*?</\#(qualified)\s*>)"#)
+                if let match = text.firstMatch(of: element) {
+                    if items.isEmpty {
+                        text.removeSubrange(match.range)
+                    } else {
+                        let lead = match.output[1].substring.map(String.init) ?? ""
+                        let indent = String(lead.drop { $0 == "\r" || $0 == "\n" })
+                        text.replaceSubrange(match.range, with: lead + list(prefix, name, kind, items, indent: indent))
+                    }
+                    return
+                }
+                let attribute = try Regex(#"\s+\#(qualified)\s*=\s*("[^"]*"|'[^']*')"#)
+                if let match = text.firstMatch(of: attribute) {
+                    text.removeSubrange(match.range)
+                    break
+                }
+            }
+            guard !items.isEmpty else { return }
+            guard var start = try descriptionStart() else { throw SaveError.unrecognized }
+            let prefix: String
+            if let existing = prefixes(for: namespace).first {
+                prefix = existing
+            } else {
+                prefix = unusedPrefix(for: namespace)
+                text.insert(contentsOf: Self.separator(in: start.attributes) + #"xmlns:\#(prefix)="\#(namespace)""#,
+                            at: start.attributeRange.upperBound)
+                guard let found = try descriptionStart() else { throw SaveError.unrecognized }
+                start = found
+            }
+            let indent = start.indent + " "
+            if start.isEmpty {
+                // `<rdf:Description …/>` opens up to hold the element.
+                let rdf = prefixes(for: Namespace.rdf).first ?? "rdf"
+                text.replaceSubrange(start.attributeRange.upperBound..<start.end,
+                                     with: ">\n\(indent)\(list(prefix, name, kind, items, indent: indent))\n\(start.indent)</\(rdf):Description>")
+            } else {
+                let lead = text[start.end...].firstMatch(of: /^\r?\n[ \t]*/).map { String($0.output) } ?? "\n" + indent
+                let indent = String(lead.drop { $0 == "\r" || $0 == "\n" })
+                text.insert(contentsOf: lead + list(prefix, name, kind, items, indent: indent), at: start.end)
+            }
+        }
+
+        private func list(_ prefix: String, _ name: String, _ kind: List, _ items: [String], indent: String) -> String {
+            let rdf = prefixes(for: Namespace.rdf).first ?? "rdf"
+            let language = kind == .alternative ? #" xml:lang="x-default""# : ""
+            let lines = ["<\(prefix):\(name)>", " <\(rdf):\(kind.rawValue)>"]
+                + items.map { "  <\(rdf):li\(language)>\(XMPSidecar.escaped($0))</\(rdf):li>" }
+                + [" </\(rdf):\(kind.rawValue)>", "</\(prefix):\(name)>"]
+            return lines.joined(separator: "\n" + indent)
         }
 
         /// The first `rdf:Description` start tag: its attributes, whether it is empty (`/>`),

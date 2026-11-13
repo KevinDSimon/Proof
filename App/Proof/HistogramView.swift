@@ -85,11 +85,12 @@ struct CaptureSettingsLine: View {
                 Text(value)
             }
         }
-        .font(.caption.monospacedDigit())
+        // The size of the control names in the cards.
+        .font(.body.monospacedDigit())
         .foregroundStyle(.secondary)
         .lineLimit(1)
         // Keeps its height while the settings are read, so the sliders don't jump.
-        .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 }

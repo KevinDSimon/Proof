@@ -172,4 +172,71 @@ struct XMPSidecarTests {
         #expect(try XMPSidecar.save(PhotoMetadata(rating: 2), for: photo).lastPathComponent == "IMG_1.XMP")
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted() == ["IMG_1.DNG", "IMG_1.XMP"])
     }
+
+    // MARK: Description
+
+    func updated(_ xmp: String, _ description: PhotoDescription) throws -> String {
+        String(decoding: try XMPSidecar.updated(Data(xmp.utf8), to: description), as: UTF8.self)
+    }
+
+    @Test("A description is added to a Lightroom sidecar, which keeps its rating, flag and develop settings")
+    func describesLightroom() throws {
+        let result = try updated(Self.lightroom, PhotoDescriptionTests.field)
+        #expect(PhotoDescription(xmp: Data(result.utf8)) == PhotoDescriptionTests.field)
+        #expect(PhotoMetadata(xmp: Data(result.utf8)) == PhotoMetadata(rating: 2, label: "Red"))
+        #expect(result.contains(#"crs:Exposure2012="+0.35""#))
+        #expect(result.contains("<rdf:li>255, 255</rdf:li>"))
+        #expect(result.contains(#"photoshop:City="Berlin""#))
+    }
+
+    @Test("A Photomator sidecar takes the description as elements and its keywords are replaced")
+    func describesPhotomator() throws {
+        let result = try updated(Self.photomator, PhotoDescription(title: "Kites", keywords: ["kites", "Berlin"], city: "Berlin"))
+        #expect(PhotoDescription(xmp: Data(result.utf8)) == PhotoDescription(title: "Kites", keywords: ["kites", "Berlin"], city: "Berlin"))
+        #expect(result.contains("<photoshop:City>Berlin</photoshop:City>"))
+        #expect(!result.contains("Leica"))
+        #expect(result.contains("<xmp:CreatorTool>Photomator</xmp:CreatorTool>"))
+        #expect(PhotoMetadata(xmp: Data(result.utf8)) == PhotoMetadata(rating: 5, flag: .flagged))
+    }
+
+    @Test("Cleared fields are removed, and text that looks like XML is kept as written")
+    func clearsAndEscapes() throws {
+        let described = try updated(Self.lightroom, PhotoDescriptionTests.field)
+        let changed = PhotoDescription(title: #"Kites <over> "Tempelhof" & 'more'"#)
+        let result = try updated(described, changed)
+        #expect(PhotoDescription(xmp: Data(result.utf8)) == changed)
+        #expect(!result.contains("dc:subject"))
+        #expect(!result.contains("photoshop:City"))
+        #expect(!result.contains("Feld"))
+    }
+
+    @Test("An empty description element opens up to hold the lists")
+    func opensEmptyDescription() throws {
+        let result = try updated(XMPSamples.rating(4), PhotoDescriptionTests.field)
+        #expect(PhotoDescription(xmp: Data(result.utf8)) == PhotoDescriptionTests.field)
+        #expect(PhotoMetadata(xmp: Data(result.utf8)) == PhotoMetadata(rating: 4))
+    }
+
+    @Test("Without a sidecar, a new one holds the description with the rating, flag and label")
+    func createsDescribedSidecar() throws {
+        let photo = try folder().appendingPathComponent("IMG_1.DNG")
+        let original = Data("raw bytes".utf8)
+        try original.write(to: photo)
+
+        let url = try XMPSidecar.save(PhotoDescriptionTests.field, keeping: PhotoMetadata(rating: 3, label: "Blue"), for: photo)
+        let data = try Data(contentsOf: url)
+        #expect(PhotoDescription(xmp: data) == PhotoDescriptionTests.field)
+        #expect(PhotoMetadata(xmp: data) == PhotoMetadata(rating: 3, label: "Blue"))
+        #expect(PhotoDescription.read(for: photo) == PhotoDescriptionTests.field)
+        #expect(try Data(contentsOf: photo) == original)
+    }
+
+    @Test("Rating a photo without a sidecar keeps the description inside it")
+    func ratingKeepsEmbeddedDescription() throws {
+        let photo = try folder().appendingPathComponent("IMG_1.tif")
+        try XMPSamples.writeImage(to: photo, xmp: PhotoDescriptionTests.lightroom)
+
+        let url = try XMPSidecar.save(PhotoMetadata(rating: 3), for: photo)
+        #expect(PhotoDescription(xmp: try Data(contentsOf: url)) == PhotoDescriptionTests.field)
+    }
 }

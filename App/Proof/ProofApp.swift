@@ -83,6 +83,9 @@ struct ProofApp: App {
                 Divider()
             }
             CommandGroup(after: .sidebar) {
+                Button(library.isShowingInfo ? "Hide Info" : "Show Info") { library.toggleInfo() }
+                    .keyboardShortcut("i")
+                    .disabled(library.selection == nil)
                 Button(library.isInspectorShown ? "Hide Inspector" : "Show Inspector") {
                     library.isInspectorShown.toggle()
                 }
@@ -227,10 +230,12 @@ struct ContentView: View {
                         .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
                 }
             }
-            .inspector(isPresented: Binding(get: { library.isEditing && library.isInspectorShown },
-                                            set: { if library.isEditing { library.isInspectorShown = $0 } })) {
+            .inspector(isPresented: Binding(get: { library.isEditing ? library.isInspectorShown : library.isInfoShown },
+                                            set: { if library.isEditing { library.isInspectorShown = $0 } else { library.isInfoShown = $0 } })) {
                 Group {
-                    if library.isCropping {
+                    if !library.isEditing {
+                        InfoInspector(library: library)
+                    } else if library.isCropping {
                         CropInspector(library: library, renderer: renderer)
                     } else {
                         AdjustmentsInspector(library: library, renderer: renderer)
@@ -310,6 +315,13 @@ struct ContentView: View {
                 .menuIndicator(.hidden)
                 .help(library.filter.isEmpty ? "Show only some of the photos" : "Filtered by \(library.filter.summary)")
                 .accessibilityLabel(library.filter.isEmpty ? "Filter" : "Filter: \(library.filter.summary)")
+            }
+        }
+        if library.selection != nil {
+            ToolbarSpacer(.fixed)
+            ToolbarItem {
+                Button("Info", systemImage: "info.circle") { library.isInfoShown.toggle() }
+                    .help(library.isInfoShown ? "Hide the photo's info (⌘I)" : "Show the photo's info (⌘I)")
             }
         }
     }
@@ -634,6 +646,7 @@ struct AdjustmentsInspector: View {
                 SelectedHistogram(library: library)
                 CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
             }
+            InfoCard(library: library)
             InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
                           canReset: basic.whiteBalance != .asShot,
                           reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
