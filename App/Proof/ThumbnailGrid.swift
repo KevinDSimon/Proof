@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The selected folder's photos, or All Photos, as thumbnails, each shown as soon as `ThumbnailCache` has it, so a
 /// folder on a NAS fills in while it is read. Click selects a photo, ⌘-click and ⇧-click select
-/// several, the arrow keys move the selection, and double-click opens the photo in Edit. Return
-/// is handled by the Photo menu.
+/// several, the arrow keys move the selection, Esc deselects every photo, and double-click opens
+/// the photo in Edit. Return is handled by the Photo menu.
 struct ThumbnailGrid: View {
     @Bindable var library: Library
     /// The photos that pass the filter.
@@ -104,6 +104,12 @@ struct ThumbnailGrid: View {
             @unknown default: nil
             }
             if let move { library.browse.move(move, in: photos, columns: columnCount) }
+        }
+        // With nothing selected, Esc passes on to whatever else handles it.
+        .onKeyPress(.escape) {
+            guard library.browse.selectedPhoto != nil else { return .ignored }
+            library.deselectAll()
+            return .handled
         }
         .onAppear { isFocused = true }
         // Loaded again when the LUT library changes, since edited thumbnails show looks.
