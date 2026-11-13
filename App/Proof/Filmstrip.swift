@@ -73,7 +73,7 @@ struct Filmstrip: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
-                    .ratingBadges(photo.photo.metadata, size: 8)
+                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, size: 8)
             } else if finished.contains(photo.id) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
@@ -93,7 +93,8 @@ struct Filmstrip: View {
         .contextMenu { PhotoContextMenu(library: library, photo: photo.id) }
         .help(photo.name)
         .accessibilityElement()
-        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata))
+        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata,
+                                                                 isEdited: photo.photo.isEdited))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityValue(isCurrent && library.browse.hasMultipleSelection ? "Shown" : "")
         .accessibilityAction(named: isSelected ? "Remove from Selection" : "Add to Selection") {

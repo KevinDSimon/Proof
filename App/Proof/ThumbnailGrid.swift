@@ -88,7 +88,7 @@ struct ThumbnailGrid: View {
                         .resizable()
                         .scaledToFit()
                         .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
-                        .ratingBadges(photo.photo.metadata, size: 10)
+                        .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, size: 10)
                 } else if finished.contains(photo.id) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
@@ -125,7 +125,8 @@ struct ThumbnailGrid: View {
         })
         .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
-        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata))
+        .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata,
+                                                                 isEdited: photo.photo.isEdited))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(named: "Edit") {
             library.browse.selectedPhoto = photo.id
