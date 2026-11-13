@@ -514,6 +514,33 @@ final class Library {
         browse.selectedPhotos.contains(photo) ? selectedPhotosInOrder : [photo]
     }
 
+    // MARK: Export
+
+    let exports = ExportQueue()
+    /// The photos the export sheet is open for; empty while it is closed.
+    var photosToExport: [PhotoReference] = []
+
+    var canExport: Bool { !isCropping && !browse.selectedPhotos.isEmpty }
+
+    /// File › Export…: opens the export sheet for `photos`, every selected photo by default.
+    func requestExport(of photos: [PhotoReference]? = nil) {
+        guard !isCropping else { return }
+        photosToExport = photos ?? selectedPhotosInOrder
+    }
+
+    /// Queues `photos` with the edits Proof has for them now; photos without one in memory are
+    /// exported with their sidecar's.
+    func export(_ photos: [PhotoReference], settings: ExportSettings, to folder: URL) {
+        commitTask?.cancel()
+        for photo in photos where edits[photo] != nil { commitEdit(of: photo) }
+        let items = photos.compactMap { photo in
+            url(ofPhoto: photo.name, in: photo.folder).map {
+                ExportQueue.Item(url: $0, recipe: edits[photo]?.recipe, rating: metadata(of: photo)?.rating ?? 0)
+            }
+        }
+        exports.start(items, settings: settings, folder: folder)
+    }
+
     /// Copies from the photo Edit shows, in Browse too, or from a right-clicked photo.
     var canCopySettings: Bool {
         !isCropping && browse.selectedPhoto != nil && (!isEditing || selectedEdit != nil)
