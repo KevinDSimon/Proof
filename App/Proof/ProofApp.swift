@@ -72,6 +72,10 @@ struct ProofApp: App {
                 Button("Copy Path") { library.copyPaths(library.selectedFileURLs) }
                     .keyboardShortcut("c", modifiers: [.command, .option])
                     .disabled(!library.hasSelectedFiles)
+                Divider()
+                Button("Export…") { library.requestExport() }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(!library.canExport)
             }
             CommandGroup(before: .sidebar) {
                 Menu("Filter") { FilterMenu(library: library) }
@@ -269,6 +273,10 @@ struct ContentView: View {
         .sheet(isPresented: $library.isChoosingSettingsToCopy) {
             CopySettingsSheet(library: library)
         }
+        .sheet(isPresented: Binding(get: { !library.photosToExport.isEmpty },
+                                    set: { if !$0 { library.photosToExport = [] } })) {
+            ExportSheet(library: library, photos: library.photosToExport)
+        }
         // A single photo reverts without asking, as Undo brings it back right there. Several may
         // include photos out of sight, each with its own undo history.
         .confirmationDialog("Revert \(library.photosPendingRevert.count) photos to their originals?",
@@ -315,6 +323,12 @@ struct ContentView: View {
                 .menuIndicator(.hidden)
                 .help(library.filter.isEmpty ? "Show only some of the photos" : "Filtered by \(library.filter.summary)")
                 .accessibilityLabel(library.filter.isEmpty ? "Filter" : "Filter: \(library.filter.summary)")
+            }
+        }
+        if library.exports.isVisible {
+            ToolbarSpacer(.fixed)
+            ToolbarItem {
+                ExportProgressButton(exports: library.exports)
             }
         }
         if library.selection != nil {
@@ -397,6 +411,12 @@ struct ContentView: View {
             }
             // The crop tool and the inspector are separate groups.
             ToolbarSpacer(.fixed)
+            if library.exports.isVisible {
+                ToolbarItem {
+                    ExportProgressButton(exports: library.exports)
+                }
+                ToolbarSpacer(.fixed)
+            }
             ToolbarItem {
                 Button("Inspector", systemImage: "sidebar.trailing") { library.isInspectorShown.toggle() }
                     .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")

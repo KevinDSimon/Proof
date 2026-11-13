@@ -405,6 +405,50 @@ public actor RAWRenderer {
         return thumbnail
     }
 
+    /// `url` with `recipe` applied at the size `settings` ask for, in their color space, for
+    /// export: the only render of a whole photo at full sensor resolution. Like `thumbnail`, it
+    /// decodes the file on its own, without caching, and leaves the open photo alone. The image
+    /// has no alpha channel, and 16 bits per channel for TIFF.
+    public func export(_ url: URL, recipe: EditRecipe, lut: PreparedLUT? = nil, settings: ExportSettings) throws -> CGImage {
+        guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else {
+            throw RAWRendererError.unsupportedFile(url)
+        }
+        let size = settings.outputSize(for: Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                           crop: recipe.crop))
+        // Decoded at the scale that fits, as the canvas is, so a smaller export looks like the canvas
+        // at that size and costs a smaller decode.
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                    crop: recipe.crop, fitting: size))
+        let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
+        guard var image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: CameraDetail(of: filter),
+                                     cameraLens: CameraLens(of: filter), lut: lut)
+        else { throw RAWRendererError.renderFailed }
+        image = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX, y: -image.extent.minY))
+        // The decoder's scale lands within a pixel or so of the size asked for; the last step makes it exact.
+        let decoded = image.extent.integral.size
+        if decoded != size {
+            image = image.clampedToExtent()
+                .applyingFilter("CILanczosScaleTransform", parameters: [
+                    kCIInputScaleKey: size.height / decoded.height,
+                    kCIInputAspectRatioKey: (size.width / decoded.width) / (size.height / decoded.height),
+                ])
+        }
+        let bounds = CGRect(origin: .zero, size: size)
+        let is16Bit = settings.format.bitsPerChannel == 16
+        let colorSpace = settings.colorSpace.cgColorSpace
+        let bitmapInfo = CGImageAlphaInfo.noneSkipLast.rawValue | (is16Bit ? CGBitmapInfo.byteOrder16Little.rawValue : 0)
+        guard let bitmap = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
+                                     bitsPerComponent: is16Bit ? 16 : 8, bytesPerRow: 0, space: colorSpace,
+                                     bitmapInfo: bitmapInfo),
+              let data = bitmap.data
+        else { throw RAWRendererError.renderFailed }
+        // `render(toBitmap:)` writes the top row first, as a CGImage holds it.
+        thumbnailContext.render(image, toBitmap: data, rowBytes: bitmap.bytesPerRow, bounds: bounds,
+                                format: is16Bit ? .RGBA16 : .RGBA8, colorSpace: colorSpace)
+        guard let result = bitmap.makeImage() else { throw RAWRendererError.renderFailed }
+        return result
+    }
+
     /// `lut` applied in full to `thumbnail`, a thumbnail of an edit with no look, for previews of
     /// looks. A LUT changes each pixel on its own, so applying it after the crop and to an 8-bit
     /// thumbnail looks the same at this size as step 4 of a full render, without decoding the photo again.

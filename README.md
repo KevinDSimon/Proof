@@ -18,7 +18,7 @@ Status: pre-alpha. Nothing to download yet.
 - Tone curve (RGB and per channel) and a histogram
 - `.cube` LUTs imported into a library, with previews of the photo and a strength slider
 - Crop, straighten, rotate and flip, before/after, copy and paste settings, undo
-- Export to JPEG, HEIC and TIFF
+- Export to JPEG, HEIC and TIFF at the original size or a long edge in pixels or a print size, in sRGB, Display P3 or Adobe RGB, keeping camera details, rating and description, several photos at a time in the background
 
 After v1: film effects, then masks as layers (v1.2). An iPad and iPhone version comes after the Mac app. See [docs/roadmap.md](docs/roadmap.md).
 
