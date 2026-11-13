@@ -163,6 +163,8 @@ final class Library {
     }
 
     private let fileAccess: FileAccess?
+    /// Saved export destinations (decision 0032). `nil` if their file couldn't be read.
+    let exportDestinations: ExportDestinations?
     private var metadataTask: Task<Void, Never>?
     private var allPhotosTask: Task<Void, Never>?
     /// Watches the available saved folders on local disks.
@@ -186,6 +188,10 @@ final class Library {
         fileAccess = try? FileAccess(storeURL: URL.applicationSupportDirectory
             .appendingPathComponent("Proof/locations.json"))
         if fileAccess == nil { errorMessage = "Proof couldn't load its saved folders." }
+        exportDestinations = fileAccess.flatMap {
+            try? ExportDestinations(storeURL: URL.applicationSupportDirectory
+                .appendingPathComponent("Proof/export-destinations.json"), fileAccess: $0)
+        }
         refreshLocations()
         observeSystem()
         looks.onChange = { [weak self] in self?.refreshEditedThumbnails() }
@@ -539,6 +545,21 @@ final class Library {
             }
         }
         exports.start(items, settings: settings, folder: folder)
+    }
+
+    /// File › Export To: exports `photos`, the selected photos by default, to a saved destination
+    /// with its settings. When its folder can't be found, the export sheet opens on it instead, to
+    /// show why and let the person choose the folder again.
+    func export(_ photos: [PhotoReference]? = nil, to destinationID: UUID) {
+        guard !isCropping, let destination = exportDestinations?.destination(destinationID) else { return }
+        let photos = photos ?? selectedPhotosInOrder
+        guard !photos.isEmpty else { return }
+        UserDefaults.standard.set(destinationID.uuidString, forKey: ExportSheet.destinationKey)
+        guard let folder = exportDestinations?.folder(of: destinationID) else {
+            photosToExport = photos
+            return
+        }
+        export(photos, settings: destination.settings, to: folder)
     }
 
     /// Copies from the photo Edit shows, in Browse too, or from a right-clicked photo.

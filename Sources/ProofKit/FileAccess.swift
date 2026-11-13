@@ -287,6 +287,19 @@ public final class FileAccess {
         return system.exists(url) ? url : nil
     }
 
+    /// A grant for a folder Proof writes to but doesn't show in the sidebar, such as an export
+    /// destination (decision 0032). The caller stores it; it isn't a saved location.
+    public func folderBookmark(for url: URL) throws -> Data {
+        try system.bookmarkData(for: url)
+    }
+
+    /// Resolves a grant from `folderBookmark(for:)`, without holding access to it. `fresh` is a
+    /// new bookmark to store when the old one is stale. `nil` when the folder isn't there.
+    public func resolveFolderBookmark(_ data: Data) -> (url: URL, fresh: Data?)? {
+        guard let (url, isStale) = try? system.resolve(data), system.exists(url) else { return nil }
+        return (url, isStale ? try? system.bookmarkData(for: url) : nil)
+    }
+
     private func endAccess(_ id: UUID) {
         if let url = accessed.removeValue(forKey: id) { system.stopAccessing(url) }
     }
