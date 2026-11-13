@@ -1,11 +1,11 @@
 import ProofKit
 import SwiftUI
 
-/// File › Export…: a saved destination or a folder chosen each time, then the format, size, color
+/// File › Export…: a saved destination or a folder chosen at export, then the format, size, color
 /// space and metadata of the export. A destination brings its own folder and settings (decision
 /// 0032); without one, the last settings are remembered for the next export (decision 0031).
 struct ExportSheet: View {
-    /// The destination last exported to, as a UUID string; empty for Choose Folder Each Time.
+    /// The destination last exported to, as a UUID string; empty for Choose Folder.
     static let destinationKey = "exportDestination"
 
     let library: Library
@@ -21,6 +21,7 @@ struct ExportSheet: View {
     /// The chosen destination's folder, resolved when it is chosen; `nil` when it can't be found.
     @State private var destinationFolder: URL?
     @State private var folderPurpose: FolderPurpose?
+    @State private var isChoosingFolder = false
     /// The folder of a destination being saved, while its name is asked for.
     @State private var newDestinationFolder: URL?
     @State private var isNaming = false
@@ -32,6 +33,11 @@ struct ExportSheet: View {
     /// Why the open panel is showing. One panel serves all three, as a view can have only one.
     private enum FolderPurpose {
         case export, newDestination, changeFolder
+    }
+
+    private func chooseFolder(for purpose: FolderPurpose) {
+        folderPurpose = purpose
+        isChoosingFolder = true
     }
 
     private var destinations: ExportDestinations? { library.exportDestinations }
@@ -135,8 +141,8 @@ struct ExportSheet: View {
         }
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
-        .fileImporter(isPresented: Binding(get: { folderPurpose != nil }, set: { if !$0 { folderPurpose = nil } }),
-                      allowedContentTypes: [.folder]) { result in
+        // The panel is closed before the result arrives, so the purpose is kept until it is read.
+        .fileImporter(isPresented: $isChoosingFolder, allowedContentTypes: [.folder]) { result in
             guard case .success(let folder) = result, let purpose = folderPurpose else { return }
             chose(folder, for: purpose)
         }
@@ -174,8 +180,8 @@ struct ExportSheet: View {
     @ViewBuilder
     private func destinationSection(_ destinations: ExportDestinations) -> some View {
         Section {
-            Picker("Destination", selection: Binding(get: { destinationID }, set: { choose($0) })) {
-                Text("Choose Folder Each Time").tag(UUID?.none)
+            Picker("Export To", selection: Binding(get: { destinationID }, set: { choose($0) })) {
+                Text("Choose Folder").tag(UUID?.none)
                 if !destinations.destinations.isEmpty {
                     Divider()
                 }
@@ -191,7 +197,7 @@ struct ExportSheet: View {
                     }
                 } else {
                     LabeledContent {
-                        Button("Choose Folder…") { folderPurpose = .changeFolder }
+                        Button("Choose Folder…") { chooseFolder(for: .changeFolder) }
                     } label: {
                         Text("The folder “\(destination.lastKnownURL.lastPathComponent)” can’t be found.")
                             .foregroundStyle(.secondary)
@@ -213,21 +219,21 @@ struct ExportSheet: View {
 
     private var destinationsMenu: some View {
         Menu("Destinations") {
-            Button("Save as New Destination…") { folderPurpose = .newDestination }
+            Button("Save as New Destination…") { chooseFolder(for: .newDestination) }
             if let destination {
                 Divider()
                 Button("Rename “\(destination.name)”…") {
                     nameDraft = destination.name
                     isRenaming = true
                 }
-                Button("Change Folder…") { folderPurpose = .changeFolder }
+                Button("Change Folder…") { chooseFolder(for: .changeFolder) }
                 Button("Delete “\(destination.name)”…") { isConfirmingDelete = true }
             }
         }
         .fixedSize()
     }
 
-    /// Switches to a destination, taking its settings, or back to choosing a folder each time,
+    /// Switches to a destination, taking its settings, or back to Choose Folder,
     /// taking the last settings used that way.
     private func choose(_ id: UUID?) {
         destinationID = id
@@ -242,7 +248,7 @@ struct ExportSheet: View {
 
     private func export() {
         guard destination != nil else {
-            folderPurpose = .export
+            chooseFolder(for: .export)
             return
         }
         guard let destinationFolder, let destinationID else { return }
