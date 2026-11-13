@@ -27,6 +27,18 @@ struct BrowseStateTests {
         #expect(state.selectedPhoto == ref(3))
     }
 
+    @Test("Deselecting in Browse clears every selected photo, and a later ⇧-click starts a new range")
+    func deselectEverything() {
+        var state = BrowseState(selectedPhoto: ref(2))
+        state.selectAll(photos)
+        state.selectedPhoto = nil
+        #expect(state.selectedPhotos.isEmpty)
+        #expect(state.mode == .browsing)
+
+        state.extend(to: ref(5), in: photos)
+        #expect(state.selectedPhotos == [ref(5)])
+    }
+
     @Test("Backslash's original shows only in Edit, and ends when leaving the photo or Edit")
     func showOriginal() {
         var state = BrowseState(selectedPhoto: ref(3))
