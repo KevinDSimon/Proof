@@ -90,15 +90,22 @@ final class Library {
     private(set) var isReadingAllPhotos = false
     /// The toolbar filter, which narrows the selected folder or All Photos. Filter rows in the
     /// sidebar apply their own filter instead.
+    /// The filmstrip's filter menu changes it too, so the two stay the same (#160).
     var filter = FilterCriteria.none {
         didSet {
-            changedPhotos = []
+            // In Edit the photo shown stays until the person moves on, even if it doesn't match.
+            changedPhotos = isEditing ? Set(browse.selectedPhoto.map { [$0] } ?? []) : []
             browse.keep(only: visiblePhotos)
         }
     }
     var browse = BrowseState() {
         didSet {
             guard browse.selectedPhoto != oldValue.selectedPhoto || browse.mode != oldValue.mode else { return }
+            // Moving to another photo in Edit lets the photos that stopped matching leave the filmstrip.
+            if isEditing, oldValue.mode == .editing, !changedPhotos.isEmpty {
+                changedPhotos = changedPhotos.filter { $0 == browse.selectedPhoto }
+                browse.keep(only: visiblePhotos)
+            }
             // Leaving the photo any way but Done or Cancel keeps the crop.
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             isPickingWhiteBalance = false
@@ -184,7 +191,8 @@ final class Library {
     /// Saved locations Proof has asked once this session to grant again for writing.
     private var askedForWriteAccess: Set<UUID> = []
     /// Photos whose rating or flag was changed since the filter or folder last changed. They stay
-    /// visible even if the filter no longer matches, so a photo doesn't vanish while it's rated.
+    /// visible even if the filter no longer matches, so a photo doesn't vanish while it's rated. In
+    /// Edit they stay only until another photo is shown.
     private var changedPhotos: Set<PhotoReference> = []
     /// Photos whose rating or flag couldn't be saved yet because their folder has a read-only grant.
     private(set) var unsavedMetadata: Set<PhotoReference> = []
@@ -235,8 +243,7 @@ final class Library {
 
     /// The listed photos that pass the filter.
     var visiblePhotos: [ListedPhoto] {
-        let filter = activeFilter
-        return listedPhotos.filter { filter.includes($0.photo) || changedPhotos.contains($0.id) }
+        activeFilter.filter(listedPhotos, keeping: changedPhotos)
     }
 
     /// How many photos read so far under the available locations each filter row matches.

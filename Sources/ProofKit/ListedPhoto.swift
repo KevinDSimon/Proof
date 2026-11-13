@@ -43,3 +43,11 @@ public struct ListedPhoto: Equatable, Identifiable, Sendable {
         return result
     }
 }
+
+extension FilterCriteria {
+    /// The photos that pass, in their order, with the photos in `kept` too. A photo is kept after
+    /// its rating, flag or edit changes, so it doesn't vanish while it is being worked on.
+    public func filter(_ photos: [ListedPhoto], keeping kept: Set<PhotoReference> = []) -> [ListedPhoto] {
+        photos.filter { includes($0.photo) || kept.contains($0.id) }
+    }
+}

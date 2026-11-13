@@ -83,7 +83,7 @@ struct FolderContentsTests {
         #expect(photos.filter(FilterCriteria(flag: .flagged, rating: 4).includes) == [flaggedFour])
         #expect(photos.filter(FilterCriteria(rating: 4, includesHigherRatings: true).includes) == [flaggedFour, five])
         #expect(photos.filter(FilterCriteria(flag: .unflagged).includes) == [five, unrated])
-        #expect(photos.filter(FilterCriteria(flag: .flagged, editedOnly: true).includes) == [flaggedFour])
+        #expect(photos.filter(FilterCriteria(flag: .flagged, edits: .edited).includes) == [flaggedFour])
         // Asking for rejected photos with a rating keeps them.
         #expect(photos.filter(FilterCriteria(flag: .rejected, rating: 5).includes) == [rejectedFive])
     }
@@ -92,8 +92,8 @@ struct FolderContentsTests {
     func criteriaSummary() {
         #expect(FilterCriteria.none.summary.isEmpty)
         #expect(FilterCriteria.none.activeCount == 0)
-        #expect(FilterCriteria(flag: .unflagged, rating: 5, editedOnly: true).activeCount == 3)
-        #expect(FilterCriteria(flag: .flagged, rating: 4, includesHigherRatings: true, editedOnly: true).summary
+        #expect(FilterCriteria(flag: .unflagged, rating: 5, edits: .edited).activeCount == 3)
+        #expect(FilterCriteria(flag: .flagged, rating: 4, includesHigherRatings: true, edits: .edited).summary
                 == "Flagged · 4+ Stars · Edited")
         #expect(FilterCriteria(rating: 1).summary == "1 Star")
         // Five stars and higher is just five stars.
