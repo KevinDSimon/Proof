@@ -136,14 +136,20 @@ public struct FilterCriteria: Equatable, Sendable {
     public var rating: Int?
     /// Whether `rating` also matches higher ratings.
     public var includesHigherRatings = false
-    public var editedOnly = false
+    public var edits: Edits?
+
+    /// Whether a photo has a Proof edit.
+    public enum Edits: Sendable {
+        case edited
+        case unedited
+    }
 
     public init(flag: PhotoMetadata.Flag? = nil, rating: Int? = nil, includesHigherRatings: Bool = false,
-                editedOnly: Bool = false) {
+                edits: Edits? = nil) {
         self.flag = flag
         self.rating = rating
         self.includesHigherRatings = includesHigherRatings
-        self.editedOnly = editedOnly
+        self.edits = edits
     }
 
     public static let none = FilterCriteria()
@@ -153,7 +159,7 @@ public struct FilterCriteria: Equatable, Sendable {
 
     /// How many parts are set, from 0 to 3, which the toolbar button shows.
     public var activeCount: Int {
-        [flag != nil, rating != nil, editedOnly].filter { $0 }.count
+        [flag != nil, rating != nil, edits != nil].filter { $0 }.count
     }
 
     public func includes(_ photo: FolderContents.Photo) -> Bool {
@@ -165,7 +171,7 @@ public struct FilterCriteria: Equatable, Sendable {
             // A rating leaves rejected photos out, unless the flag asks for them.
             if flag == nil, metadata?.flag == .rejected { return false }
         }
-        if editedOnly, !photo.isEdited { return false }
+        if let edits, photo.isEdited != (edits == .edited) { return false }
         return true
     }
 
@@ -183,7 +189,11 @@ public struct FilterCriteria: Equatable, Sendable {
             let more = includesHigherRatings && rating < 5 ? "+" : ""
             parts.append("\(rating)\(more) \(rating == 1 && more.isEmpty ? "Star" : "Stars")")
         }
-        if editedOnly { parts.append("Edited") }
+        switch edits {
+        case .edited: parts.append("Edited")
+        case .unedited: parts.append("Unedited")
+        case nil: break
+        }
         return parts.joined(separator: " · ")
     }
 }
@@ -225,7 +235,7 @@ public enum PhotoFilter: String, CaseIterable, Codable, Sendable {
         switch self {
         case .flagged: FilterCriteria(flag: .flagged)
         case .rejected: FilterCriteria(flag: .rejected)
-        case .edited: FilterCriteria(editedOnly: true)
+        case .edited: FilterCriteria(edits: .edited)
         default: FilterCriteria(rating: rating)
         }
     }

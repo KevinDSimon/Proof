@@ -80,7 +80,7 @@ struct ProofApp: App {
             }
             CommandGroup(before: .sidebar) {
                 Menu("Filter") { FilterMenu(library: library) }
-                    .disabled(library.selection == nil || library.selection?.filter != nil || library.isEditing)
+                    .disabled(library.selection == nil || library.selection?.filter != nil)
                 Divider()
                 Button("Reload Folders") { library.refresh() }
                     .keyboardShortcut("r")
@@ -317,25 +317,7 @@ struct ContentView: View {
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
         // A filter row is already filtered.
         if library.selection != nil, library.selection?.filter == nil {
-            ToolbarItem {
-                Menu {
-                    FilterMenu(library: library)
-                } label: {
-                    // While a filter is on, the button shows how many parts are set, so it reads as
-                    // on without an accent color. The tooltip names them. The symbol has no circle
-                    // around it, so it is as large as the other toolbar symbols.
-                    if library.filter.isEmpty {
-                        Label("Filter", systemImage: "line.3.horizontal.decrease")
-                    } else {
-                        Label("\(library.filter.activeCount)", systemImage: "line.3.horizontal.decrease")
-                            .labelStyle(.titleAndIcon)
-                            .monospacedDigit()
-                    }
-                }
-                .menuIndicator(.hidden)
-                .help(library.filter.isEmpty ? "Show only some of the photos" : "Filtered by \(library.filter.summary)")
-                .accessibilityLabel(library.filter.isEmpty ? "Filter" : "Filter: \(library.filter.summary)")
-            }
+            ToolbarItem { filterButton }
         }
         if library.exports.isVisible {
             ToolbarSpacer(.fixed)
@@ -359,24 +341,81 @@ struct ContentView: View {
             Button("Back to Folder", systemImage: "chevron.backward") { library.browse.finishEditing() }
                 .help("Return to the folder (⌘↑)")
         }
+        // The filmstrip's controls, beside the back button, away from the tools that change the
+        // photo. They share the back button's capsule: a ToolbarSpacer between them is ignored
+        // here, and a Divider draws as a short horizontal dash. A sidebar filter row is already
+        // filtered, so it has no filter button, as in Browse.
+        ToolbarItemGroup(placement: .navigation) {
+            if library.selection != nil, library.selection?.filter == nil {
+                filterButton
+            }
+            Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip",
+                   systemImage: "rectangle.bottomthird.inset.filled") {
+                library.isFilmstripShown.toggle()
+            }
+            .help(library.isFilmstripShown ? "Hide the filmstrip (⌥⌘F)" : "Show the filmstrip (⌥⌘F)")
+        }
     }
 
-    /// A chevron in the gap between the photo and the filmstrip that hides or shows it, as
-    /// View › Hide Filmstrip does. It sits beside the photo, never on it.
-    private var filmstripToggle: some View {
-        let title = library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip"
-        return Button {
-            library.isFilmstripShown.toggle()
+    /// The filter's toolbar button, in Browse and in Edit. Both change the same filter, so
+    /// filtering in either mode narrows the grid and the filmstrip (#160).
+    private var filterButton: some View {
+        Menu {
+            FilterMenu(library: library)
         } label: {
-            Image(systemName: library.isFilmstripShown ? "chevron.down" : "chevron.up")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .frame(width: 44, height: 20)
-                .contentShape(Rectangle())
+            // While a filter is on, the button shows how many parts are set, so it reads as
+            // on without an accent color. The tooltip names them. The symbol has no circle
+            // around it, so it is as large as the other toolbar symbols.
+            if library.filter.isEmpty {
+                Label("Filter", systemImage: "line.3.horizontal.decrease")
+            } else {
+                Label("\(library.filter.activeCount)", systemImage: "line.3.horizontal.decrease")
+                    .labelStyle(.titleAndIcon)
+                    .monospacedDigit()
+            }
         }
-        .buttonStyle(.plain)
-        .help("\(title) (⌥⌘F)")
-        .accessibilityLabel(title)
+        .menuIndicator(.hidden)
+        .help(library.filter.isEmpty ? "Show only some of the photos" : "Filtered by \(library.filter.summary)")
+        .accessibilityLabel(library.filter.isEmpty ? "Filter" : "Filter: \(library.filter.summary)")
+    }
+
+    /// The filmstrip in its card, with the inspector cards' gray. The filter and the button that
+    /// hides it are in the toolbar, so the card holds only thumbnails.
+    private var filmstripCard: some View {
+        Group {
+            if isFilmstripEmpty {
+                filmstripEmptyState
+            } else {
+                Filmstrip(library: library, photos: library.visiblePhotos)
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: InspectorCard<EmptyView>.cornerRadius, style: .continuous)
+            .fill(Color(white: InspectorCard<EmptyView>.fillGray(for: colorScheme))))
+        .clipShape(.rect(cornerRadius: InspectorCard<EmptyView>.cornerRadius, style: .continuous))
+    }
+
+    /// True when no photo passes the filter. The photo shown stays in `visiblePhotos` so the canvas
+    /// keeps it, but the filmstrip leaves it out rather than show it under a filter it fails.
+    private var isFilmstripEmpty: Bool {
+        let filter = library.activeFilter
+        return !filter.isEmpty && !library.visiblePhotos.contains { filter.includes($0.photo) }
+    }
+
+    /// Centered in the card, at the filmstrip's height so the photo doesn't move. Clear Filter is
+    /// offered only for the toolbar's filter; a sidebar filter row is changed in the sidebar.
+    private var filmstripEmptyState: some View {
+        VStack(spacing: 8) {
+            Text("No photos match the filter.")
+                .foregroundStyle(.secondary)
+            if library.selection?.filter == nil, !library.filter.isEmpty {
+                Button("Clear Filter") { library.filter = .none }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.small)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: Filmstrip.height)
     }
 
     @ViewBuilder private var editor: some View {
@@ -389,16 +428,12 @@ struct ContentView: View {
                     EditCanvas(library: library, url: url, renderer: renderer)
                         .padding([.top, .horizontal], 24)
                         .padding(.bottom, 16)
-                    filmstripToggle
                     if library.isFilmstripShown {
-                        Filmstrip(library: library, photos: library.visiblePhotos)
-                            .background(RoundedRectangle(cornerRadius: InspectorCard<EmptyView>.cornerRadius,
-                                                         style: .continuous)
-                                .fill(Color(white: InspectorCard<EmptyView>.fillGray(for: colorScheme))))
-                            .clipShape(.rect(cornerRadius: InspectorCard<EmptyView>.cornerRadius, style: .continuous))
+                        filmstripCard
                             .padding([.horizontal, .bottom], 24)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     } else {
+                        // With the canvas's 16 pt, the photo keeps a 24 pt margin below it.
                         Spacer().frame(height: 8)
                     }
                 }
@@ -1415,6 +1450,11 @@ private struct FilterMenu: View {
         Toggle("Include Higher Ratings", isOn: $library.filter.includesHigherRatings)
             .disabled(library.filter.rating == nil || library.filter.rating == 5)
         Divider()
-        Toggle("Edited Only", isOn: $library.filter.editedOnly)
+        Picker("Edits", selection: $library.filter.edits) {
+            Text("Edited or Not").tag(FilterCriteria.Edits?.none)
+            Text("Edited").tag(FilterCriteria.Edits?.some(.edited))
+            Text("Unedited").tag(FilterCriteria.Edits?.some(.unedited))
+        }
+        .pickerStyle(.inline)
     }
 }
