@@ -136,6 +136,10 @@ final class Library {
     /// The Distortion slider or a Transform slider is being dragged, which shows a grid over the photo.
     var isAdjustingGeometry = false
     var isInspectorShown = true
+    /// The Info panel beside the grid in Browse (#151).
+    var isInfoShown = false
+    /// The Info card below the histogram in Edit, collapsed until opened.
+    var isInfoCardExpanded = false
     /// How far the photo in Edit is zoomed and where; back to Fit for each photo and for the crop tool.
     let zoom = CanvasZoom()
     /// The LUT library and its previews of the photo in Edit, for the Look section.
@@ -382,6 +386,50 @@ final class Library {
                 errorMessage = "The rating and flag of “\(photo.name)” couldn't be saved. (\(error.localizedDescription))"
             }
         }
+    }
+
+    /// Whether the photo's info is in view: the panel in Browse, the open card in Edit.
+    var isShowingInfo: Bool {
+        isEditing ? isInspectorShown && isInfoCardExpanded : isInfoShown
+    }
+
+    /// Shows or hides the photo's info, for ⌘I. In Edit it opens the inspector if it is hidden.
+    func toggleInfo() {
+        if isEditing {
+            let show = !isShowingInfo
+            isInfoCardExpanded = show
+            if show { isInspectorShown = true }
+        } else {
+            isInfoShown.toggle()
+        }
+    }
+
+    /// The photo the Info panel describes: the only selected one. With several selected it shows none.
+    var infoPhoto: PhotoReference? {
+        browse.selectedPhotos.count == 1 ? browse.selectedPhotos.first : nil
+    }
+
+    /// Saves a photo's title, caption, keywords, creator, copyright and location to its XMP
+    /// sidecar, after any rating or flag still being written to it. Returns whether it was saved.
+    func saveDescription(_ description: PhotoDescription, of photo: PhotoReference) async -> Bool {
+        guard let url = url(ofPhoto: photo.name, in: photo.folder) else { return false }
+        guard ensureCanWrite(nextTo: url) else {
+            errorMessage = "The description of “\(photo.name)” couldn't be saved, because Proof can't write to its folder yet."
+            return false
+        }
+        let metadata = metadata(of: photo) ?? .unrated
+        let previous = metadataWrite
+        let write = Task {
+            await previous?.value
+            let result = await Task.detached { try XMPSidecar.save(description, keeping: metadata, for: url) }.result
+            if case .failure(let error) = result {
+                errorMessage = "The description of “\(photo.name)” couldn't be saved. (\(error.localizedDescription))"
+                return false
+            }
+            return true
+        }
+        metadataWrite = Task { _ = await write.value }
+        return await write.value
     }
 
     // MARK: Edits

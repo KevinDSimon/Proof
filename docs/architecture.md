@@ -6,7 +6,7 @@ Proof is split into a platform-neutral engine package, `ProofKit`, and thin app 
 
 | Layer | Owns | Never imports |
 | --- | --- | --- |
-| `ProofKit` | Edit recipe, render pipeline, sidecars, XMP reading and rating writes, `.cube` parsing, thumbnails | AppKit, UIKit, SwiftUI |
+| `ProofKit` | Edit recipe, render pipeline, sidecars, XMP reading, rating and description writes, `.cube` parsing, thumbnails | AppKit, UIKit, SwiftUI |
 | Mac app (`App/Proof.xcodeproj`) | Folders panel, filmstrip, inspector, canvas, export UI | — |
 | iOS app (later) | The same panels for touch, Files-app folder picking | — |
 
@@ -38,6 +38,7 @@ Zoom renders only what the view shows. `Viewport` in `ProofKit` holds the zoom, 
 | --- | --- | --- |
 | Original RAW | Its own folder | Never written |
 | Ratings, flags and labels | XMP sidecar (`IMG_0001.xmp` or `IMG_0001.DNG.xmp`) or XMP embedded in the DNG | Other apps; Proof writes ratings and flags to the sidecar only |
+| Title, caption, keywords, creator, copyright, location | The same XMP sidecar or embedded XMP, then IPTC and the camera's artist and copyright | Other apps; Proof writes them to the sidecar only |
 | Edit recipe | `IMG_0001.DNG.proof` next to the original, JSON | Proof |
 | Thumbnails, folder index | Application Support | Proof; disposable |
 
@@ -93,6 +94,8 @@ The Mac app has one window. Panels sit beside the photo and never cover it; see 
 - A changed rating or flag is saved to the photo's XMP sidecar by `XMPSidecar`, off the main thread, creating `IMG_0001.xmp` when there is none. Only `xmp:Rating`, `xmpDM:pick` and `xmpDM:good` change; the rest of the file keeps its bytes. See [decision 0022](decisions/0022-writing-ratings.md). In a folder with a read-only grant, Proof asks for access once; until then the change stays in memory, the Edit inspector says it isn't saved, and it is saved once the folder is granted. When a folder is read again, a changed rating stays unless the photo's XMP sidecar has one; XMP read from inside a photo is kept the same way. A photo whose rating or flag changed stays visible until the filter or folder changes, even if the filter no longer matches it. XMP read in the background never replaces a rating already changed.
 - Every toolbar action is also in the menu bar: Add Folder, Show in Finder and Copy Path (⌥⌘C) in File, which act on the selected photos, or on the selected folder when no photo is selected; Undo and Redo of edits, Copy and Paste of settings, and Select All (⌘A) and Deselect All (⌥⌘A) of photos, in Edit; the filter under Filter, with the same items as the toolbar menu, in Browse, Reload Folders (⌘R), Show Sidebar, Show Inspector (⌃⌘I) and the zoom commands in View; Edit (Return), Back to Folder (⌘↑), Show Original (\), Crop (C), Rotate Left (⌘[), Rotate Right (⌘]), Flip Horizontal, Flip Vertical, Next Look (⌥⌘]), Previous Look (⌥⌘[), Rating (0–5) and Flag (P, U, X) in Photo. While cropping, Photo has Done Cropping (Return), Cancel Cropping (Esc) and Swap Crop Orientation (X) in place of Crop, and X no longer rejects the photo.
 - The sidebar selection, All Photos, a filter row or a folder's `FileReference`, is remembered between launches. A selection saved before All Photos existed is still read. The selected photo is not remembered.
+
+- View › Show Info (⌘I) or the Info button in the Browse toolbar shows the Info panel in the inspector column (`InfoInspector`). It describes the one selected photo and follows the selection; with several selected it shows none. In Edit, the same details are in an Info card below the histogram, collapsed until opened, and ⌘I opens and closes it. File and capture details are read-only, from `PhotoInfo`. Title, caption, keywords, creator, copyright and location come from `PhotoDescription` and are saved to the XMP sidecar by `XMPSidecar` when a field is left, after any rating still being written. See [decision 0030](decisions/0030-info-panel.md).
 
 ## Folder access
 
