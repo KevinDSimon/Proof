@@ -12,7 +12,7 @@ Issue #15 adds the Contrast, Whites and Blacks sliders. The tone curve, which co
 - Inside 0 to 1 the curve keeps black and white in place. Outside, where the extended-range decode can reach, it continues in a straight line at the slope of its end instead of clipping.
 - Whites and blacks apply first, then contrast. Whites and blacks each add a bump that is zero at both ends and peaks three quarters of the way toward its end. At ±100 the curve's slope never drops below 0.1, so it always rises.
 - Contrast turns around middle gray (0.18 in linear light) and doubles or halves the slope there at ±100. It uses a rational curve instead of a power curve: a power curve's slope at black is zero or infinite, which a lookup can't follow without banding. Its slope at black and white is the inverse of its slope at middle gray.
-- The curve is applied to red, green and blue separately. The slight rise in saturation that comes with more contrast is intended, as in Lightroom.
+- The curve is applied to red, green and blue separately. The slight rise in saturation that comes with more contrast is intended.
 - With all three at 0 the stage is skipped, so `processVersion` stays 1. No release has rendered these values, and the format already stored them.
 
 ## Consequences

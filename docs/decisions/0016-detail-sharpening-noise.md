@@ -4,7 +4,7 @@ Date: 2026-11-10
 Status: Accepted
 
 ## Context
-Issue #104 adds a Detail card with sharpening and noise reduction, as in Lightroom's Detail panel. `CIRAWFilter` already sharpens and reduces noise during the decode, with defaults it chooses for each photo. On the sample photo (Leica M11, ISO 64, decoder version 8) it reports support for `sharpnessAmount` (default 1), `detailAmount` (0), `luminanceNoiseReductionAmount` (0), `colorNoiseReductionAmount` (0.5), `contrastAmount` and `moireReductionAmount`. It has no sharpening radius or masking. Measured on 256-pixel crops:
+Issue #104 adds a Detail card with sharpening and noise reduction. `CIRAWFilter` already sharpens and reduces noise during the decode, with defaults it chooses for each photo. On the sample photo (Leica M11, ISO 64, decoder version 8) it reports support for `sharpnessAmount` (default 1), `detailAmount` (0), `luminanceNoiseReductionAmount` (0), `colorNoiseReductionAmount` (0.5), `contrastAmount` and `moireReductionAmount`. It has no sharpening radius or masking. Measured on 256-pixel crops:
 - Sharpness changes the photo only when the decode scale is above 0.5. Fit-to-window renders of a large photo are not sharpened.
 - Luminance noise reduction and Detail follow the photo's ISO. They do almost nothing at ISO 64; on a copy of the sample marked ISO 6400 they work strongly, and that copy's default luminance amount is 0.72. Amounts above 1 make artifacts.
 - Color noise reduction works at every scale.

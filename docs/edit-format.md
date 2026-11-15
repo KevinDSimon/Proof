@@ -64,7 +64,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | --- | --- |
 | `formatVersion` | Version of this JSON layout. Bumped when fields are renamed or restructured; older files are migrated on read. |
 | `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. |
-| `basic` | Lightroom-style Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Texture and clarity raise (positive) or lower (negative) local contrast: texture in fine detail a few pixels across, clarity over larger areas, mostly in the midtones. Both are measured against a share of the photo's size, so they look the same at any render size, and are clamped the same way. Files saved before they existed read both as 0. Dehaze removes (positive) or adds (negative) haze, measured against the photo's own haziest area; it is clamped the same way, and files saved before it existed read it as 0. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
+| `basic` | Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Texture and clarity raise (positive) or lower (negative) local contrast: texture in fine detail a few pixels across, clarity over larger areas, mostly in the midtones. Both are measured against a share of the photo's size, so they look the same at any render size, and are clamped the same way. Files saved before they existed read both as 0. Dehaze removes (positive) or adds (negative) haze, measured against the photo's own haziest area; it is clamped the same way, and files saved before it existed read it as 0. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
 | `selectiveColor` | Hue, saturation and brightness for each of eight color ranges, described below. |
 | `blackAndWhite` | The Basic card's Treatment and the black-and-white mix, described below. |
 | `curve` | Control points per channel (`rgb`, `red`, `green`, `blue`), each `[input, output]` from 0 to 1 in sRGB-encoded values, sorted by input, at most 16 per channel. The RGB curve applies after Contrast, Whites and Blacks, then each color channel's curve. The curve passes through every point with monotone cubic interpolation and is flat beyond the first and last points. Values outside 0 to 1 are clamped, and a point at the same input as an earlier one is ignored. `levels` holds each channel's black, midtone and white handles as `[black, midtone, white]`, described below. |
@@ -84,7 +84,7 @@ Missing fields take their default (no adjustment). `look` and `crop` are written
 
 ## Levels
 
-Each channel's handles apply before its points, as in Photoshop's Levels followed by Curves.
+Each channel's handles apply before its points, as a levels adjustment followed by a curve.
 
 | Value | Meaning |
 | --- | --- |
@@ -132,7 +132,7 @@ Each value runs from 0 to 100, and `null` keeps the camera's default, which `CIR
 
 ## Vignette
 
-Lightroom's post-crop vignetting. It applies after the crop, so it centers on the cropped and straightened frame. Values outside their ranges render as the nearer end. With `amount` at 0 nothing changes, whatever the other three hold. A missing `vignette`, as in files saved before it existed, means no vignette; a missing field inside it takes the default below. See decision 0021.
+A creative vignette. It applies after the crop, so it centers on the cropped and straightened frame. Values outside their ranges render as the nearer end. With `amount` at 0 nothing changes, whatever the other three hold. A missing `vignette`, as in files saved before it existed, means no vignette; a missing field inside it takes the default below. See decision 0021.
 
 | Field | Meaning |
 | --- | --- |
@@ -173,7 +173,7 @@ Corrections for the lens, applied as the photo is decoded, before every other ad
 
 ## Transform
 
-Perspective correction, as in Lightroom's Transform panel, applied right after the lens corrections to the whole photo as the camera oriented it, before the crop's turns (decision 0025). Show Original keeps it, as it keeps the crop. A missing `transform`, as in files saved before it existed, means no correction, and so does a missing field.
+Perspective correction, applied right after the lens corrections to the whole photo as the camera oriented it, before the crop's turns (decision 0025). Show Original keeps it, as it keeps the crop. A missing `transform`, as in files saved before it existed, means no correction, and so does a missing field.
 
 | Field | Meaning |
 | --- | --- |

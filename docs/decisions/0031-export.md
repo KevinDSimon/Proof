@@ -6,7 +6,7 @@ Status: Accepted
 ## Context
 Issue #24 asked for JPEG, HEIC and TIFF export with a size, quality and color space, keeping EXIF and the rating, and for exporting several photos in the background. Photos exported from Proof go to two places: a phone or social media, where small sRGB or Display P3 files are wanted, and printing, where labs want large sRGB JPEGs and fine-art printers want 16-bit TIFFs in a wider color space at a set print size.
 
-Lightroom's export window has about nine sections and saved presets. A first draft for Proof had three presets (Phone, Social, Print). Presets hide the settings behind names that don't say what the file will be, and need a way to manage them.
+Export windows in other editors often have many sections and saved presets. A first draft for Proof had three presets (Phone, Social, Print). Presets hide the settings behind names that don't say what the file will be, and need a way to manage them.
 
 ## Decision
 - File › Export… (⇧⌘E) and the right-click menu export the selected photos. One sheet shows four groups, with no presets: format (JPEG, HEIC or TIFF, with a quality slider for JPEG and HEIC), size (Original, or Long Edge in px, in or cm, with a resolution in ppi for in and cm), color space (sRGB, Display P3 or Adobe RGB) and a Remove Location switch. The sheet remembers the last settings (`ExportSettings`, stored as JSON in user defaults), which gives most of what presets would.

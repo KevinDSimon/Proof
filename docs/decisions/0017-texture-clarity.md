@@ -4,7 +4,7 @@ Date: 2026-11-10
 Status: Accepted
 
 ## Context
-Issue #101 adds Texture and Clarity, which raise or lower local contrast as in Lightroom: Texture in fine detail, Clarity over larger areas, mostly in the midtones. Core Image's `CIUnsharpMask` and `CIHighlightShadowAdjust` only raise contrast, and their radius is in pixels, so the same value would look different on the canvas, on a thumbnail and in an export. The sample photo (`L1000725.DNG`, a dusk landscape) was rendered with each slider at +100 and −100 by the comparison test in `TextureClarityTests`.
+Issue #101 adds Texture and Clarity, which raise or lower local contrast: Texture in fine detail, Clarity over larger areas, mostly in the midtones. Core Image's `CIUnsharpMask` and `CIHighlightShadowAdjust` only raise contrast, and their radius is in pixels, so the same value would look different on the canvas, on a thumbnail and in an export. The sample photo (`L1000725.DNG`, a dusk landscape) was rendered with each slider at +100 and −100 by the comparison test in `TextureClarityTests`.
 
 ## Decision
 - Texture and clarity are one custom Metal color kernel, compiled at run time like Highlights and Shadows (decision 0009). The stage runs in linear light after Highlights and Shadows and before the tone lookup.
@@ -15,4 +15,4 @@ Issue #101 adds Texture and Clarity, which raise or lower local contrast as in L
 ## Consequences
 - With the decode cached and every tone slider in use, a texture or clarity change renders at a full-screen size (3360×2234) in about 14–18 ms (median) on the owner’s Mac when measured on its own, inside one 30 fps frame.
 - The strengths, radii and fades were tuned on one photo. Changing them after a release renders these values needs a new `processVersion`.
-- At −100, Clarity gives a soft, glowing look, and Texture a visible smoothing at screen size; both match Lightroom's direction but not its exact amount.
+- At −100, Clarity gives a soft, glowing look, and Texture a visible smoothing at screen size.

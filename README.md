@@ -1,94 +1,109 @@
 # Proof
 
-A Mac RAW photo editor built on Core Image. It edits photos where they already live (a local folder, an external drive or a NAS), saves edits in a sidecar next to each file, and never changes the original.
+Proof is a RAW photo editor for the Mac. It opens photos where they already are, on your Mac, an external drive or a network drive, and never changes the original files. Your edits are saved in a small file next to each photo, so there is no catalog or library to import into or keep in sync.
 
-Status: pre-alpha, for testers. See [Install](#install).
+![Proof editing a photo, with the adjustment panel beside it](docs/images/edit.png)
 
-## v1 scope
+Proof is an early test version. Things will be missing, and some will break. Reports of what you find are the most useful thing at this stage.
 
-- Folders panel with an All Photos view across every saved folder and its subfolders, and a filmstrip, with sidebar rows and a combinable toolbar filter for flags, ratings and edits that read ratings from XMP sidecars (written by Photomator, Lightroom, Capture One and others); ratings and flags set in Proof are saved to the same sidecars
-- Info panel with a photo's file and camera details, and a title, caption, keywords, creator, copyright and location saved to its XMP sidecar
-- Lightroom's Basic panel: temperature, tint, exposure, contrast, highlights, shadows, whites, blacks, Texture, Clarity, Dehaze, vibrance, saturation
-- Selective Color: hue, saturation and brightness for eight color ranges, chosen from a graph of the photo's colors
-- Black & White, chosen as the Basic card's Treatment, with red, green and blue filter sliders
-- Zoom to 100% and beyond, sharpening and noise reduction
-- Effects: Lightroom's post-crop vignette, film grain, halation and bloom
-- Lens profile corrections, manual distortion, and perspective correction with Upright (Auto, Guided, Level, Vertical, Full)
-- HSL color mixer and black and white
-- Tone curve (RGB and per channel) and a histogram
-- `.cube` LUTs imported into a library, with previews of the photo and a strength slider
-- Crop, straighten, rotate and flip, before/after, copy and paste settings, undo and a History panel
-- Opens photos with the crop and perspective correction the camera saved in the file: Leica Q digital-zoom framings and Leica M11 perspective control
-- Export to JPEG, HEIC and TIFF at the original size or a long edge in pixels or a print size, in sRGB, Display P3 or Adobe RGB, keeping camera details, rating and description, several photos at a time in the background
-- Saved export destinations, a folder with its settings, picked in the Export sheet or from File › Export To
+## Try it
 
-After v1: spot healing and masks as layers (v1.1), then presets and virtual copies (v1.2). An iPad and iPhone version comes after the Mac app. See [docs/roadmap.md](docs/roadmap.md).
+You need a Mac with Apple silicon (M1 or later) running macOS 27 or later. Proof doesn't run on Intel Macs.
 
-## Install
+1. Download `Proof-0.1.dmg` from the [latest release](https://github.com/KevinDSimon/Proof/releases/latest).
+2. Open it and drag Proof to the Applications folder shown beside it.
+3. Open Proof from Applications. The first time, macOS asks you to confirm that you want to open an app downloaded from the internet.
+4. Choose File › Add Folder… (⌘O) and pick a folder of RAW photos. Proof sees only the folders you choose, and remembers them the next time it opens.
 
-Proof needs macOS 27 or later on a Mac with Apple silicon (M1 or later). It doesn't run on Intel Macs.
+Proof opens the RAW formats macOS supports, including DNG and the formats of most current cameras. It doesn't open JPEG or HEIC files yet.
 
-1. Download the `.dmg` from the latest release on the [Releases page](https://github.com/KevinDSimon/Proof/releases).
-2. Open it and drag Proof to the Applications shortcut beside it.
-3. Open Proof from Applications. It's signed and notarized by Apple, so it opens without a warning; the first time, macOS may ask to confirm that you want to open an app downloaded from the internet.
-4. Choose File › Add Folder… (⌘O) and pick a folder of RAW photos. Proof runs in the App Sandbox, so it sees only folders you choose; it remembers them the next time it opens.
+### Things to try
 
-Proof writes its edits and ratings to files beside your photos and never changes the photos themselves.
+- Browse a folder in the grid. Rate photos with the 1–5 keys, flag them with P (pick) and X (reject), and filter by rating or flag from the toolbar.
+- Select a photo and press Return to edit it. Press ⌘↑, or the back button in the toolbar, to go back to the folder.
+- Drag the sliders in the panel on the right. Press \ to compare with the original.
+- Crop and straighten with C.
+- Copy one photo's settings (⌘C) and paste them onto others (⌘V).
+- Export a few photos as JPEG with File › Export (⇧⌘E).
 
-## Repository layout
+Your original photos are never changed. Edits go into a `.proof` file next to each photo, and ratings and flags into an `.xmp` file, which other photo apps can read too. To undo everything Proof did to a folder, delete those files.
 
-| Path | What it is |
-| --- | --- |
-| `App/Proof.xcodeproj` | The Mac app (SwiftUI, App Sandbox on). Depends on the local `ProofKit` package. |
-| `App/Proof` | The Mac app's source files and entitlements |
-| `App/Version.xcconfig` | The app's version and build number |
-| `Sources/ProofKit` | Platform-neutral engine: edit recipe, render pipeline, sidecars, XMP, LUT parsing. No AppKit, UIKit or SwiftUI. |
-| `Tests/ProofKitTests` | Tests for ProofKit (Swift Testing) |
-| `docs/` | Architecture, edit file format, release steps, roadmap and decision records |
-| `scripts/release.sh` | Builds a signed, notarized `.dmg` for a release (see `docs/releasing.md`) |
-| `CLAUDE.md` | Rules for AI agents working in this repo |
+### Reporting a problem
 
-## Building
+[Open a bug report](https://github.com/KevinDSimon/Proof/issues/new/choose). Say what you did, what you expected and what happened instead. A screenshot, your Mac model and the camera that took the photo help.
 
-Requires macOS 27 and Xcode 27 or later on Apple Silicon. The app targets macOS 27 and, later, iOS 27.
+## Features
 
-To build and test the engine from the command line:
+![The photo browser with the folder list, thumbnail grid and filter](docs/images/browse.png)
+
+**Browse and organize**
+
+- Folders shown as they are on disk, with an All Photos view across every folder you've added
+- A thumbnail grid and a filmstrip while editing
+- Star ratings, pick and reject flags, and filters that combine them
+- Ratings and flags read from and saved to XMP sidecars, so other photo apps see them
+- An Info panel with camera details, and a title, caption, keywords, creator, copyright and location
+- Folders on external and network drives; renamed photos are found again with their edits
+
+**Edit**
+
+- White balance (with an eyedropper), exposure, contrast, highlights, shadows, whites and blacks
+- Texture, clarity, dehaze, vibrance and saturation, and an Auto button
+- Tone curve for all channels or red, green and blue separately, with a histogram
+- Selective color: hue, saturation and brightness for eight color ranges
+- Black and white with red, green and blue filters
+- Sharpening and noise reduction, with zoom to 100% and beyond
+- Lens corrections from the camera's profile, manual distortion, chromatic aberration and lens vignetting
+- Perspective correction, automatic or guided by lines you draw
+- Crop, straighten, rotate and flip
+- Before and after, undo, and a History panel to step back through changes
+- Copy and paste settings between photos
+
+**Looks and effects**
+
+- Import `.cube` LUT files into a library, preview them on the photo and set their strength
+- Vignette, film grain, halation and bloom
+
+**Export**
+
+- JPEG, HEIC and TIFF, at full size, a long edge in pixels, or a print size
+- sRGB, Display P3 or Adobe RGB color
+- Several photos at once in the background, keeping camera details, rating and description
+- Saved export destinations for folders you export to often
+
+## Roadmap
+
+The first version, v1, is nearly complete; this test build is part of it. Planned next:
+
+- **v1.1:** spot healing for dust, masks for adjusting part of a photo, and better automatic straightening
+- **v1.2:** presets, and virtual copies with side-by-side comparison
+- **Later:** matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF files, importing presets from other editors, and an iPad and iPhone version
+
+Proof won't have a catalog or cloud sync. See [docs/roadmap.md](docs/roadmap.md) for the full plan.
+
+## Build from source
+
+You need a Mac with Apple silicon, macOS 27 and Xcode 27 or later.
+
+1. Clone this repository and open `App/Proof.xcodeproj` in Xcode.
+2. Choose the **Proof** scheme and **My Mac** as the destination.
+3. Choose Product › Run (⌘R).
+
+The app is signed to run locally, so you don't need an Apple developer account. To build and test the editing engine from the command line:
 
 ```bash
 swift build
 swift test
 ```
 
-RAW files are never committed, so the tests that render a real photo run only when `PROOF_SAMPLE_DNG` names one:
-
-```bash
-PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG swift test
-```
-
-Reference renders of that photo, with no edit and with an edit, are kept as PNGs in `Tests/ProofKitTests/References` together with a fingerprint of the photo. They are compared only when `PROOF_SAMPLE_DNG` names the same photo. After a change that is meant to alter pixels, record them again and say in the pull request which renders changed and why:
-
-```bash
-PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG PROOF_RECORD_REFERENCES=1 swift test --filter ReferenceRenderTests
-```
-
-To compare Highlights and Shadows with Core Image's `CIHighlightShadowAdjust`, point `PROOF_COMPARE_DIR` at a folder of RAW photos. The test writes one strip per photo and method to `PROOF_COMPARE_OUTPUT`, or to a temporary folder:
-
-```bash
-PROOF_COMPARE_DIR=~/Pictures/Compare PROOF_COMPARE_OUTPUT=~/Desktop/compare swift test --filter comparisonStrips
-```
-
-To run the Mac app:
-
-1. Open `App/Proof.xcodeproj` in Xcode. Xcode resolves the `ProofKit` package from the repository root.
-2. Choose the **Proof** scheme and **My Mac** as the destination.
-3. Choose Product > Run (⌘R). Press ⌘O and choose a folder of RAW photos, select a photo and press Return to edit it.
-
-The app is signed to run locally, so no Apple developer team is needed. Release builds for testers are signed and notarized by `scripts/release.sh`; see [docs/releasing.md](docs/releasing.md). To build it without Xcode's interface:
-
-```bash
-xcodebuild -project App/Proof.xcodeproj -scheme Proof build
-```
+| Path | What it is |
+| --- | --- |
+| `App/` | The Mac app (SwiftUI) |
+| `Sources/ProofKit` | The editing engine: edit settings, rendering, sidecars, XMP and LUTs. It has no Mac-only code, so a later iPad and iPhone app can reuse it. |
+| `Tests/ProofKitTests` | Tests for the engine |
+| `docs/` | Architecture, the edit file format, releasing, the roadmap and decision records |
+| `scripts/release.sh` | Builds a signed, notarized `.dmg` for a release |
 
 ## Contributing
 
-Work is tracked in GitHub Issues, grouped into milestones by phase. Each change goes through a pull request that closes its issue, passes CI and updates the docs it affects. See [CLAUDE.md](CLAUDE.md) for the conventions; they apply to people and agents alike.
+Work is tracked in [GitHub Issues](https://github.com/KevinDSimon/Proof/issues), grouped into milestones. Each change goes through a pull request that closes its issue. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run the full tests and what a pull request needs.

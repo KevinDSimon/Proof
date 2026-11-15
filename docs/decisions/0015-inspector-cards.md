@@ -4,7 +4,7 @@ Date: 2026-11-10
 Status: Accepted; folding changed by 0034
 
 ## Context
-Issue #98. The inspector was a grouped SwiftUI `Form`: each section's title and Reset sat above its card, and only Curve and Looks had a switch to compare with and without them. On macOS 26 a grouped form draws pop-up buttons as plain text with arrows, without the filled background they have elsewhere, such as in Finder's settings. The owner wants each adjustment group laid out as Pixelmator Pro does on iPhone and iPad: the title inside the card, Reset beside a switch that turns the group on or off.
+Issue #98. The inspector was a grouped SwiftUI `Form`: each section's title and Reset sat above its card, and only Curve and Looks had a switch to compare with and without them. On macOS 26 a grouped form draws pop-up buttons as plain text with arrows, without the filled background they have elsewhere, such as in Finder's settings. The owner wants each adjustment group laid out as a card: the title inside the card, Reset beside a switch that turns the group on or off.
 
 ## Decision
 - Each adjustment group is an `InspectorCard`: a rounded card with its title inside, Reset, and a switch. Histogram has a card without Reset or a switch. The cards are laid out by hand in a `ScrollView`, not in a `Form`, so pop-up buttons keep their filled background.
