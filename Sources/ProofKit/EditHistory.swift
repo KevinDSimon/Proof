@@ -1,43 +1,63 @@
 /// One photo's edit and its undo and redo steps. Each step is a whole recipe, so undo restores
-/// every control at once, whichever one changed.
+/// every control at once, whichever one changed. The History panel lists the same steps.
 public struct EditHistory: Equatable, Sendable {
-    public private(set) var recipe: EditRecipe
-    private var undoSteps: [EditRecipe] = []
-    private var redoSteps: [EditRecipe] = []
-
-    public init(_ recipe: EditRecipe) {
-        self.recipe = recipe
+    /// One entry in the History panel: the edit after a change, and the change's name.
+    public struct Step: Equatable, Sendable {
+        public var recipe: EditRecipe
+        /// Such as "Exposure +0.30"; "Opened" for the edit the photo opened with.
+        public var label: String
     }
 
-    public var canUndo: Bool { !undoSteps.isEmpty }
-    public var canRedo: Bool { !redoSteps.isEmpty }
+    public static let openedLabel = "Opened"
 
-    /// Makes `recipe` the current edit as one undo step and clears redo. Returns `false`, and
-    /// records nothing, when it is the current edit already.
+    /// Every step, oldest first: the edit as opened, then each change, including those undone.
+    public private(set) var steps: [Step]
+    /// The step shown. Steps after it are the ones Redo brings back.
+    public private(set) var currentIndex = 0
+
+    public init(_ recipe: EditRecipe) {
+        steps = [Step(recipe: recipe, label: Self.openedLabel)]
+    }
+
+    public var recipe: EditRecipe { steps[currentIndex].recipe }
+    public var canUndo: Bool { currentIndex > 0 }
+    public var canRedo: Bool { currentIndex < steps.count - 1 }
+
+    /// Makes `recipe` the current edit as one undo step and drops the steps after the current
+    /// one. `label` names the change; without it the label says what differs from the current
+    /// edit. Returns `false`, and records nothing, when it is the current edit already.
     @discardableResult
-    public mutating func record(_ recipe: EditRecipe) -> Bool {
+    public mutating func record(_ recipe: EditRecipe, label: String? = nil) -> Bool {
         guard recipe != self.recipe else { return false }
-        undoSteps.append(self.recipe)
-        redoSteps = []
-        self.recipe = recipe
+        let label = label ?? recipe.changeLabel(from: self.recipe)
+        steps.removeSubrange((currentIndex + 1)...)
+        steps.append(Step(recipe: recipe, label: label))
+        currentIndex += 1
         return true
     }
 
     /// Returns to the edit before the last step; `nil` when there is none.
     @discardableResult
     public mutating func undo() -> EditRecipe? {
-        guard let previous = undoSteps.popLast() else { return nil }
-        redoSteps.append(recipe)
-        recipe = previous
+        guard canUndo else { return nil }
+        currentIndex -= 1
         return recipe
     }
 
     /// Repeats the last undone step; `nil` when there is none.
     @discardableResult
     public mutating func redo() -> EditRecipe? {
-        guard let next = redoSteps.popLast() else { return nil }
-        undoSteps.append(recipe)
-        recipe = next
+        guard canRedo else { return nil }
+        currentIndex += 1
+        return recipe
+    }
+
+    /// Shows the edit as it was at step `index`, keeping the later steps for Redo; `nil` when
+    /// there is no such step or it is shown already.
+    @discardableResult
+    public mutating func go(to index: Int) -> EditRecipe? {
+        guard steps.indices.contains(index), index != currentIndex else { return nil }
+        currentIndex = index
         return recipe
     }
 }

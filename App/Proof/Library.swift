@@ -146,6 +146,8 @@ final class Library {
     /// The Distortion slider or a Transform slider is being dragged, which shows a grid over the photo.
     var isAdjustingGeometry = false
     var isInspectorShown = true
+    /// The History panel on the leading side in Edit (#56).
+    var isHistoryShown = false
     /// The filmstrip under the photo in Edit (#159), remembered across launches.
     var isFilmstripShown = UserDefaults.standard.object(forKey: Library.filmstripKey) as? Bool ?? true {
         didSet { UserDefaults.standard.set(isFilmstripShown, forKey: Self.filmstripKey) }
@@ -520,6 +522,12 @@ final class Library {
         stepEdit { $0.redo() }
     }
 
+    /// Clicking a step in the History panel: the photo as it was then. Undo and Redo move on
+    /// from there, and a new change drops the steps after it.
+    func goToHistoryStep(_ index: Int) {
+        stepEdit { $0.go(to: index) }
+    }
+
     private func stepEdit(_ step: (inout EditHistory) -> EditRecipe?) {
         guard let photo = browse.selectedPhoto else { return }
         commitEdit(of: photo)
@@ -627,7 +635,7 @@ final class Library {
         for photo in photos where loadEdit(of: photo) {
             commitEdit(of: photo)
             edits[photo]!.recipe = edits[photo]!.recipe.pasting(copied)
-            commitEdit(of: photo)
+            commitEdit(of: photo, label: "Paste Settings")
         }
         if isEditing, let shown = browse.selectedPhoto, photos.contains(shown), let recipe = selectedEdit?.recipe {
             let pasted = Set(copied.items.compactMap(\.group))
@@ -677,7 +685,7 @@ final class Library {
         for photo in photos where loadEdit(of: photo) {
             commitEdit(of: photo)
             guard var edit = edits[photo] else { continue }
-            edit.history.record(edit.cameraEdit)
+            edit.history.record(edit.cameraEdit, label: "Revert")
             edit.recipe = edit.cameraEdit
             edits[photo] = edit
             save(photo, reverting: true)
@@ -1212,9 +1220,10 @@ final class Library {
         }
     }
 
-    /// Makes the photo's current change one undo step and saves it.
-    private func commitEdit(of photo: PhotoReference) {
-        guard var edit = edits[photo], edit.history.record(edit.recipe) else { return }
+    /// Makes the photo's current change one undo step and saves it. `label` names the step in
+    /// the History panel; without it the step says what changed.
+    private func commitEdit(of photo: PhotoReference, label: String? = nil) {
+        guard var edit = edits[photo], edit.history.record(edit.recipe, label: label) else { return }
         edits[photo] = edit
         save(photo)
     }

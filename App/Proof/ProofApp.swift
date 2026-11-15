@@ -107,6 +107,11 @@ struct ProofApp: App {
                 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
                 .disabled(!library.isEditing)
+                Button(library.isHistoryShown ? "Hide History" : "Show History") {
+                    library.isHistoryShown.toggle()
+                }
+                .keyboardShortcut("y")
+                .disabled(!library.isEditing)
                 CanvasColorMenu(library: library)
                 Divider()
                 Button("Zoom In") { library.zoom.zoomIn() }
@@ -234,7 +239,14 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            FolderSidebar(library: library)
+            Group {
+                // In Edit the leading column holds the History panel instead of the folders.
+                if library.isEditing {
+                    HistorySidebar(library: library)
+                } else {
+                    FolderSidebar(library: library)
+                }
+            }
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 360)
                 .toolbar(removing: library.isEditing ? .sidebarToggle : nil)
         } detail: {
@@ -314,10 +326,17 @@ struct ContentView: View {
         .onChange(of: library.isEditing) { _, isEditing in
             if isEditing {
                 browseColumnVisibility = columnVisibility
-                columnVisibility = .detailOnly
+                columnVisibility = library.isHistoryShown ? .all : .detailOnly
             } else {
                 columnVisibility = browseColumnVisibility
             }
+        }
+        .onChange(of: library.isHistoryShown) { _, isShown in
+            if library.isEditing { columnVisibility = isShown ? .all : .detailOnly }
+        }
+        // Dragging the History panel closed hides it as its button does.
+        .onChange(of: columnVisibility) { _, visibility in
+            if library.isEditing { library.isHistoryShown = visibility != .detailOnly }
         }
     }
 
@@ -360,6 +379,12 @@ struct ContentView: View {
                 library.isFilmstripShown.toggle()
             }
             .help(library.isFilmstripShown ? "Hide the filmstrip (⌥⌘F)" : "Show the filmstrip (⌥⌘F)")
+            // Beside the filmstrip's button: both show or hide a panel, and History opens on this side.
+            Button(library.isHistoryShown ? "Hide History" : "Show History",
+                   systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                library.isHistoryShown.toggle()
+            }
+            .help(library.isHistoryShown ? "Hide the photo's history (⌘Y)" : "Show the photo's history (⌘Y)")
         }
     }
 
@@ -759,11 +784,11 @@ struct AdjustmentsInspector: View {
                           reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
                 // The eyedropper after the pop-up; Custom is listed only while it is chosen.
                 HStack {
-                    MenuPopUp(title: Self.title(of: basic.whiteBalance),
+                    MenuPopUp(title: basic.whiteBalance.title,
                               items: WhiteBalancePreset.allCases
                                   .filter { $0 != .custom || basic.whiteBalance == .custom }
                                   .map { preset in
-                                      .action(Self.title(of: preset), isChecked: preset == basic.whiteBalance) {
+                                      .action(preset.title, isChecked: preset == basic.whiteBalance) {
                                           if preset == .auto {
                                               guard let renderer else { return }
                                               Task { await library.autoWhiteBalance(with: renderer) }
@@ -1416,20 +1441,6 @@ struct AdjustmentsInspector: View {
 
     private static func fading(_ start: Color, into end: Color) -> [Color] {
         [start, start.opacity(0.15), end.opacity(0.15), end]
-    }
-
-    private static func title(of preset: WhiteBalancePreset) -> String {
-        switch preset {
-        case .asShot: "As Shot"
-        case .auto: "Auto"
-        case .daylight: "Daylight"
-        case .cloudy: "Cloudy"
-        case .shade: "Shade"
-        case .tungsten: "Tungsten"
-        case .fluorescent: "Fluorescent"
-        case .flash: "Flash"
-        case .custom: "Custom"
-        }
     }
 
     private static func message(for unsaved: PhotoEdit.Unsaved) -> String {
