@@ -80,7 +80,7 @@ struct ProofApp: App {
             }
             CommandGroup(before: .sidebar) {
                 Menu("Filter") { FilterMenu(library: library) }
-                    .disabled(library.selection == nil || library.selection?.filter != nil)
+                    .disabled(library.selection == nil)
                 Divider()
                 Button("Reload Folders") { library.refresh() }
                     .keyboardShortcut("r")
@@ -315,8 +315,8 @@ struct ContentView: View {
     }
 
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
-        // A filter row is already filtered.
-        if library.selection != nil, library.selection?.filter == nil {
+        // On a filter row it narrows the row's photos further.
+        if library.selection != nil {
             ToolbarItem { filterButton }
         }
         if library.exports.isVisible {
@@ -343,10 +343,9 @@ struct ContentView: View {
         }
         // The filmstrip's controls, beside the back button, away from the tools that change the
         // photo. They share the back button's capsule: a ToolbarSpacer between them is ignored
-        // here, and a Divider draws as a short horizontal dash. A sidebar filter row is already
-        // filtered, so it has no filter button, as in Browse.
+        // here, and a Divider draws as a short horizontal dash.
         ToolbarItemGroup(placement: .navigation) {
-            if library.selection != nil, library.selection?.filter == nil {
+            if library.selection != nil {
                 filterButton
             }
             Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip",
@@ -401,13 +400,13 @@ struct ContentView: View {
         return !filter.isEmpty && !library.visiblePhotos.contains { filter.includes($0.photo) }
     }
 
-    /// Centered in the card, at the filmstrip's height so the photo doesn't move. Clear Filter is
-    /// offered only for the toolbar's filter; a sidebar filter row is changed in the sidebar.
+    /// Centered in the card, at the filmstrip's height so the photo doesn't move. Clear Filter
+    /// clears the toolbar's filter; a sidebar filter row is changed in the sidebar.
     private var filmstripEmptyState: some View {
         VStack(spacing: 8) {
             Text("No photos match the filter.")
                 .foregroundStyle(.secondary)
-            if library.selection?.filter == nil, !library.filter.isEmpty {
+            if !library.filter.isEmpty {
                 Button("Clear Filter") { library.filter = .none }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
@@ -615,7 +614,7 @@ struct ContentView: View {
     }
 
     private var emptyTitle: String {
-        if let row = library.selection?.filter {
+        if let row = library.selection?.filter, library.filter.isEmpty {
             return "No \(row.rating.map { "\($0)-Star" } ?? row.title) Photos"
         }
         return library.filter.isEmpty ? "No Photos" : "No Matching Photos"

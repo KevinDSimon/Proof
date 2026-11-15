@@ -1,7 +1,7 @@
 # 0033. One filter for Browse and the filmstrip
 
 Date: 2026-11-13
-Status: Accepted
+Status: Accepted; the filter button on filter rows is superseded by 0037
 
 ## Context
 Issue #160 asks for a way to narrow the filmstrip in Edit, such as to flagged or 4-star photos, so moving between photos skips the rest. The filmstrip already showed the photos that pass the Browse filter, but the filter couldn't be changed in Edit. The project rules keep browsing controls out of Edit. The filmstrip could have had a filter of its own, but then the grid and the filmstrip could show different photos, and returning to Browse could select a photo the grid hides.

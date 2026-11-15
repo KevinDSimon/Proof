@@ -88,6 +88,42 @@ struct FolderContentsTests {
         #expect(photos.filter(FilterCriteria(flag: .rejected, rating: 5).includes) == [rejectedFive])
     }
 
+    @Test("The toolbar filter narrows a sidebar row, and parts that can't both hold match nothing")
+    func narrowedCriteria() {
+        let flaggedFour = FolderContents.Photo(name: "a", isEdited: true, metadata: .init(rating: 4, flag: .flagged))
+        let flaggedFive = FolderContents.Photo(name: "b", isEdited: false, metadata: .init(rating: 5, flag: .flagged))
+        let five = FolderContents.Photo(name: "c", isEdited: true, metadata: .init(rating: 5))
+        let rejectedThree = FolderContents.Photo(name: "d", isEdited: false, metadata: .init(rating: 3, flag: .rejected))
+        let rejectedFive = FolderContents.Photo(name: "e", isEdited: false, metadata: .init(rating: 5, flag: .rejected))
+        let photos = [flaggedFour, flaggedFive, five, rejectedThree, rejectedFive]
+        func shown(_ row: PhotoFilter, _ toolbar: FilterCriteria) -> [FolderContents.Photo] {
+            photos.filter(row.criteria.narrowed(by: toolbar).includes)
+        }
+
+        #expect(shown(.flagged, .none) == photos.filter(PhotoFilter.flagged.includes))
+        #expect(shown(.flagged, FilterCriteria(rating: 5)) == [flaggedFive])
+        #expect(shown(.flagged, FilterCriteria(rating: 4, includesHigherRatings: true)) == [flaggedFour, flaggedFive])
+        #expect(shown(.edited, FilterCriteria(flag: .unflagged)) == [five])
+        #expect(shown(.fiveStars, FilterCriteria(rating: 4, includesHigherRatings: true)) == [flaggedFive, five])
+        // A rating inside Rejected keeps rejected photos, as Rejected and 3 Stars together do.
+        #expect(shown(.rejected, FilterCriteria(rating: 3)) == [rejectedThree])
+        #expect(shown(.fiveStars, FilterCriteria(flag: .rejected)) == [rejectedFive])
+        // Parts that contradict each other match no photo, and the result isn't empty criteria.
+        for (row, toolbar) in [(PhotoFilter.flagged, FilterCriteria(flag: .rejected)),
+                               (.fiveStars, FilterCriteria(rating: 4)),
+                               (.threeStars, FilterCriteria(rating: 4, includesHigherRatings: true)),
+                               (.edited, FilterCriteria(edits: .unedited))] {
+            #expect(shown(row, toolbar).isEmpty)
+            #expect(!row.criteria.narrowed(by: toolbar).isEmpty)
+        }
+        // Two "or higher" ratings keep the higher one, whichever side sets it.
+        #expect(FilterCriteria(rating: 2, includesHigherRatings: true)
+                    .narrowed(by: FilterCriteria(rating: 4, includesHigherRatings: true))
+                == FilterCriteria(rating: 4, includesHigherRatings: true))
+        #expect(FilterCriteria(rating: 3, includesHigherRatings: true).narrowed(by: FilterCriteria(rating: 5))
+                == FilterCriteria(rating: 5))
+    }
+
     @Test("Criteria name and count the parts that are set, in menu order")
     func criteriaSummary() {
         #expect(FilterCriteria.none.summary.isEmpty)

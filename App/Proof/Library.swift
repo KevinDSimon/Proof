@@ -91,8 +91,8 @@ final class Library {
     /// While All Photos or a filter row is selected, whether folders under the saved locations are
     /// still being read.
     private(set) var isReadingAllPhotos = false
-    /// The toolbar filter, which narrows the selected folder or All Photos. Filter rows in the
-    /// sidebar apply their own filter instead.
+    /// The toolbar filter, which narrows the selected folder, All Photos or filter row. A filter
+    /// row's own criteria apply first, and this narrows them further (#182).
     /// The filmstrip's filter menu changes it too, so the two stay the same (#160).
     var filter = FilterCriteria.none {
         didSet {
@@ -244,9 +244,9 @@ final class Library {
         availableRoots.flatMap { ListedPhoto.photos(under: $0, in: contents) }
     }
 
-    /// The filter that applies: a filter row's, or the toolbar's.
+    /// The filter that applies: a filter row's narrowed by the toolbar's, or the toolbar's.
     var activeFilter: FilterCriteria {
-        selection?.filter?.criteria ?? filter
+        selection?.filter.map { $0.criteria.narrowed(by: filter) } ?? filter
     }
 
     /// The listed photos that pass the filter.
