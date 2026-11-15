@@ -4,7 +4,7 @@ Date: 2026-11-08
 Status: Accepted. The appearance and canvas points of the 2026-11-08 amendment are superseded by [0036](0036-dark-interface-canvas-color.md).
 
 ## Context
-Apple's guidelines put Liquid Glass in a layer for controls and navigation that floats above content, and say not to use it in the content layer. They also suggest that a photo editor's editing mode shows its own toolbar controls and restores the standard ones when it ends. Photos, Lightroom and Photomator all separate browsing a folder from editing a photo, and none of them shows browsing filters while editing.
+Apple's guidelines put Liquid Glass in a layer for controls and navigation that floats above content, and say not to use it in the content layer. They also suggest that a photo editor's editing mode shows its own toolbar controls and restores the standard ones when it ends. Photo editors commonly separate browsing a folder from editing a photo, and don't show browsing filters while editing.
 
 Issue #6 adds the first panel, the Folders sidebar, and the rest of Phase 1 and Phase 2 add a filmstrip and an edit inspector. The app should feel like a standard Mac app on the current macOS. On macOS 26 and later, sidebars and toolbars are translucent glass, and apps can extend their content underneath them. A photo editor needs the opposite: the person judges color and tone, so nothing should tint or cover the photo.
 

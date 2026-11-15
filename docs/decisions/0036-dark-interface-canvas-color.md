@@ -4,7 +4,7 @@ Date: 2026-11-15
 Status: Accepted
 
 ## Context
-Since #38 the window followed the system appearance in Browse and Edit, and the canvas with it: white in light, 13% gray in dark ([0004](0004-window-layout.md), amendment of 2026-11-08). In the light appearance the photo was judged against a white surround, which makes it look darker, and the bright sidebar and inspector competed with it. Lightroom and Capture One keep their interface dark and let the surround behind the photo be changed instead.
+Since #38 the window followed the system appearance in Browse and Edit, and the canvas with it: white in light, 13% gray in dark ([0004](0004-window-layout.md), amendment of 2026-11-08). In the light appearance the photo was judged against a white surround, which makes it look darker, and the bright sidebar and inspector competed with it. Many photo editors keep their interface dark and let the surround behind the photo be changed instead.
 
 ## Decision
 Proof's interface is dark in both system appearances. `NSApplication.appearance` is set to dark when the app starts, so the sidebar, grid, inspector, toolbar, menus, sheets and the color panel all follow.

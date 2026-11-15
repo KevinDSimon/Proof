@@ -6,21 +6,7 @@ Status: Accepted
 ## Context
 Issue #161 asks whether the order of cards in the adjustments inspector follows a sensible editing workflow. The cards were added one phase at a time, each below the last, so the order reflects when they were built rather than when they are used. Card order changes only the panel; the pipeline's processing order is separate, and no saved edit renders differently.
 
-The order before this decision, compared with Lightroom Classic's Develop panels and Capture One's default tool tabs:
-
-| Proof | Lightroom Classic | Capture One |
-| --- | --- | --- |
-| Histogram | Histogram | Histogram |
-| Info | | |
-| White Balance | Basic: Profile, White Balance, Tone, Presence | Exposure tab: Exposure, High Dynamic Range, Levels, Curve, Clarity, Vignetting |
-| Basic: tone, Texture, Clarity, Dehaze, Black & White, Vibrance, Saturation | Tone Curve | Color tab: White Balance, Color Balance, Color Editor, Black & White |
-| Selective Color | HSL / Color, Color Grading | Details tab: Sharpening, Noise Reduction, Film Grain |
-| Curve | Detail | Lens tab: Lens Correction |
-| Detail | Lens Corrections | Composition tab: Crop, Rotation, Keystone |
-| Lens Corrections | Transform | Styles, in a tool of their own |
-| Transform | Effects: Vignetting, Grain | |
-| Effects: Vignette, Grain, Halation, Bloom | Calibration | |
-| Looks | | |
+The order before this decision: Histogram, Info, White Balance, Basic (tone, Texture, Clarity, Dehaze, Black & White, Vibrance, Saturation), Selective Color, Curve, Detail, Lens Corrections, Transform, Effects (Vignette, Grain, Halation, Bloom) and Looks.
 
 ## Decision
 The owner chose this order:
@@ -37,12 +23,12 @@ The owner chose this order:
 10. Transform
 11. Effects
 
-- Looks moves from the bottom to just above White Balance. A look is usually where an edit starts, and the other adjustments refine it; Lightroom puts its Profile in the same place, at the top of Basic. Looks starts off and closed unless the photo has a look, so on most photos it adds one row above White Balance.
-- Curve moves above Selective Color, so tone comes before color, as in Lightroom.
+- Looks moves from the bottom to just above White Balance. A look is usually where an edit starts, and the other adjustments refine it. Looks starts off and closed unless the photo has a look, so on most photos it adds one row above White Balance.
+- Curve moves above Selective Color, so tone comes before color.
 - Which cards start open doesn't change: White Balance, Basic and Lens Corrections are on; the others start off unless the photo uses them (`AdjustmentGroup.initiallyOff`). Lens Corrections stays on because its switch also turns off the lens profile corrections read from the file.
-- Crop and straighten stay a separate tool rather than a card, as in Lightroom and Photos. The crop tool needs the whole photo on the canvas, and Done or Cancel is its comparison.
-- Vignette stays in Effects and lens vignetting in Lens Corrections, the same split as Lightroom.
-- Every card in the adjustments inspector folds with a disclosure arrow beside its title, as the Info card does and as Lightroom's and Capture One's panels do. This changes decision 0015, where the switch alone opened and closed a card, so a card in use couldn't be put out of the way without hiding its adjustments from the photo. Now:
+- Crop and straighten stay a separate tool rather than a card. The crop tool needs the whole photo on the canvas, and Done or Cancel is its comparison.
+- Vignette stays in Effects and lens vignetting in Lens Corrections.
+- Every card in the adjustments inspector folds with a disclosure arrow beside its title, as the Info card does. This changes decision 0015, where the switch alone opened and closed a card, so a card in use couldn't be put out of the way without hiding its adjustments from the photo. Now:
   - A click on the arrow, the title or the empty space beside it folds or unfolds the card; Reset and the switch keep their own clicks. A folded card that is on keeps its adjustments on the photo.
   - A card that is off is closed, as before. Unfolding it turns it on, since an off card has nothing to show.
   - Turning a card's switch on unfolds it, so the controls just turned on are visible.

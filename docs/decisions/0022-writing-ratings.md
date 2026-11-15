@@ -8,7 +8,7 @@ Decision 0002 said Proof reads ratings from XMP but doesn't write them, so culli
 
 ## Decision
 - Write to the sidecar Proof reads (decision 0005): the most recently modified of `IMG.xmp` and `IMG.DNG.xmp`, in any capitalization, under its name on disk. With no sidecar, create `IMG.xmp`, the name Photomator, Lightroom and Capture One use. Never write into the DNG or any other original.
-- Change only `xmp:Rating` (0 to 5), `xmpDM:pick` (1 flagged, 0 unflagged, -1 rejected) and `xmpDM:good` (`True` flagged, `False` rejected, removed when unflagged). A rejected photo keeps its stars, as in Lightroom; `xmp:Rating` is not set to -1.
+- Change only `xmp:Rating` (0 to 5), `xmpDM:pick` (1 flagged, 0 unflagged, -1 rejected) and `xmpDM:good` (`True` flagged, `False` rejected, removed when unflagged). A rejected photo keeps its stars; `xmp:Rating` is not set to -1.
 - Edit the sidecar as text rather than parse it and write it out again. Tags are found by namespace URI under whatever prefix the file binds, and changed where they are, as an attribute or an element. A missing tag is added to the first `rdf:Description`: as an element when that description holds its properties as elements (Photomator), otherwise as an attribute lined up with the others (Lightroom). A missing namespace is declared on the same description. Everything else in the file keeps its bytes.
 - Read the result back before writing. If it doesn't give the intended rating and flag with the label unchanged, or the file isn't XMP, leave the file alone and report an error.
 - A new sidecar holds the rating, the flag and the label, if the photo has one. The label is taken from the XMP embedded in the photo when needed, because the new sidecar takes the place of that XMP in other apps.

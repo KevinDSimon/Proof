@@ -4,7 +4,7 @@ Date: 2026-11-07
 Status: Accepted
 
 ## Context
-Proof needs RAW decoding, a Lightroom-style Basic panel, curves, LUTs and later masks. Options considered: Apple's Core Image with `CIRAWFilter`, building on Redlamp's open-source Swift and Metal engine, or a custom engine on LibRaw.
+Proof needs RAW decoding, a Basic panel of tone and color sliders, curves, LUTs and later masks. Options considered: Apple's Core Image with `CIRAWFilter`, building on an existing open-source Swift and Metal engine, or a custom engine on LibRaw.
 
 ## Decision
 Use Core Image and `CIRAWFilter`, with small custom Metal kernels where Core Image has no built-in filter (tone lookups, and later Texture, Clarity and Dehaze).

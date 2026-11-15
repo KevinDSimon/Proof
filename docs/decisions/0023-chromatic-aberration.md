@@ -4,7 +4,7 @@ Date: 2026-11-11
 Status: Accepted
 
 ## Context
-Issue #78 adds a Lens Corrections card. Lightroom's has a Remove Chromatic Aberration checkbox beside its profile corrections. `CIRAWFilter` has no setting for it, and the lens profiles it can apply are absent from many RAW files, including every Leica M DNG. Lateral chromatic aberration is the lens focusing red and blue at a slightly different size from green: colored fringes along edges that grow from nothing at the center toward the corners. Longitudinal aberration, the purple and green fringes around out-of-focus highlights, doesn't follow the center and isn't addressed here. The sample photo (`L1000725.DNG`, Summicron-M 35 ASPH on an M11) measures red at about 1.0001 and blue at about 0.99998, under a pixel at the corners at full resolution.
+Issue #78 adds a Lens Corrections card with a Remove Chromatic Aberration checkbox beside the profile corrections. `CIRAWFilter` has no setting for it, and the lens profiles it can apply are absent from many RAW files, including every Leica M DNG. Lateral chromatic aberration is the lens focusing red and blue at a slightly different size from green: colored fringes along edges that grow from nothing at the center toward the corners. Longitudinal aberration, the purple and green fringes around out-of-focus highlights, doesn't follow the center and isn't addressed here. The sample photo (`L1000725.DNG`, Summicron-M 35 ASPH on an M11) measures red at about 1.0001 and blue at about 0.99998, under a pixel at the corners at full resolution.
 
 ## Decision
 - Model lateral aberration as one scale per channel about the photo's center, relative to green, as lensfun's linear `tca` term does. Correcting reads red and blue at those scales, so each lines up with green.

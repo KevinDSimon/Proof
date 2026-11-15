@@ -4,7 +4,7 @@ Date: 2026-11-08
 Status: Accepted
 
 ## Context
-Phase 0 asks for an exposure slider that responds in real time on local disk and on the Synology share. Issue #4 measured a 60 MP Leica M11 DNG (`L1000725.DNG`, 57 MB) on an Apple M2 against three targets: embedded preview under 100 ms, a slider render under 50 ms, and a full render under 2 s. Lightroom-style smart previews (a smaller copy of each photo, decoded and cached locally) were the fallback if the RAW file was too slow to edit directly.
+Phase 0 asks for an exposure slider that responds in real time on local disk and on the Synology share. Issue #4 measured a 60 MP Leica M11 DNG (`L1000725.DNG`, 57 MB) on an Apple M2 against three targets: embedded preview under 100 ms, a slider render under 50 ms, and a full render under 2 s. Smart previews (a smaller copy of each photo, decoded and cached locally) were the fallback if the RAW file was too slow to edit directly.
 
 Median of repeated reads; the first read is listed separately because it is the only one that can miss the file cache.
 

@@ -4,7 +4,7 @@ Date: 2026-11-12
 Status: Accepted
 
 ## Context
-Issue #92 adds film effects: grain, halation and bloom. Grain is Lightroom's (Amount, Size, Roughness). Lightroom has no halation or bloom. Redlamp (github.com/pdcgomes/redlamp, MPL-2.0) has all three, and its code was read for the method; none of it was copied. The owner wants all three in one card with the existing vignette, as in Lightroom's Effects panel, and in one pull request.
+Issue #92 adds film effects: grain, halation and bloom. Grain has Amount, Size and Roughness. The owner wants all three in one card with the existing vignette, and in one pull request.
 
 Core Image doesn't cover them. It has no grain filter, only `CIRandomGenerator`, whose noise is tied to pixels: it would be finer on an export than on the canvas. `CIBloom` and `CIGloom` blur the whole image rather than only the highlights, so they haze the shadows, can't tell a lamp from a bright wall, and spread the same in every color, which halation doesn't.
 
@@ -19,12 +19,12 @@ Core Image doesn't cover them. It has no grain filter, only `CIRandomGenerator`,
 - **Grain** is the last stage, after the vignette, on the cropped frame.
   - It is value noise in two octaves: grains of the chosen size, and grains half as large mixed in by Roughness. It is added to gamma-encoded values, where it looks even, and is strongest in the low midtones, where a negative is thinnest.
   - The grain is placed and sized in units of the cropped frame. Its long edge is 6000 units, so at Size 25 a grain is about two pixels on a 24-megapixel photo.
-  - Where a render is smaller than that, each pixel shows the average of the grains it covers: one random value per pixel, scaled down by how many grains it holds. The canvas therefore shows the grain an export shrunk to the same size would have; a test checks that the two match within 35%. Grain is judged at 100%, as in Lightroom.
+  - Where a render is smaller than that, each pixel shows the average of the grains it covers: one random value per pixel, scaled down by how many grains it holds. The canvas therefore shows the grain an export shrunk to the same size would have; a test checks that the two match within 35%. Grain is judged at 100%.
   - The hash is the PCG hash from Jarzynski and Olano, "Hash Functions for GPU Rendering" (2020).
 - With an effect's Amount at 0 its stage is skipped, so saved edits render as before and `processVersion` stays 1.
 
 ## Consequences
-- Redlamp's color grain, which gives each color channel its own grain, is left out for now. It can be added later as a new field without changing how these values render.
+- Color grain, which gives each color channel its own grain, is left out for now. It can be added later as a new field without changing how these values render.
 - Halation shows only where a photo has bright highlights against darker areas: street lights, the sun, a window at night. On a photo without them it changes little, as on film. The sample photo has none, so its reference render raises Exposure until the sky clips.
 - A light smaller than about one pixel of the 2048-pixel copy is averaged with its surroundings before it is measured, so it may not get the clip-point boost. At that size it barely glows on film either.
 - Horizon detection renders without any effect, since grain and glow aren't part of the scene.

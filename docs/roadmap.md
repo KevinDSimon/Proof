@@ -6,7 +6,7 @@ Each phase is a GitHub milestone, and each item an issue. Estimates assume part-
 | --- | --- | --- |
 | Phase 0: Spike | A 60 MP M11 DNG opens and an exposure slider responds in real time, local and on the NAS | Done |
 | Phase 1: Browser panels | Folders panel, thumbnails, star filter from XMP, filmstrip | Done |
-| Phase 2: Basic panel | Lightroom's Basic panel minus Texture and Clarity; Dehaze; histogram; crop and straighten; undo | Done |
+| Phase 2: Basic panel | Basic panel without Texture and Clarity; Dehaze; histogram; crop and straighten; undo | Done |
 | Phase 3: Curves and LUTs | Tone curve per channel; `.cube` LUTs with previews and strength; inspector cards | Done |
 | Phase 4: Edit comfortably | Zoom to 100% and beyond; save ratings and flags to XMP sidecars; sharpening and noise reduction; Texture and Clarity; before/after; auto and eyedropper white balance; Vignette | Done |
 | Phase 5: Geometry | Manual distortion and lens vignetting, lens profile corrections from the file, manual and automatic perspective | Done |
