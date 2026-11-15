@@ -2,7 +2,7 @@
 
 A Mac RAW photo editor built on Core Image. It edits photos where they already live (a local folder, an external drive or a NAS), saves edits in a sidecar next to each file, and never changes the original.
 
-Status: pre-alpha. Nothing to download yet.
+Status: pre-alpha, for testers. See [Install](#install).
 
 ## v1 scope
 
@@ -24,15 +24,28 @@ Status: pre-alpha. Nothing to download yet.
 
 After v1: spot healing and masks as layers (v1.1), then presets and virtual copies (v1.2). An iPad and iPhone version comes after the Mac app. See [docs/roadmap.md](docs/roadmap.md).
 
+## Install
+
+Proof needs macOS 27 or later on a Mac with Apple silicon (M1 or later). It doesn't run on Intel Macs.
+
+1. Download the `.dmg` from the latest release on the [Releases page](https://github.com/KevinDSimon/Proof/releases).
+2. Open it and drag Proof to the Applications shortcut beside it.
+3. Open Proof from Applications. It's signed and notarized by Apple, so it opens without a warning; the first time, macOS may ask to confirm that you want to open an app downloaded from the internet.
+4. Choose File › Add Folder… (⌘O) and pick a folder of RAW photos. Proof runs in the App Sandbox, so it sees only folders you choose; it remembers them the next time it opens.
+
+Proof writes its edits and ratings to files beside your photos and never changes the photos themselves.
+
 ## Repository layout
 
 | Path | What it is |
 | --- | --- |
 | `App/Proof.xcodeproj` | The Mac app (SwiftUI, App Sandbox on). Depends on the local `ProofKit` package. |
 | `App/Proof` | The Mac app's source files and entitlements |
+| `App/Version.xcconfig` | The app's version and build number |
 | `Sources/ProofKit` | Platform-neutral engine: edit recipe, render pipeline, sidecars, XMP, LUT parsing. No AppKit, UIKit or SwiftUI. |
 | `Tests/ProofKitTests` | Tests for ProofKit (Swift Testing) |
-| `docs/` | Architecture, edit file format, roadmap and decision records |
+| `docs/` | Architecture, edit file format, release steps, roadmap and decision records |
+| `scripts/release.sh` | Builds a signed, notarized `.dmg` for a release (see `docs/releasing.md`) |
 | `CLAUDE.md` | Rules for AI agents working in this repo |
 
 ## Building
@@ -70,7 +83,7 @@ To run the Mac app:
 2. Choose the **Proof** scheme and **My Mac** as the destination.
 3. Choose Product > Run (⌘R). Press ⌘O and choose a folder of RAW photos, select a photo and press Return to edit it.
 
-The app is signed to run locally, so no Apple developer team is needed. To build it without Xcode's interface:
+The app is signed to run locally, so no Apple developer team is needed. Release builds for testers are signed and notarized by `scripts/release.sh`; see [docs/releasing.md](docs/releasing.md). To build it without Xcode's interface:
 
 ```bash
 xcodebuild -project App/Proof.xcodeproj -scheme Proof build
