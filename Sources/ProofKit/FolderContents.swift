@@ -152,10 +152,51 @@ public struct FilterCriteria: Equatable, Sendable {
         self.edits = edits
     }
 
+    /// Set only by `narrowed(by:)`, when two criteria ask for different values of one part.
+    public private(set) var matchesNothing = false
+
     public static let none = FilterCriteria()
 
     /// Nothing is narrowed: every photo passes.
-    public var isEmpty: Bool { activeCount == 0 }
+    public var isEmpty: Bool { activeCount == 0 && !matchesNothing }
+
+    /// A sidebar filter row's criteria narrowed further by the toolbar's: one set of criteria
+    /// that a photo passes only if it would pass both. Merged into one rather than checked one
+    /// after the other, so the rule that a rating leaves rejected photos out sees either side's
+    /// flag: Rejected with 3 Stars shows rejected 3-star photos, whichever side sets which.
+    /// Parts that can't both hold, such as Flagged and Rejected, match no photo.
+    public func narrowed(by other: FilterCriteria) -> FilterCriteria {
+        var merged = self
+        merged.matchesNothing = matchesNothing || other.matchesNothing
+        func combine<Value: Equatable>(_ mine: Value?, _ theirs: Value?) -> Value? {
+            guard let mine, let theirs else { return mine ?? theirs }
+            if mine != theirs { merged.matchesNothing = true }
+            return mine
+        }
+        merged.flag = combine(flag, other.flag)
+        merged.edits = combine(edits, other.edits)
+        switch (rating, other.rating) {
+        case (nil, _):
+            merged.rating = other.rating
+            merged.includesHigherRatings = other.includesHigherRatings
+        case (_, nil):
+            break
+        case let (mine?, theirs?):
+            switch (includesHigherRatings, other.includesHigherRatings) {
+            case (true, true):
+                merged.rating = max(mine, theirs)
+            case (false, false):
+                if mine != theirs { merged.matchesNothing = true }
+            case (false, true):
+                if mine < theirs { merged.matchesNothing = true }
+            case (true, false):
+                merged.rating = theirs
+                merged.includesHigherRatings = false
+                if theirs < mine { merged.matchesNothing = true }
+            }
+        }
+        return merged
+    }
 
     /// How many parts are set, from 0 to 3, which the toolbar button shows.
     public var activeCount: Int {
@@ -163,6 +204,7 @@ public struct FilterCriteria: Equatable, Sendable {
     }
 
     public func includes(_ photo: FolderContents.Photo) -> Bool {
+        if matchesNothing { return false }
         let metadata = photo.metadata
         if let flag, (metadata?.flag ?? .unflagged) != flag { return false }
         if let rating {
