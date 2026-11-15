@@ -1,7 +1,7 @@
 # 0004. Native macOS window layout with panels beside the photo
 
 Date: 2026-11-08
-Status: Accepted
+Status: Accepted. The appearance and canvas points of the 2026-11-08 amendment are superseded by [0036](0036-dark-interface-canvas-color.md).
 
 ## Context
 Apple's guidelines put Liquid Glass in a layer for controls and navigation that floats above content, and say not to use it in the content layer. They also suggest that a photo editor's editing mode shows its own toolbar controls and restores the standard ones when it ends. Photos, Lightroom and Photomator all separate browsing a folder from editing a photo, and none of them shows browsing filters while editing.

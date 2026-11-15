@@ -158,11 +158,9 @@ extension Library {
     }
 }
 
-/// The inspector's cards in a scrolling column on the canvas's own gray, 16 pt from every edge,
-/// so the panel and the photo read as one surface.
+/// The inspector's cards in a scrolling column on the interface's dark gray, 16 pt from every edge.
 struct InspectorPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollView {
@@ -171,6 +169,13 @@ struct InspectorPanel<Content: View>: View {
             }
             .padding(16)
         }
-        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
+        .background(Color.interfaceBackground.ignoresSafeArea())
     }
+}
+
+extension Color {
+    /// The window's own gray behind the sidebar, grid and inspector (#42): the 13% gray of the
+    /// default canvas, so in Edit the panels and the photo read as one surface until another canvas
+    /// color is chosen.
+    static let interfaceBackground = Color(white: CanvasColor.darkGray.components.red)
 }

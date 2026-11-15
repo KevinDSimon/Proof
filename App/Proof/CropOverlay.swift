@@ -9,7 +9,8 @@ struct CropOverlay: View {
     let library: Library
     let frame: CropFrame
     let aspect: AspectRatio?
-    let backdropGray: Double
+    /// The canvas color, which the photo outside the rectangle fades toward.
+    let backdrop: Color
 
     /// The rectangle when the current drag started; `nil` between drags.
     @State private var dragStart: CropFrame?
@@ -223,10 +224,10 @@ struct CropOverlay: View {
 
     private func draw(in context: inout GraphicsContext, size: CGSize, layout: Layout) {
         let box = layout.box
-        // Fades the photo outside the rectangle toward the canvas, in either appearance.
+        // Fades the photo outside the rectangle toward the canvas, whatever its color.
         var outside = Path(CGRect(origin: .zero, size: size))
         outside.addRect(box)
-        context.fill(outside, with: .color(Color(white: backdropGray).opacity(0.7)), style: FillStyle(eoFill: true))
+        context.fill(outside, with: .color(backdrop.opacity(0.7)), style: FillStyle(eoFill: true))
 
         let line = Color.white
         var shadowed = context

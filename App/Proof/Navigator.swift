@@ -6,8 +6,6 @@ import SwiftUI
 struct Navigator: View {
     let zoom: CanvasZoom
     let preview: CGImage
-    /// The canvas's gray, which the inspector beside it shares.
-    let backdropGray: Double
     /// The long edge, in points.
     private static let length: CGFloat = 160
     private static let padding: CGFloat = 5
@@ -39,7 +37,7 @@ struct Navigator: View {
             .padding(Self.padding)
             .background {
                 let plate = RoundedRectangle(cornerRadius: SelectionOutline.cornerRadius(padding: Self.padding))
-                plate.fill(Color(white: backdropGray))
+                plate.fill(Color.interfaceBackground)
                     .overlay(plate.strokeBorder(SelectionOutline.color, lineWidth: SelectionOutline.lineWidth))
             }
             .help("Click or drag to move around the photo")

@@ -6,6 +6,12 @@ import ProofKit
 struct ProofApp: App {
     @State private var library = Library()
 
+    init() {
+        // Always dark, whatever the system appearance (#42), so the photo is judged against a calm
+        // surround. Set on the app rather than the window so menus, sheets and panels follow.
+        NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+    }
+
     var body: some Scene {
         // One window, like other photo editors: the sidebar selection and filter belong to it.
         Window("Proof", id: "main") {
@@ -101,6 +107,7 @@ struct ProofApp: App {
                 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
                 .disabled(!library.isEditing)
+                CanvasColorMenu(library: library)
                 Divider()
                 Button("Zoom In") { library.zoom.zoomIn() }
                     .keyboardShortcut("+")
@@ -240,7 +247,7 @@ struct ContentView: View {
                         // Declared on the grid's column, as Edit's are on the photo's, so the
                         // toolbar keeps its groups apart.
                         .toolbar { browseToolbar }
-                        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
+                        .background(Color.interfaceBackground.ignoresSafeArea())
                 }
             }
             .inspector(isPresented: Binding(get: { library.isEditing ? library.isInspectorShown : library.isInfoShown },
@@ -445,7 +452,7 @@ struct ContentView: View {
         // The canvas runs under the toolbar glass and stops at the inspector; the photo stays inside the safe area.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Never under the inspector on the trailing edge: its material would show the gray through.
-        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme))
+        .background(library.canvasColor.color
             .ignoresSafeArea(edges: [.top, .leading, .bottom]))
         // Declared on the photo's column rather than the window, so the button sits over the
         // photo and stays put when the inspector opens and closes.
@@ -627,13 +634,11 @@ struct EditCanvas: View {
     let library: Library
     let url: URL
     let renderer: RAWRenderer
-    @Environment(\.colorScheme) private var colorScheme
     /// The photo has neither its render nor a cached thumbnail to show yet.
     @State private var isWaiting = false
 
     var body: some View {
-        let backdrop = PhotoCanvas.backdropGray(for: colorScheme)
-        PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdropGray: backdrop,
+        PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdrop: library.canvasColor,
                     angle: library.isCropping ? library.selectedCrop.angle : 0,
                     viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailGrid.cache) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
@@ -650,7 +655,8 @@ struct EditCanvas: View {
         }
         .overlay {
             if library.isCropping, let frame = library.selectedCropFrame {
-                CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect, backdropGray: backdrop)
+                CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect,
+                           backdrop: library.canvasColor.color)
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
             } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
@@ -664,7 +670,7 @@ struct EditCanvas: View {
         // toolbar's zoom pop-up.
         .overlay(alignment: .topTrailing) {
             if let preview = library.zoom.preview, library.zoom.isEnabled, library.zoom.canPan {
-                Navigator(zoom: library.zoom, preview: preview, backdropGray: backdrop)
+                Navigator(zoom: library.zoom, preview: preview)
                     .padding(12)
                     .transition(.opacity)
             }

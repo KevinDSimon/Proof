@@ -5,7 +5,6 @@ import SwiftUI
 struct FolderSidebar: View {
     @Bindable var library: Library
     @State private var removing: SavedLocation?
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         List(selection: $library.selection) {
@@ -28,7 +27,7 @@ struct FolderSidebar: View {
         // The same plain color as the grid and the photo's canvas, instead of the sidebar material,
         // so the window reads as one surface.
         .scrollContentBackground(.hidden)
-        .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
+        .background(Color.interfaceBackground.ignoresSafeArea())
         .onDeleteCommand {
             removing = library.locations.first {
                 library.selection == .folder(FileReference(locationID: $0.id, relativePath: []))

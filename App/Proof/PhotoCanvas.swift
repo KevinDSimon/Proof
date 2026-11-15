@@ -5,18 +5,11 @@ import SwiftUI
 
 /// Shows one RAW photo in a Metal-backed view, fitted to the view or zoomed as `viewport` says.
 struct PhotoCanvas: NSViewRepresentable {
-    /// The neutral gray around the photo: white in the light appearance, 13% gray in the dark.
-    /// Neutral grays match in Display P3 and sRGB, so the canvas and the SwiftUI backdrop around
-    /// it meet without a seam.
-    static func backdropGray(for colorScheme: ColorScheme) -> Double {
-        colorScheme == .dark ? 0.13 : 1
-    }
-
     let url: URL
     let renderer: RAWRenderer
     var recipe: EditRecipe
-    /// The gray of the canvas around the photo, from 0 to 1.
-    var backdropGray: Double
+    /// The color of the canvas around the photo.
+    var backdrop: CanvasColor
     /// Degrees clockwise to tilt the photo around its center as it is drawn. The crop tool
     /// straightens this way, without waiting for a render.
     var angle: Double = 0
@@ -56,7 +49,7 @@ struct PhotoCanvas: NSViewRepresentable {
         context.coordinator.onError = onError
         context.coordinator.onHistogram = onHistogram
         context.coordinator.onWaiting = onWaiting
-        context.coordinator.setBackdrop(backdropGray)
+        context.coordinator.setBackdrop(backdrop)
         context.coordinator.setAngle(angle)
         context.coordinator.setViewport(viewport)
         context.coordinator.show(url, recipe: recipe)
@@ -174,7 +167,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
     private var resizeTask: Task<Void, Never>?
 
     private var background = CIColor(red: 0, green: 0, blue: 0, colorSpace: RAWRenderer.colorSpace)!
-    private var backdropGray: Double?
+    private var backdrop: CanvasColor?
     private var angle = 0.0
     private static let log = Logger(subsystem: "Proof", category: "render")
 
@@ -185,10 +178,11 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         commandQueue = renderer.device.makeCommandQueue()
     }
 
-    func setBackdrop(_ gray: Double) {
-        guard gray != backdropGray else { return }
-        backdropGray = gray
-        background = CIColor(red: gray, green: gray, blue: gray, colorSpace: RAWRenderer.colorSpace)!
+    func setBackdrop(_ backdrop: CanvasColor) {
+        guard backdrop != self.backdrop else { return }
+        self.backdrop = backdrop
+        let color = backdrop.components
+        background = CIColor(red: color.red, green: color.green, blue: color.blue, colorSpace: RAWRenderer.colorSpace)!
         view?.needsDisplay = true
     }
 
@@ -392,5 +386,14 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
                 self.measureLatest()
             }
         }
+    }
+}
+
+extension CanvasColor {
+    /// In Display P3, as the Metal canvas draws it, so the SwiftUI backdrop around it meets it
+    /// without a seam.
+    var color: Color {
+        let color = components
+        return Color(.displayP3, red: color.red, green: color.green, blue: color.blue)
     }
 }
