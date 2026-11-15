@@ -92,8 +92,9 @@ xcodebuild -exportArchive \
 [[ -d "$app" ]] || fail "The export failed."
 
 codesign --verify --deep --strict "$app"
-codesign --display --verbose=2 "$app" 2>&1 | grep -q 'flags=.*runtime' \
-  || fail "The exported app isn't signed with the hardened runtime."
+# Captured first: grep -q stops reading early, which pipefail reports as a failure.
+signature=$(codesign --display --verbose=2 "$app" 2>&1)
+[[ "$signature" == *flags=*runtime* ]] || fail "The exported app isn't signed with the hardened runtime."
 
 # The app is notarized and stapled on its own first, so it still opens
 # offline after it's dragged out of the disk image.
