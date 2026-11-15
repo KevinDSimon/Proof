@@ -155,6 +155,11 @@ final class Library {
     var infoPanelWidth: CGFloat = 320
     /// The Info card below the histogram in Edit, collapsed until opened.
     var isInfoCardExpanded = false
+    /// The inspector cards folded with their arrows, remembered across photos and launches.
+    var foldedCards = FoldedCards(Set(UserDefaults.standard.stringArray(forKey: Library.foldedCardsKey) ?? [])) {
+        didSet { UserDefaults.standard.set(foldedCards.titles.sorted(), forKey: Self.foldedCardsKey) }
+    }
+    private static let foldedCardsKey = "foldedInspectorCards"
     /// How far the photo in Edit is zoomed and where; back to Fit for each photo and for the crop tool.
     let zoom = CanvasZoom()
     /// The LUT library and its previews of the photo in Edit, for the Look section.

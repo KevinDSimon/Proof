@@ -970,6 +970,8 @@ struct AdjustmentsInspector: View {
                 }
             }
         }
+        // Every titled card here can fold; the crop tool's single card can't.
+        .environment(\.foldedCards, Binding(get: { library.foldedCards }, set: { library.foldedCards = $0 }))
     }
 
     private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }

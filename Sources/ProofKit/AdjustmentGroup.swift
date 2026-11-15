@@ -65,3 +65,23 @@ extension EditRecipe {
         bloom = GlowAdjustments()
     }
 }
+
+/// The inspector cards folded with their disclosure arrows, by title. Folding is apart from a
+/// card's switch: a card that is on can be folded out of the way and keep its adjustments, and it
+/// stays folded from photo to photo (decision 0034). A card that is off is closed either way.
+public struct FoldedCards: Hashable, Sendable {
+    public private(set) var titles: Set<String>
+
+    public init(_ titles: Set<String> = []) {
+        self.titles = titles
+    }
+
+    /// Whether the card titled `title` shows its controls.
+    public func isExpanded(_ title: String, isOn: Bool = true) -> Bool {
+        isOn && !titles.contains(title)
+    }
+
+    public mutating func setFolded(_ title: String, _ isFolded: Bool) {
+        if isFolded { titles.insert(title) } else { titles.remove(title) }
+    }
+}

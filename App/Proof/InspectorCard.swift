@@ -3,7 +3,8 @@ import SwiftUI
 
 /// One group of the inspector as a card with its title inside, as Pixelmator Pro lays out its
 /// adjustments on iPhone and iPad. Reset sits beside an optional switch; turning the switch off
-/// closes the card, and what that means for the photo is up to the caller. The cards are laid out
+/// closes the card, and what that means for the photo is up to the caller. In a panel that sets
+/// `foldedCards`, a titled card also has a disclosure arrow that folds it. The cards are laid out
 /// by hand rather than as a grouped `Form`, which on macOS removes the filled background from
 /// pop-up buttons inside it.
 struct InspectorCard<Content: View>: View {
@@ -25,12 +26,35 @@ struct InspectorCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.foldedCards) private var foldedCards
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Self.controlSpacing) {
-            if let title { header(title) }
-            if isOn?.wrappedValue ?? true {
-                content()
+        Group {
+            if let title, let foldedCards {
+                // The same disclosure arrow as the Info card. It folds the card apart from the
+                // switch; unfolding a card that is off turns it on, since an off card shows nothing.
+                DisclosureGroup(isExpanded: Binding(
+                    get: { foldedCards.wrappedValue.isExpanded(title, isOn: isOn?.wrappedValue ?? true) },
+                    set: { expanded in
+                        withAnimation(.snappy(duration: 0.2)) {
+                            foldedCards.wrappedValue.setFolded(title, !expanded)
+                            if expanded { isOn?.wrappedValue = true }
+                        }
+                    })) {
+                    VStack(alignment: .leading, spacing: Self.controlSpacing) {
+                        content()
+                    }
+                    .padding(.top, Self.controlSpacing)
+                } label: {
+                    header(title)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: Self.controlSpacing) {
+                    if let title { header(title) }
+                    if isOn?.wrappedValue ?? true {
+                        content()
+                    }
+                }
             }
         }
         .padding(Self.padding)
@@ -60,7 +84,13 @@ struct InspectorCard<Content: View>: View {
             }
             if let isOn {
                 Toggle(title, isOn: Binding(get: { isOn.wrappedValue },
-                                            set: { value in withAnimation(.snappy(duration: 0.2)) { isOn.wrappedValue = value } }))
+                                            set: { value in
+                                                withAnimation(.snappy(duration: 0.2)) {
+                                                    isOn.wrappedValue = value
+                                                    // Turning a card on opens it, so its controls show.
+                                                    if value { foldedCards?.wrappedValue.setFolded(title, false) }
+                                                }
+                                            }))
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     // Green, as on iPhone and iPad: without a tint the switch is white either
@@ -109,6 +139,11 @@ struct InspectorField<Content: View, Status: View>: View {
             content()
         }
     }
+}
+
+extension EnvironmentValues {
+    /// Which cards are folded, for a panel whose titled cards can fold; `nil` where they can't.
+    @Entry var foldedCards: Binding<FoldedCards>? = nil
 }
 
 extension Library {
