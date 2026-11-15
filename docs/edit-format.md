@@ -209,6 +209,8 @@ As Shot is `whiteBalance: "asShot"` with `temperature` and `tint` both `null`, a
 
 Missing crop fields take their default: the whole photo, no straighten, no turn or flips, freeform. The rectangle is expected to lie within the photo once straightened; Proof keeps it there. A crop that changes nothing is written as `null`.
 
+A photo without a sidecar opens with the crop and perspective correction its camera saved in the file, if any: the DNG `DefaultUserCrop` as `crop`, and Leica's perspective control as `transform` (decision 0035). They are ordinary values once saved. Because of this, a sidecar is written when the edit differs from those settings, even if every value in it is neutral, so a photo whose camera crop was removed keeps showing the whole frame.
+
 ## Earlier formats
 
 Format 2 had `crop` with the rectangle and `angle` but no turn, flips or ratio. No version of Proof wrote or rendered one, so a format 2 crop is read with its rectangle and angle as they are, no turn or flips and a freeform ratio, and saved as format 3.

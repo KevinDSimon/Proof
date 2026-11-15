@@ -40,6 +40,9 @@ struct PhotoEdit {
     var history: EditHistory
     /// The sidecar as last read or written; `nil` when there is none.
     var sidecar: Sidecar?
+    /// The edit the photo has with no sidecar: neutral, with the crop and perspective correction
+    /// the camera saved in the file (see `CameraSettings`). Revert returns to it.
+    var cameraEdit = EditRecipe()
     /// ISO, focal length, aperture and shutter speed, shown under the histogram. Read once the
     /// photo is opened.
     var captureSettings: CaptureSettings?
@@ -632,7 +635,7 @@ final class Library {
     func photosToRevert(among photos: [PhotoReference]? = nil) -> [PhotoReference] {
         guard !isCropping else { return [] }
         return (photos ?? selectedPhotosInOrder).filter { photo in
-            if let edit = edits[photo] { return !edit.recipe.isNeutral || edit.sidecar != nil }
+            if let edit = edits[photo] { return !edit.recipe.isAsShot(edit.cameraEdit) || edit.sidecar != nil }
             return contents[photo.folder]?.photos.first { $0.name == photo.name }?.isEdited == true
         }
     }
@@ -661,16 +664,16 @@ final class Library {
         revertEdit(of: photosPendingRevert)
     }
 
-    /// Makes the edit of each photo neutral, as one undo step in its own history, and deletes its
-    /// sidecar (decision 0007). Undo writes the edit back as a new sidecar.
+    /// Returns the edit of each photo to the one it opens with, as one undo step in its own
+    /// history, and deletes its sidecar (decision 0007). Undo writes the edit back as a new sidecar.
     private func revertEdit(of photos: [PhotoReference]) {
         commitTask?.cancel()
         showEdited()
         for photo in photos where loadEdit(of: photo) {
             commitEdit(of: photo)
             guard var edit = edits[photo] else { continue }
-            edit.history.record(EditRecipe())
-            edit.recipe = EditRecipe()
+            edit.history.record(edit.cameraEdit)
+            edit.recipe = edit.cameraEdit
             edits[photo] = edit
             save(photo, reverting: true)
         }
@@ -688,16 +691,17 @@ final class Library {
         if browse.isShowingOriginal { browse.showEdited() }
     }
 
-    /// Reads the photo's sidecar the first time it is opened in Edit, or copied from, pasted to
-    /// or reverted in Browse. Later the edit and its undo history are kept in memory. Returns
+    /// Reads the photo's sidecar, and the settings its camera saved in the file, the first time it
+    /// is opened in Edit, or copied from, pasted to or reverted in Browse. Later the edit and its undo history are kept in memory. Returns
     /// whether the photo has an edit in `edits`; a photo whose file can't be found has none.
     @discardableResult private func loadEdit(of photo: PhotoReference) -> Bool {
         if edits[photo] != nil { return true }
         guard let url = url(ofPhoto: photo.name, in: photo.folder) else { return false }
         do {
             let sidecar = try Sidecar.read(for: url)
-            let recipe = sidecar?.recipe ?? EditRecipe()
-            edits[photo] = PhotoEdit(recipe: recipe, history: EditHistory(recipe), sidecar: sidecar)
+            let cameraEdit = EditRecipe(asShot: CameraSettings(contentsOf: url))
+            let recipe = sidecar?.recipe ?? cameraEdit
+            edits[photo] = PhotoEdit(recipe: recipe, history: EditHistory(recipe), sidecar: sidecar, cameraEdit: cameraEdit)
         } catch {
             edits[photo] = PhotoEdit(recipe: EditRecipe(), history: EditHistory(EditRecipe()), unsaved: .unreadable)
         }
@@ -1220,7 +1224,7 @@ final class Library {
         defer { edits[photo] = edit }
         guard edit.unsaved != .unreadable else { return }
         // Back to what's on disk: nothing to write, and no reason to ask for access.
-        if edit.history.recipe == edit.sidecar?.recipe ?? EditRecipe(), !(reverting && edit.sidecar != nil) {
+        if edit.history.recipe == edit.sidecar?.recipe ?? edit.cameraEdit, !(reverting && edit.sidecar != nil) {
             edit.unsaved = nil
             return
         }
@@ -1233,7 +1237,7 @@ final class Library {
                 try Sidecar.delete(for: url)
                 edit.sidecar = nil
             } else {
-                edit.sidecar = try Sidecar.save(edit.history.recipe, for: url, over: edit.sidecar)
+                edit.sidecar = try Sidecar.save(edit.history.recipe, for: url, over: edit.sidecar, asShot: edit.cameraEdit)
             }
             edit.unsaved = nil
         } catch {

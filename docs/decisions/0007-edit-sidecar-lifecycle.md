@@ -47,3 +47,6 @@ Building Revert to Original in issue #61 changed one point. Revert deletes the s
 
 ## Amendment, 2026-11-12
 Selecting several photos in issue #67 adds one exception. Revert to Original still acts at once on one photo, where Undo brings the edit back in place. When it would revert more than one photo, it asks first, because some of them may be out of sight and each one's undo is in its own history, reached by opening that photo in Edit.
+
+## Amendment, 2026-11-15
+Issue #86 lets a photo open with a crop or perspective correction its camera saved in the file (decision 0035). For such a photo, "neutral" in this decision means the edit it opens with: the sidecar is deleted when the edit returns to the camera's settings, and written when it differs, including when every value is neutral. Revert to Original returns the photo to the camera's settings. Photos without camera settings are unchanged.
