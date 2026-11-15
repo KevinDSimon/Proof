@@ -10,7 +10,7 @@ Proof is split into a platform-neutral engine package, `ProofKit`, and thin app 
 | Mac app (`App/Proof.xcodeproj`) | Folders panel, filmstrip, inspector, canvas, export UI | — |
 | iOS app (later) | The same panels for touch, Files-app folder picking | — |
 
-The Mac app runs in the App Sandbox. Its project links `ProofKit` as a local Swift package, so a change to `ProofKit` is picked up by the next app build without a version bump. Until Developer ID signing is set up (#25), the app is signed to run locally only.
+The Mac app runs in the App Sandbox. Its project links `ProofKit` as a local Swift package, so a change to `ProofKit` is picked up by the next app build without a version bump. Xcode and CI sign it ad hoc, to run locally; releases are signed with the owner's Developer ID and notarized by `scripts/release.sh` (decision 0038, `docs/releasing.md`). The version and build number are set in `App/Version.xcconfig`.
 
 ## Render pipeline
 
