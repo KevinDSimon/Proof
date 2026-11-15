@@ -1,7 +1,7 @@
 # 0029. Filter rows in the sidebar and a filter menu in the toolbar
 
 Date: 2026-11-12
-Status: Accepted
+Status: Accepted; the filter button on filter rows is superseded by 0037
 
 ## Context
 Browse filtered the selected folder with a segmented control of All, 5 Stars and Edited, with ⌘1–⌘3 in the View menu. Issue #58 asks for flags and every star rating, which is too many choices for a segmented control or for number shortcuts. A single list of choices also can't combine them, such as flagged photos with four stars or more. Photos and Lightroom offer both ways to filter: views across the library in the sidebar, and a filter for the current folder in the toolbar.
