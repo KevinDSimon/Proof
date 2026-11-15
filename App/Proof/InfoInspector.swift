@@ -5,7 +5,6 @@ import SwiftUI
 /// description. It follows the selection; with several photos selected it shows none (#151).
 struct InfoInspector: View {
     let library: Library
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         if let photo = library.infoPhoto, let url = library.url(ofPhoto: photo.name, in: photo.folder) {
@@ -24,7 +23,7 @@ struct InfoInspector: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(white: PhotoCanvas.backdropGray(for: colorScheme)).ignoresSafeArea())
+            .background(Color.interfaceBackground.ignoresSafeArea())
         }
     }
 }

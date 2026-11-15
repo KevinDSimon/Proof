@@ -151,6 +151,11 @@ final class Library {
         didSet { UserDefaults.standard.set(isFilmstripShown, forKey: Self.filmstripKey) }
     }
     private static let filmstripKey = "filmstripShown"
+    /// The color around the photo in Edit (#42), remembered across photos and launches.
+    var canvasColor = CanvasColor(stored: UserDefaults.standard.data(forKey: Library.canvasColorKey)) {
+        didSet { UserDefaults.standard.set(canvasColor.encoded, forKey: Self.canvasColorKey) }
+    }
+    private static let canvasColorKey = "canvasColor"
     /// The Info panel beside the grid in Browse (#151).
     var isInfoShown = false
     /// The Info panel's width when last open, so the grid can lay out for the width it will have
