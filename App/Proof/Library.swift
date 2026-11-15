@@ -721,7 +721,7 @@ final class Library {
             let sidecar = try Sidecar.read(for: url)
             let cameraEdit = EditRecipe(asShot: CameraSettings(contentsOf: url))
             let recipe = sidecar?.recipe ?? cameraEdit
-            edits[photo] = PhotoEdit(recipe: recipe, history: EditHistory(recipe), sidecar: sidecar, cameraEdit: cameraEdit)
+            edits[photo] = PhotoEdit(recipe: recipe, history: EditHistory(recipe, original: cameraEdit), sidecar: sidecar, cameraEdit: cameraEdit)
         } catch {
             edits[photo] = PhotoEdit(recipe: EditRecipe(), history: EditHistory(EditRecipe()), unsaved: .unreadable)
         }

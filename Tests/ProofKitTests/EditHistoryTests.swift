@@ -84,6 +84,19 @@ struct EditHistoryTests {
         #expect(!history.canRedo)
     }
 
+    @Test("The original comes first, below the edit as opened, and is the only step when they match")
+    func original() {
+        var history = EditHistory(recipe(exposure: 1), original: EditRecipe())
+        #expect(history.steps.map(\.label) == ["Original", "Opened"])
+        #expect(history.recipe == recipe(exposure: 1))
+        let undone = history.undo()
+        #expect(undone == EditRecipe())
+        #expect(history.canRedo)
+        let unedited = EditHistory(EditRecipe(), original: EditRecipe())
+        #expect(unedited.steps.map(\.label) == ["Original"])
+        #expect(!unedited.canUndo)
+    }
+
     @Test("Going to the step shown, or one that doesn't exist, changes nothing")
     func goToNowhere() {
         var history = EditHistory(EditRecipe())

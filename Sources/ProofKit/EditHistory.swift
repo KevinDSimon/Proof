@@ -9,14 +9,26 @@ public struct EditHistory: Equatable, Sendable {
     }
 
     public static let openedLabel = "Opened"
+    public static let originalLabel = "Original"
 
-    /// Every step, oldest first: the edit as opened, then each change, including those undone.
+    /// Every step, oldest first: the photo's original, the edit as opened when it differs, then
+    /// each change, including those undone.
     public private(set) var steps: [Step]
     /// The step shown. Steps after it are the ones Redo brings back.
     public private(set) var currentIndex = 0
 
-    public init(_ recipe: EditRecipe) {
-        steps = [Step(recipe: recipe, label: Self.openedLabel)]
+    /// `original` is the photo with no edit. It comes first, so it can be reached however the
+    /// photo was edited before it was opened; it is the only step when it is the edit opened.
+    public init(_ recipe: EditRecipe, original: EditRecipe? = nil) {
+        guard let original else {
+            steps = [Step(recipe: recipe, label: Self.openedLabel)]
+            return
+        }
+        steps = [Step(recipe: original, label: Self.originalLabel)]
+        if recipe != original {
+            steps.append(Step(recipe: recipe, label: Self.openedLabel))
+            currentIndex = 1
+        }
     }
 
     public var recipe: EditRecipe { steps[currentIndex].recipe }
