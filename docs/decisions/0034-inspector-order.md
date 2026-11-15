@@ -43,7 +43,7 @@ The owner chose this order:
 - Crop and straighten stay a separate tool rather than a card, as in Lightroom and Photos. The crop tool needs the whole photo on the canvas, and Done or Cancel is its comparison.
 - Vignette stays in Effects and lens vignetting in Lens Corrections, the same split as Lightroom.
 - Every card in the adjustments inspector folds with a disclosure arrow beside its title, as the Info card does and as Lightroom's and Capture One's panels do. This changes decision 0015, where the switch alone opened and closed a card, so a card in use couldn't be put out of the way without hiding its adjustments from the photo. Now:
-  - The arrow folds or unfolds the card. A folded card that is on keeps its adjustments on the photo.
+  - A click on the arrow, the title or the empty space beside it folds or unfolds the card; Reset and the switch keep their own clicks. A folded card that is on keeps its adjustments on the photo.
   - A card that is off is closed, as before. Unfolding it turns it on, since an off card has nothing to show.
   - Turning a card's switch on unfolds it, so the controls just turned on are visible.
   - Folded cards stay folded from photo to photo and across launches, so the panel is set up once. Histogram folds too. The crop tool's single Crop card doesn't fold.

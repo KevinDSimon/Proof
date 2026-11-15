@@ -33,20 +33,21 @@ struct InspectorCard<Content: View>: View {
             if let title, let foldedCards {
                 // The same disclosure arrow as the Info card. It folds the card apart from the
                 // switch; unfolding a card that is off turns it on, since an off card shows nothing.
-                DisclosureGroup(isExpanded: Binding(
+                let isExpanded = Binding(
                     get: { foldedCards.wrappedValue.isExpanded(title, isOn: isOn?.wrappedValue ?? true) },
                     set: { expanded in
                         withAnimation(.snappy(duration: 0.2)) {
                             foldedCards.wrappedValue.setFolded(title, !expanded)
                             if expanded { isOn?.wrappedValue = true }
                         }
-                    })) {
+                    })
+                DisclosureGroup(isExpanded: isExpanded) {
                     VStack(alignment: .leading, spacing: Self.controlSpacing) {
                         content()
                     }
                     .padding(.top, Self.controlSpacing)
                 } label: {
-                    header(title)
+                    header(title) { isExpanded.wrappedValue.toggle() }
                 }
             } else {
                 VStack(alignment: .leading, spacing: Self.controlSpacing) {
@@ -63,7 +64,9 @@ struct InspectorCard<Content: View>: View {
             .fill(Color(white: Self.fillGray(for: colorScheme))))
     }
 
-    private func header(_ title: String) -> some View {
+    /// `fold`, when given, runs on a click anywhere in the row but Reset and the switch, so the
+    /// title and the space beside it fold the card as well as the small arrow does.
+    private func header(_ title: String, fold: (() -> Void)? = nil) -> some View {
         HStack(spacing: 8) {
             Text(title)
                 .font(.headline)
@@ -101,6 +104,8 @@ struct InspectorCard<Content: View>: View {
                     .accessibilityLabel(title)
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { fold?() }
     }
 
     /// The card's gray, a step lighter than the canvas in the dark appearance and darker in the light.
