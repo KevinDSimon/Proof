@@ -747,6 +747,8 @@ struct AdjustmentsInspector: View {
                 CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
             }
             InfoCard(library: library)
+            // Looks first, as Lightroom's Profile: a look is where an edit starts (decision 0034).
+            LookSection(library: library)
             InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
                           canReset: basic.whiteBalance != .asShot,
                           reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
@@ -942,18 +944,17 @@ struct AdjustmentsInspector: View {
                 }
             }
             .disabled(library.selectedEdit == nil)
-            SelectiveColorCard(library: library)
             InspectorCard(title: "Curve", isOn: library.isOnBinding(.curve),
                           canReset: !(library.selectedEdit?.recipe.curve.isIdentity ?? true),
                           reset: { library.changeEdit { $0.curve = ToneCurve() } }) {
                 CurveEditor(library: library)
             }
             .disabled(library.selectedEdit == nil)
+            SelectiveColorCard(library: library)
             detailCard
             lensCard
             transformCard
             effectsCard
-            LookSection(library: library)
             if let unsaved = library.selectedEdit?.unsaved {
                 InspectorCard {
                     Text(Self.message(for: unsaved))
