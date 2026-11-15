@@ -295,15 +295,42 @@ final class Library {
         return ([location].compactMap { $0 } + folder.relativePath).joined(separator: " › ")
     }
 
-    /// Reads a folder off the main thread. Already-read folders are read again only when `force` is set.
+    /// Reads a folder off the main thread. Already-read folders are read again only when `force` is
+    /// set. Where Proof can write, sidecars left behind by a renamed photo are renamed to follow it
+    /// first, and edits whose sidecar changed on disk are reloaded after (decision 0007).
     func load(_ folder: FileReference, force: Bool = false) async {
         guard force || contents[folder] == nil else { return }
-        guard let url = fileAccess?.url(for: folder) else { return }
-        let read = await Task.detached { try? FolderContents.read(at: url) }.value
+        guard let fileAccess, let url = fileAccess.url(for: folder) else { return }
+        // Asking for access isn't worth it for relinking, so folders that can't be written are skipped.
+        let canRelink = fileAccess.canWrite(to: url)
+        let read = await Task.detached {
+            if canRelink { _ = try? Sidecar.relink(in: url) }
+            return try? FolderContents.read(at: url)
+        }.value
         contents[folder] = (read ?? FolderContents(subfolders: [], photos: [])).keepingMetadata(from: contents[folder])
         if .folder(folder) == selection {
             browse.keep(only: visiblePhotos)
             readEmbeddedMetadata()
+        }
+        if force { await reloadChangedEdits(in: folder) }
+    }
+
+    /// Shows the edit now on disk for each photo in `folder` whose sidecar changed since Proof last
+    /// read or wrote it, as one undo step. Proof's own writes match what it last wrote, so they
+    /// change nothing. A photo with a change in progress, or one Proof couldn't save, keeps its
+    /// edit: the most recent write wins, and that one hasn't been written yet.
+    private func reloadChangedEdits(in folder: FileReference) async {
+        for photo in edits.keys where photo.folder == folder {
+            guard let url = url(ofPhoto: photo.name, in: photo.folder) else { continue }
+            let read = await Task.detached { Result { try Sidecar.read(for: url) } }.value
+            guard case .success(let sidecar) = read, var edit = edits[photo], edit.unsaved == nil, edit.recipe == edit.history.recipe,
+                  sidecar != edit.sidecar else { continue }
+            let recipe = sidecar?.recipe ?? edit.cameraEdit
+            edit.sidecar = sidecar
+            edit.history.record(recipe, label: "Changed Elsewhere")
+            edit.recipe = recipe
+            edits[photo] = edit
+            refreshThumbnail(of: photo, at: url)
         }
     }
 

@@ -53,7 +53,8 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
     "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
     "rotation": 90, "flipHorizontal": false, "flipVertical": false, "aspect": [4, 5]
   },
-  "layers": []
+  "layers": [],
+  "original": { "size": 61203456, "captureTime": "2025:06:01 14:03:22.417", "uniqueID": "0aff3c2e91d04b7a8e6f1c0d2b3a4e5f" }
 }
 ```
 
@@ -77,6 +78,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `transform` | Perspective correction, described below. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
+| `original` | The photo the sidecar was first written for, described below. It identifies the photo, not the edit, and doesn't change how it renders. |
 
 Missing fields take their default (no adjustment). `look` and `crop` are written as `null` when there is none. Proof writes the file with its keys sorted and indented.
 
@@ -210,6 +212,18 @@ As Shot is `whiteBalance: "asShot"` with `temperature` and `tint` both `null`, a
 Missing crop fields take their default: the whole photo, no straighten, no turn or flips, freeform. The rectangle is expected to lie within the photo once straightened; Proof keeps it there. A crop that changes nothing is written as `null`.
 
 A photo without a sidecar opens with the crop and perspective correction its camera saved in the file, if any: the DNG `DefaultUserCrop` as `crop`, and Leica's perspective control as `transform` (decision 0035). They are ordinary values once saved. Because of this, a sidecar is written when the edit differs from those settings, even if every value in it is neutral, so a photo whose camera crop was removed keeps showing the whole frame.
+
+## Original
+
+Proof stores a fingerprint of the original when it first writes the sidecar, so the sidecar can follow the photo when it is renamed in the same folder (decision 0007). None of its values change with a rename.
+
+| Value | Meaning |
+| --- | --- |
+| `size` | The original's size in bytes. |
+| `captureTime` | EXIF `DateTimeOriginal` as the camera wrote it, followed by a period and `SubsecTimeOriginal` when the file has it. Kept as text, without a time zone. `null` when the file has none. |
+| `uniqueID` | DNG `RawDataUniqueID` in lowercase hexadecimal, or EXIF `ImageUniqueID` as written when there is no raw data ID. `null` when the file has neither. |
+
+When Proof reads a folder it can write to and finds a sidecar with no photo of the same name, it renames the sidecar to the one photo without a sidecar whose fingerprint matches all three values. With no match, or more than one, the sidecar is left alone. The fingerprint is never updated after it is written. Sidecars written before Proof stored it have no `original`; they are read the same and get one the next time they are saved, from the photo as it is then.
 
 ## Earlier formats
 
