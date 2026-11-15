@@ -1,6 +1,6 @@
 # Roadmap
 
-Each phase is a GitHub milestone, and each item an issue. Estimates assume part-time work. The personal v1 is Phase 7 and Phase 8.
+Each phase is a GitHub milestone, and each item an issue. Estimates assume part-time work. The personal v1 is Phase 7, Phase 8 and the v1 milestone.
 
 | Milestone | Goal | Estimate |
 | --- | --- | --- |
@@ -12,10 +12,11 @@ Each phase is a GitHub milestone, and each item an issue. Estimates assume part-
 | Phase 5: Geometry | Manual distortion and lens vignetting, lens profile corrections from the file, manual and automatic perspective | Done |
 | Phase 6: Color | Selective color by color range; black and white with red, green and blue filters | Done |
 | Effects | Grain, halation and bloom | Done |
-| Phase 7: Many photos | Copy and paste settings, presets, multi-select, context menus, instant previews, filters, crop refinements | 2–3 weekends |
-| Phase 8: Export | JPEG, HEIC and TIFF export; signing and notarization | 1 weekend |
-| v1.1 | Virtual copies with side-by-side compare, history panel, relinking renamed photos | — |
-| v1.2 | Masks as layers: gradients, Vision subject and person masks, brush | — |
-| Later | Lightroom and Capture One preset import, lens profiles made in Proof, the camera's own crop, better auto-straighten, appearance setting, iPad and iPhone app | — |
+| Phase 7: Many photos | Copy and paste settings, multi-select, context menus, instant previews, filters, crop refinements | Done |
+| Phase 8: Export | JPEG, HEIC and TIFF export; saved export destinations | Done |
+| v1 | Inspector order, the camera's own crop and perspective, relinking renamed photos, history panel, an always-dark interface with a choice of canvas color, a signed and notarized build others can install | — |
+| v1.1 | Spot healing for dust, masks as layers, lens profiles made in Proof, better auto-straighten | — |
+| v1.2 | Presets, virtual copies with side-by-side compare | — |
+| Later | Matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF, Lightroom and Capture One preset import, iPad and iPhone app | — |
 
-Not planned: healing, a catalog, cloud sync.
+Not planned: a catalog, cloud sync.
