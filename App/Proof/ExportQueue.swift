@@ -64,7 +64,8 @@ final class ExportQueue {
         Task {
             let read = await Task.detached(priority: .utility) {
                 items.map { item in
-                    Job(url: item.url, recipe: item.recipe ?? (try? Sidecar.read(for: item.url))??.recipe ?? EditRecipe(),
+                    Job(url: item.url, recipe: item.recipe ?? (try? Sidecar.read(for: item.url))??.recipe
+                                ?? EditRecipe(asShot: CameraSettings(contentsOf: item.url)),
                         rating: item.rating, settings: settings, folder: folder)
                 }
             }.value

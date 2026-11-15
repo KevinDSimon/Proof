@@ -9,7 +9,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "ProofKit"),
-        // Reference renders are read from source by path, not bundled.
-        .testTarget(name: "ProofKitTests", dependencies: ["ProofKit"], exclude: ["References"]),
+        // Reference renders and sample metadata are read from source by path, not bundled.
+        .testTarget(name: "ProofKitTests", dependencies: ["ProofKit"], exclude: ["References", "Samples"]),
     ]
 )

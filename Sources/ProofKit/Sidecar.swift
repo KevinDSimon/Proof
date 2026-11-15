@@ -51,12 +51,14 @@ public struct Sidecar: Equatable, Sendable {
     }
 
     /// Saves `recipe` next to `original`, over `existing` (the sidecar as last read or written,
-    /// `nil` if there was none), with `NSFileCoordinator`. A neutral recipe deletes the file
-    /// instead, unless it has unrecognized fields. Returns the sidecar now on disk. Blocks on file I/O.
+    /// `nil` if there was none), with `NSFileCoordinator`. A recipe the photo opens with anyway,
+    /// `asShot` (see `CameraSettings`), deletes the file instead, unless it has unrecognized
+    /// fields. Returns the sidecar now on disk. Blocks on file I/O.
     @discardableResult
-    public static func save(_ recipe: EditRecipe, for original: URL, over existing: Sidecar?) throws -> Sidecar? {
+    public static func save(_ recipe: EditRecipe, for original: URL, over existing: Sidecar?,
+                            asShot: EditRecipe = EditRecipe()) throws -> Sidecar? {
         let url = EditRecipe.sidecarURL(for: original)
-        if recipe.isNeutral, existing?.hasUnrecognizedFields != true {
+        if recipe.isAsShot(asShot), existing?.hasUnrecognizedFields != true {
             try delete(for: original)
             return nil
         }

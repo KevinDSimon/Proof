@@ -18,6 +18,7 @@ Status: pre-alpha. Nothing to download yet.
 - Tone curve (RGB and per channel) and a histogram
 - `.cube` LUTs imported into a library, with previews of the photo and a strength slider
 - Crop, straighten, rotate and flip, before/after, copy and paste settings, undo
+- Opens photos with the crop and perspective correction the camera saved in the file: Leica Q digital-zoom framings and Leica M11 perspective control
 - Export to JPEG, HEIC and TIFF at the original size or a long edge in pixels or a print size, in sRGB, Display P3 or Adobe RGB, keeping camera details, rating and description, several photos at a time in the background
 - Saved export destinations, a folder with its settings, picked in the Export sheet or from File › Export To
 
