@@ -828,7 +828,7 @@ struct AdjustmentsInspector: View {
                               || basic.clarity != 0 || basic.dehaze != 0 || basic.highlights != 0 || basic.shadows != 0
                               || basic.whites != 0 || basic.blacks != 0,
                           reset: {
-                              library.changeEdit {
+                              library.changeEdit(label: "Reset Basic") {
                                   $0.basic.exposure = 0
                                   $0.basic.contrast = 0
                                   $0.basic.texture = 0

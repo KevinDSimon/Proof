@@ -477,10 +477,14 @@ final class Library {
 
     /// Changes the selected photo's edit. Outside a drag, the change is committed once the
     /// controls are idle, so a burst of key presses is one undo step.
-    func changeEdit(_ change: (inout EditRecipe) -> Void) {
+    /// `label` names the step in the History panel, for a change whose sliders don't say what
+    /// made it, such as Auto Tone. Without it the step says what changed.
+    func changeEdit(label: String? = nil, _ change: (inout EditRecipe) -> Void) {
         guard let photo = browse.selectedPhoto, edits[photo] != nil else { return }
         showEdited()
         change(&edits[photo]!.recipe)
+        // A later change before the step is made gets the step named by what changed.
+        pendingStepLabel = label
         commitTask?.cancel()
         guard !isAdjusting else { return }
         commitTask = Task {
@@ -489,6 +493,9 @@ final class Library {
             commitEdit(of: photo)
         }
     }
+
+    /// The name `changeEdit` was given for the step it is about to make.
+    @ObservationIgnored private var pendingStepLabel: String?
 
     /// Photo › Next Look and Previous Look can step through the shown folder's looks.
     var canStepLook: Bool {
@@ -931,7 +938,7 @@ final class Library {
 
     /// Sets the selected photo's six Tone sliders to the values Auto estimates.
     func autoTone(with renderer: RAWRenderer) async {
-        await autoAdjust(with: renderer, what: "tone") { renderer, recipe in
+        await autoAdjust(with: renderer, what: "tone", label: "Auto Tone") { renderer, recipe in
             let light = try await renderer.autoTone(recipe: recipe)
             return { light.apply(to: &$0.basic) }
         }
@@ -1086,7 +1093,7 @@ final class Library {
 
     /// Measures the selected photo with `estimate` and applies the change it returns as one edit,
     /// unless another photo was chosen meanwhile. Takes about a second for white balance.
-    private func autoAdjust(with renderer: RAWRenderer, what: String,
+    private func autoAdjust(with renderer: RAWRenderer, what: String, label: String? = nil,
                             estimate: (RAWRenderer, EditRecipe) async throws -> (inout EditRecipe) -> Void) async {
         guard !isAutoAdjusting, let photo = browse.selectedPhoto, let url = selectedPhotoURL,
               let recipe = selectedEdit?.recipe else { return }
@@ -1101,7 +1108,7 @@ final class Library {
             return
         }
         guard browse.selectedPhoto == photo else { return }
-        changeEdit(change)
+        changeEdit(label: label, change)
     }
 
     /// Straightens to the horizon Vision finds in the selected photo. When there is none, the
@@ -1223,7 +1230,8 @@ final class Library {
     /// Makes the photo's current change one undo step and saves it. `label` names the step in
     /// the History panel; without it the step says what changed.
     private func commitEdit(of photo: PhotoReference, label: String? = nil) {
-        guard var edit = edits[photo], edit.history.record(edit.recipe, label: label) else { return }
+        defer { pendingStepLabel = nil }
+        guard var edit = edits[photo], edit.history.record(edit.recipe, label: label ?? pendingStepLabel) else { return }
         edits[photo] = edit
         save(photo)
     }
