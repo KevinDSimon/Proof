@@ -14,9 +14,9 @@ struct CopySettingsSheet: View {
     /// The cards in the inspector's order, split into columns of about equal height, with Crop
     /// (`nil`) beside Transform.
     private static let columns: [[AdjustmentGroup?]] = [
-        [.whiteBalance, .basic],
+        [.look, .whiteBalance, .basic],
         [.curve, .selectiveColor, .detail, .lens],
-        [.transform, nil, .effects, .look],
+        [.transform, nil, .effects],
     ]
 
     var body: some View {
