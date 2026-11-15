@@ -971,6 +971,8 @@ struct AdjustmentsInspector: View {
                 }
             }
         }
+        // Every titled card here can fold; the crop tool's single card can't.
+        .environment(\.foldedCards, Binding(get: { library.foldedCards }, set: { library.foldedCards = $0 }))
     }
 
     private var basic: BasicAdjustments { library.selectedEdit?.recipe.basic ?? BasicAdjustments() }
@@ -1125,9 +1127,9 @@ struct AdjustmentsInspector: View {
                             unit: "degrees", help: "Turns the photo, in degrees clockwise")
             // Rarely needed, so closed unless the photo uses them.
             let usesMore = transform.aspect != 0 || transform.scale != 100 || transform.xOffset != 0 || transform.yOffset != 0
-            DisclosureGroup("Aspect, Scale and Offset", isExpanded: Binding(
-                get: { showsMoreTransform ?? usesMore },
-                set: { showsMoreTransform = $0 })) {
+            let showsMore = Binding(get: { showsMoreTransform ?? usesMore },
+                                    set: { showsMoreTransform = $0 })
+            DisclosureGroup(isExpanded: showsMore) {
                 VStack(alignment: .leading, spacing: InspectorCard<EmptyView>.controlSpacing) {
                     transformSlider("Aspect", \.aspect, range: PerspectiveTransform.aspectRange,
                                     help: "Stretches the photo across, or upward with negative values, to undo the stretch a correction leaves")
@@ -1139,6 +1141,14 @@ struct AdjustmentsInspector: View {
                                     help: "Moves the photo up, or down with negative values")
                 }
                 .padding(.top, 6)
+            } label: {
+                // The whole row opens it, as the cards' headers do, not just the arrow.
+                Text("Aspect, Scale and Offset")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.snappy(duration: 0.2)) { showsMore.wrappedValue.toggle() }
+                    }
             }
             .foregroundStyle(InspectorCard<EmptyView>.labelColor)
         }

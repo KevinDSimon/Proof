@@ -42,9 +42,15 @@ struct InfoCard: View {
                         .id(photo)
                         .padding(.top, InspectorCard<EmptyView>.controlSpacing)
                 } label: {
+                    // The whole row folds the card, as on the other cards, not just the arrow.
                     Text("Info")
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.snappy(duration: 0.2)) { library.isInfoCardExpanded.toggle() }
+                        }
                 }
             }
         }
