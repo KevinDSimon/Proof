@@ -50,3 +50,6 @@ Selecting several photos in issue #67 adds one exception. Revert to Original sti
 
 ## Amendment, 2026-11-15
 Issue #86 lets a photo open with a crop or perspective correction its camera saved in the file (decision 0035). For such a photo, "neutral" in this decision means the edit it opens with: the sidecar is deleted when the edit returns to the camera's settings, and written when it differs, including when every value is neutral. Revert to Original returns the photo to the camera's settings. Photos without camera settings are unchanged.
+
+## Amendment, 2026-11-15
+Building relinking and reloading in issue #62 settled three details. A sidecar written before fingerprints existed gets one on its next save, taken from the photo as it is then, so existing edits can be relinked after that save. A sidecar is relinked only when its photo matches no other left-behind sidecar either, so two sidecars never compete for one photo. A sidecar that changes on disk while its photo has an edit Proof couldn't save, or a slider still moving, isn't reloaded: that edit is the more recent one, and it is written once saved.

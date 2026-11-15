@@ -123,7 +123,7 @@ public struct FolderContents: Equatable, Sendable {
         (try? Data(contentsOf: url)).flatMap(PhotoMetadata.init(xmp:))
     }
 
-    private static func isRAW(_ values: URLResourceValues) -> Bool {
+    static func isRAW(_ values: URLResourceValues) -> Bool {
         values.contentType?.conforms(to: .rawImage) == true
     }
 }

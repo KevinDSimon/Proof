@@ -5,6 +5,9 @@ import Foundation
 /// When the file is created and deleted is set out in decision 0007.
 public struct Sidecar: Equatable, Sendable {
     public private(set) var recipe: EditRecipe
+    /// The photo the sidecar was first written for, which relinks it after a rename. `nil` in
+    /// sidecars written before Proof stored it; the next save adds it.
+    public private(set) var original: OriginalFingerprint?
     /// The file has fields `EditRecipe` doesn't read. Such a file is never deleted for being neutral.
     public private(set) var hasUnrecognizedFields: Bool
     /// The JSON as read or written, which a save merges the new recipe over.
@@ -15,17 +18,30 @@ public struct Sidecar: Equatable, Sendable {
     public init(data: Data) throws {
         recipe = try JSONDecoder().decode(EditRecipe.self, from: data)
         json = try JSONDecoder().decode(JSONValue.self, from: data)
-        hasUnrecognizedFields = json.hasFields(missingFrom: try JSONValue(recipe))
+        original = (try? JSONDecoder().decode(OriginalField.self, from: data))?.original
+        hasUnrecognizedFields = json.removingField(Self.originalKey).hasFields(missingFrom: try JSONValue(recipe))
     }
 
     /// The JSON for `recipe`, written over this sidecar's so unrecognized fields stay as they were.
-    public func data(saving recipe: EditRecipe) throws -> Data {
-        try Self.encoder.encode(JSONValue(recipe).merged(over: json))
+    /// `original` is stored only when the sidecar has no fingerprint yet.
+    public func data(saving recipe: EditRecipe, original: OriginalFingerprint? = nil) throws -> Data {
+        var merged = try JSONValue(recipe).merged(over: json)
+        if self.original == nil, let original { merged = try merged.settingField(Self.originalKey, to: JSONValue(original)) }
+        return try Self.encoder.encode(merged)
     }
 
     /// The JSON for a new sidecar.
-    public static func data(for recipe: EditRecipe) throws -> Data {
-        try encoder.encode(recipe)
+    public static func data(for recipe: EditRecipe, original: OriginalFingerprint? = nil) throws -> Data {
+        var json = try JSONValue(recipe)
+        if let original { json = try json.settingField(originalKey, to: JSONValue(original)) }
+        return try encoder.encode(json)
+    }
+
+    /// The sidecar field that holds `original`, beside the recipe's fields.
+    static let originalKey = "original"
+
+    private struct OriginalField: Decodable {
+        var original: OriginalFingerprint?
     }
 
     private static var encoder: JSONEncoder {
@@ -53,7 +69,8 @@ public struct Sidecar: Equatable, Sendable {
     /// Saves `recipe` next to `original`, over `existing` (the sidecar as last read or written,
     /// `nil` if there was none), with `NSFileCoordinator`. A recipe the photo opens with anyway,
     /// `asShot` (see `CameraSettings`), deletes the file instead, unless it has unrecognized
-    /// fields. Returns the sidecar now on disk. Blocks on file I/O.
+    /// fields. A sidecar without a fingerprint of the original gets one. Returns the sidecar now
+    /// on disk. Blocks on file I/O.
     @discardableResult
     public static func save(_ recipe: EditRecipe, for original: URL, over existing: Sidecar?,
                             asShot: EditRecipe = EditRecipe()) throws -> Sidecar? {
@@ -62,7 +79,9 @@ public struct Sidecar: Equatable, Sendable {
             try delete(for: original)
             return nil
         }
-        let data = try existing.map { try $0.data(saving: recipe) } ?? data(for: recipe)
+        let fingerprint = existing?.original == nil ? OriginalFingerprint(contentsOf: original) : nil
+        let data = try existing.map { try $0.data(saving: recipe, original: fingerprint) }
+            ?? data(for: recipe, original: fingerprint)
         try coordinate { coordinator, error in
             coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: error) { url in
                 do {
@@ -83,6 +102,67 @@ public struct Sidecar: Equatable, Sendable {
                 do {
                     try FileManager.default.removeItem(at: url)
                 } catch CocoaError.fileNoSuchFile {
+                } catch let caught {
+                    error?.pointee = caught as NSError
+                }
+            }
+        }
+    }
+
+    // MARK: Relinking
+
+    /// Renames the sidecars in `folder` whose photo is gone to the photo they were written for,
+    /// when that photo was renamed in the same folder (decision 0007). A sidecar is renamed only
+    /// when exactly one photo without a sidecar has its fingerprint, and no other sidecar matches
+    /// that photo; otherwise it is left alone. Returns the photos that got a sidecar, keyed by
+    /// new name with the old name as value. Blocks on file I/O, so call it off the main thread.
+    @discardableResult
+    public static func relink(in folder: URL) throws -> [String: String] {
+        let keys: Set<URLResourceKey> = [.contentTypeKey, .fileSizeKey]
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles])
+        let names = Set(entries.map(\.lastPathComponent))
+        let orphans: [(name: String, original: OriginalFingerprint)] = entries.compactMap { entry in
+            let name = entry.deletingPathExtension().lastPathComponent
+            guard entry.pathExtension == "proof", !names.contains(name),
+                  let sidecar = try? read(for: folder.appendingPathComponent(name)),
+                  let original = sidecar.original else { return nil }
+            return (name, original)
+        }
+        guard !orphans.isEmpty else { return [:] }
+
+        // The size rules out most photos without opening them, which on a NAS is slow.
+        let sizes = Set(orphans.map(\.original.size))
+        let candidates: [(name: String, original: OriginalFingerprint)] = entries.compactMap { entry in
+            let name = entry.lastPathComponent
+            guard !names.contains(name + ".proof"),
+                  let values = try? entry.resourceValues(forKeys: keys), FolderContents.isRAW(values),
+                  let size = values.fileSize, sizes.contains(size),
+                  let original = OriginalFingerprint(contentsOf: entry) else { return nil }
+            return (name, original)
+        }
+
+        var relinked: [String: String] = [:]
+        for orphan in orphans {
+            let matches = candidates.filter { $0.original == orphan.original }
+            guard matches.count == 1, let photo = matches.first,
+                  orphans.filter({ $0.original == photo.original }).count == 1 else { continue }
+            try move(from: folder.appendingPathComponent(orphan.name + ".proof"),
+                     to: folder.appendingPathComponent(photo.name + ".proof"))
+            relinked[photo.name] = orphan.name
+        }
+        return relinked
+    }
+
+    /// Renames a sidecar with `NSFileCoordinator`. Fails rather than replace a file already there.
+    private static func move(from source: URL, to destination: URL) throws {
+        try coordinate { coordinator, error in
+            coordinator.coordinate(writingItemAt: source, options: .forMoving,
+                                   writingItemAt: destination, options: .forReplacing, error: error) { source, destination in
+                do {
+                    coordinator.item(at: source, willMoveTo: destination)
+                    try FileManager.default.moveItem(at: source, to: destination)
+                    coordinator.item(at: source, didMoveTo: destination)
                 } catch let caught {
                     error?.pointee = caught as NSError
                 }
@@ -148,6 +228,20 @@ enum JSONValue: Codable, Equatable, Sendable {
         default:
             return self
         }
+    }
+
+    /// This object without the field `key`. Other values are returned as they are.
+    func removingField(_ key: String) -> JSONValue {
+        guard case .object(var fields) = self else { return self }
+        fields[key] = nil
+        return .object(fields)
+    }
+
+    /// This object with `key` set to `value`. Other values are returned as they are.
+    func settingField(_ key: String, to value: JSONValue) -> JSONValue {
+        guard case .object(var fields) = self else { return self }
+        fields[key] = value
+        return .object(fields)
     }
 
     /// Whether this value has a field, at any depth, that `known` lacks. A `null` doesn't count.
