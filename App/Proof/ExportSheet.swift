@@ -64,6 +64,7 @@ struct ExportSheet: View {
                         LabeledContent("Quality") {
                             HStack {
                                 Slider(value: $settings.quality, in: 0.1...1, step: 0.05)
+                                    .tint(.sliderFill)
                                 Text(settings.quality, format: .percent.precision(.fractionLength(0)))
                                     .monospacedDigit()
                                     .frame(width: 40, alignment: .trailing)
@@ -119,7 +120,7 @@ struct ExportSheet: View {
                 Section {
                     Toggle("Remove Location", isOn: $settings.removesLocation)
                         .toggleStyle(.switch)
-                        .tint(.green)
+                        .tint(.highlight)
                 }
             }
             .formStyle(.grouped)

@@ -111,7 +111,10 @@ struct ThumbnailGrid: View {
             library.deselectAll()
             return .handled
         }
-        .onAppear { isFocused = true }
+        // Coming back from Edit, a photo is selected and the arrow keys should move from it. After a
+        // sidebar row is picked nothing is, and the sidebar keeps focus so its selection stays in
+        // the highlight; clicking a photo or pressing Tab moves focus here.
+        .onAppear { if library.browse.selectedPhoto != nil { isFocused = true } }
         // Loaded again when the LUT library changes, since edited thumbnails show looks.
         .task(id: ThumbnailLoad(photos: allPhotos.map(\.id), lutGeneration: library.looks.generation)) {
             await loadThumbnails()
