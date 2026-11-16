@@ -78,7 +78,7 @@ struct AdjustmentSlider: View {
             }
                 .labelsHidden()
                 .controlSize(.small)
-                .tint(track.isEmpty ? nil : .clear)
+                .tint(track.isEmpty ? .sliderFill : .clear)
                 .background(alignment: .center) { trackBackground }
                 .accessibilityValue("\(formatted(value)) \(unit)")
                 .accessibilityAction(named: "Reset", reset)

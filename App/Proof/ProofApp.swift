@@ -1327,8 +1327,8 @@ struct AdjustmentsInspector: View {
             Toggle(title, isOn: isOn)
                 .toggleStyle(.switch)
                 .controlSize(.mini)
-                // Green, as the cards' own switches are.
-                .tint(.green)
+                // The highlight, as the cards' own switches are.
+                .tint(.highlight)
                 .labelsHidden()
         }
         .help(help)

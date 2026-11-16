@@ -28,7 +28,7 @@ struct MasksInspector: View {
                     Toggle("Show Overlay", isOn: Binding(get: { library.showsMaskOverlay }, set: { library.showsMaskOverlay = $0 }))
                         .toggleStyle(.switch)
                         .controlSize(.small)
-                        .tint(.green)
+                        .tint(.highlight)
                         .help("Tint the selected mask red on the photo (O). Moving a slider turns it off.")
                 }
             }
@@ -158,7 +158,7 @@ struct MasksInspector: View {
                                            set: { value in library.changeLayer(at: index) { $0.mask.isInverted = value } }))
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                .tint(.green)
+                .tint(.highlight)
                 .help("Apply the adjustments where the mask doesn't")
             Button {
                 library.removeLayer(at: index)

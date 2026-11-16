@@ -1,17 +1,14 @@
-import AppKit
 import SwiftUI
 
 /// The selection style shared by the grid, the filmstrip, the Looks card and the navigator: a
-/// thin rounded outline a few points outside the photo, like a card. It is light gray in the
-/// light appearance and white in the dark, so no color competes with the photo.
+/// thin rounded outline a few points outside the photo, like a card, in the interface's one
+/// highlight color. It is only a line, so it doesn't compete with the photo.
 enum SelectionOutline {
     /// Thumbnails' own corners, small enough that the photo still reads as a rectangle.
     static let photoCornerRadius: CGFloat = 4
     static let lineWidth: CGFloat = 1
 
-    static let color = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .white : NSColor(white: 0.77, alpha: 1)
-    })
+    static let color = Color.highlight
 
     /// Keeps the outline's corners concentric with the photo's, whatever the padding.
     static func cornerRadius(padding: CGFloat) -> CGFloat { photoCornerRadius + padding }
