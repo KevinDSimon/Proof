@@ -8,7 +8,7 @@ Issue #194: Proof had no app icon, so the Dock and Finder showed the generic one
 
 ## Decision
 - The icon is an Icon Composer file, `App/Proof/AppIcon.icon`, rather than PNGs in the asset catalog. macOS applies the icon shape and the margin around it, and draws the dark, clear and tinted appearances from the same file. The build turns it into every size macOS needs.
-- It is flat: a solid fill of #131313 and one layer, `aperture-p.svg`, the P and its blades in flat white. Glass, specular highlights, the layer shadow and translucency are off. macOS still adds the edge and shadow it gives every app icon. The drawing's mask and repeated blade were written out as plain paths so the layer has no masks or `<use>` elements. The layer keeps the source drawing's coordinates and is scaled by 1024/912, so the mark keeps its size relative to the icon's edge.
+- It is flat: a solid fill of #131313 and one layer, `aperture-p.svg`, the P and its blades in flat white. Glass, specular highlights, the layer shadow and translucency are off. macOS still adds the edge and shadow it gives every app icon. The drawing's mask and repeated blade were written out as plain paths so the layer has no masks or `<use>` elements. The layer keeps the source drawing's coordinates and is scaled by 1.32, so the mark is about 70% of the icon's height. At the source drawing's proportion, 60% of the height, the black tile blended into the dark Dock and the mark looked smaller than the neighboring icons.
 - `ASSETCATALOG_COMPILER_APPICON_NAME` is `AppIcon` in both configurations.
 
 ## Consequences
