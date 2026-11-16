@@ -352,7 +352,8 @@ struct MaskOverlay: View {
         case .radialInside:
             return drag == nil ? .grabIdle : .grabActive
         case .linearTurn, .radialTurn:
-            return .image(Image(systemName: "arrow.clockwise"), hotSpot: .center)
+            // The crop tool's, so turning looks the same everywhere.
+            return .image(Image(nsImage: RotateCursor.image(for: .topRight)), hotSpot: .center)
         case .linearStart, .linearEnd:
             guard case let .linear(gradient) = library.shownLayer?.mask.shape else { return .default }
             let lines = linearLines(gradient, photo: photo)

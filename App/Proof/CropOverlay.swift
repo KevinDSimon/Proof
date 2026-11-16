@@ -348,10 +348,11 @@ private extension CropHandle {
     }
 }
 
-/// The pointer outside a crop corner. macOS has no rotate cursor, so this draws one in the style
-/// of its resize cursors: a black curved arrow with a white outline, curving around the corner.
+/// The pointer outside a crop corner, and on the Masks tool's turning handles. macOS has no
+/// rotate cursor, so this draws one in the style of its resize cursors: a black curved arrow
+/// with a white outline, curving around the corner.
 @MainActor
-private enum RotateCursor {
+enum RotateCursor {
     private static var images: [CropHandle: NSImage] = [:]
 
     static func image(for corner: CropHandle) -> NSImage {
