@@ -56,6 +56,7 @@ Your original photos are never changed. Edits go into a `.proof` file next to ea
 - Lens corrections from the camera's profile, manual distortion, chromatic aberration and lens vignetting
 - Perspective correction, automatic or guided by lines you draw
 - Crop, straighten, rotate and flip
+- Masks: linear and radial gradients, a brush, and the photo's subject, each with its own exposure, tone, presence and color sliders
 - Before and after, undo, and a History panel to step back through changes
 - Copy and paste settings between photos
 
@@ -75,7 +76,7 @@ Your original photos are never changed. Edits go into a `.proof` file next to ea
 
 The first version, v1, is nearly complete; this test build is part of it. Planned next:
 
-- **v1.1:** spot healing for dust, masks for adjusting part of a photo, and better automatic straightening
+- **v1.1:** spot healing for dust, masks limited by brightness or color, and better automatic straightening
 - **v1.2:** presets, and virtual copies with side-by-side comparison
 - **Later:** matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF files, importing presets from other editors, and an iPad and iPhone version
 

@@ -1,5 +1,5 @@
 /// One checkbox in the Copy Settings sheet, as in Lightroom's: a slider, a section of a card,
-/// or a card with one control. The sheet groups them by card, with Crop and Spot Removal on their own.
+/// or a card with one control. The sheet groups them by card, with Crop, Spot Removal and Masks on their own.
 public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
     case whiteBalance
     case exposure, contrast, highlights, shadows, whites, blacks,
@@ -11,16 +11,18 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
     case transform
     case crop
     case spotRemoval
+    case masks
     case vignette, grain, halation, bloom
     case look
 
-    /// Ticked the first time the sheet opens: everything but Transform, Crop and Spot Removal,
-    /// which fit the photo they came from. Transform and Crop suit others only when nothing moved,
-    /// as on a tripod; spots suit others when they cover sensor dust, which stays put on the sensor.
-    public static let defaultItems: Set<SettingsItem> = Set(allCases).subtracting([.transform, .crop, .spotRemoval])
+    /// Ticked the first time the sheet opens: everything but Transform, Crop, Spot Removal and
+    /// Masks, which fit the photo they came from. Transform and Crop suit others only when nothing
+    /// moved, as on a tripod; spots suit others when they cover sensor dust, which stays put on the
+    /// sensor; masks are drawn around what one photo shows.
+    public static let defaultItems: Set<SettingsItem> = Set(allCases).subtracting([.transform, .crop, .spotRemoval, .masks])
 
     /// The inspector card that shows the item: the sheet groups items by it, and a paste turns
-    /// its switch on. `nil` for Crop and Spot Removal, which their tools show.
+    /// its switch on. `nil` for Crop, Spot Removal and Masks, which their tools show.
     public var group: AdjustmentGroup? {
         switch self {
         case .whiteBalance: .whiteBalance
@@ -31,7 +33,7 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
         case .sharpening, .noiseReduction, .colorNoiseReduction: .detail
         case .lensProfile, .chromaticAberration, .distortion, .lensVignetting: .lens
         case .transform: .transform
-        case .crop, .spotRemoval: nil
+        case .crop, .spotRemoval, .masks: nil
         case .vignette, .grain, .halation, .bloom: .effects
         case .look: .look
         }
@@ -95,6 +97,8 @@ extension EditRecipe {
             case .crop: recipe.crop = source.crop
             // Every spot, replacing the target's, so pasting onto a photo twice doesn't double them.
             case .spotRemoval: recipe.spots = source.spots
+            // Every layer, replacing the target's, as spots are.
+            case .masks: recipe.layers = source.layers
             case .vignette: recipe.vignette = source.vignette
             case .grain: recipe.grain = source.grain
             case .halation: recipe.halation = source.halation

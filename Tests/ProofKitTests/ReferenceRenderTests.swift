@@ -36,6 +36,10 @@ struct ReferenceRenderTests {
         ("lens-manual", lensManual, nil),
         ("perspective", perspective, nil),
         ("spots", spots, nil),
+        ("mask-linear", maskLinear, nil),
+        ("mask-radial", maskRadial, nil),
+        ("mask-brush", maskBrush, nil),
+        ("mask-subject", maskSubject, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -240,6 +244,64 @@ struct ReferenceRenderTests {
         return recipe
     }()
 
+    /// The sky darkened and cooled by a linear gradient from the top, under a crop that turns the
+    /// photo, so a change to where masks land relative to the crop shows too.
+    static let maskLinear: EditRecipe = {
+        var adjustments = LocalAdjustments()
+        adjustments.exposure = -1
+        adjustments.highlights = -40
+        adjustments.temperature = -20
+        var recipe = EditRecipe()
+        recipe.layers = [Layer(name: "Sky", mask: Mask(.linear(LinearMask(start: CGPoint(x: 0.5, y: 0), end: CGPoint(x: 0.5, y: 0.45)))),
+                               adjustments: adjustments)]
+        recipe.crop = Crop(x: 0.1, y: 0.05, width: 0.8, height: 0.8, rotation: 90)
+        return recipe
+    }()
+
+    /// Everything outside a turned, feathered ellipse darkened, with clarity.
+    static let maskRadial: EditRecipe = {
+        var adjustments = LocalAdjustments()
+        adjustments.exposure = -0.8
+        adjustments.clarity = 30
+        var recipe = EditRecipe()
+        recipe.layers = [Layer(name: "Edges",
+                               mask: Mask(.radial(RadialMask(center: CGPoint(x: 0.48, y: 0.45), radiusX: 0.25, radiusY: 0.15,
+                                                                 angle: 30, feather: 60)), isInverted: true),
+                               adjustments: adjustments)]
+        return recipe
+    }()
+
+    /// Two strokes across the lower half with lifted shadows, and an erased gap.
+    static let maskBrush: EditRecipe = {
+        var adjustments = LocalAdjustments()
+        adjustments.shadows = 60
+        adjustments.exposure = 0.5
+        adjustments.saturation = 30
+        var recipe = EditRecipe()
+        recipe.layers = [Layer(name: "Foreground", mask: Mask(.brush(BrushMask(strokes: [
+            BrushStroke(points: [CGPoint(x: 0.1, y: 0.7), CGPoint(x: 0.5, y: 0.75), CGPoint(x: 0.9, y: 0.7)], radius: 0.08),
+            BrushStroke(points: [CGPoint(x: 0.2, y: 0.9), CGPoint(x: 0.8, y: 0.9)], radius: 0.05, feather: 20, flow: 60),
+            BrushStroke(points: [CGPoint(x: 0.5, y: 0.6), CGPoint(x: 0.5, y: 0.95)], radius: 0.03, erases: true),
+        ]))), adjustments: adjustments)]
+        return recipe
+    }()
+
+    /// The subject Vision found in the sample photo when the references were recorded, brightened,
+    /// warmed and given texture. The mask is kept with the references, so Vision changing later
+    /// doesn't change the render.
+    static let maskSubject: EditRecipe = {
+        var adjustments = LocalAdjustments()
+        adjustments.exposure = 0.5
+        adjustments.texture = 40
+        adjustments.temperature = 15
+        let png = (try? Data(contentsOf: subjectMaskFile)) ?? Data()
+        var recipe = EditRecipe()
+        recipe.layers = [Layer(name: "Subject", mask: Mask(.subject(SubjectMask(png: png))), adjustments: adjustments)]
+        return recipe
+    }()
+
+    static let subjectMaskFile = referencesFolder.appendingPathComponent("mask-subject-input.png")
+
     static let perspective: EditRecipe = {
         var recipe = EditRecipe()
         recipe.transform = PerspectiveTransform(vertical: -25, horizontal: 10, rotate: 1.5, aspect: 10,
@@ -283,6 +345,11 @@ struct ReferenceRenderTests {
         let renderer = try RAWRenderer()
         try await renderer.open(url)
         try FileManager.default.createDirectory(at: referencesFolder, withIntermediateDirectories: true)
+        // The subject mask is found once and kept, since `maskSubject` reads it.
+        if !FileManager.default.fileExists(atPath: Self.subjectMaskFile.path) {
+            let subject = try #require(try await renderer.subjectMask(recipe: EditRecipe()))
+            try subject.png.write(to: Self.subjectMaskFile)
+        }
         for reference in try await renders(renderer) {
             try CIContext().writePNGRepresentation(of: reference.image, to: referencesFolder.appendingPathComponent("\(reference.name).png"),
                                                    format: .RGBA8, colorSpace: RAWRenderer.colorSpace)

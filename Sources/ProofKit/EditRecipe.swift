@@ -24,6 +24,9 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var crop: Crop?
     public var spots: [Spot]
     public var layers: [Layer]
+    /// The layer whose mask the canvas tints red, by its place in `layers`. Not saved: it is set
+    /// only on the recipe the canvas renders while the Masks tool shows a mask.
+    public var maskOverlay: Int?
 
     private enum CodingKeys: String, CodingKey {
         case formatVersion, processVersion, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, spots, layers
@@ -95,10 +98,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
         // Format 1 held temperature and tint as −100 to 100 offsets. Nothing rendered them, so
         // they are dropped and the photo keeps the camera's white balance, as it always showed.
-        if formatVersion < 2 {
-            basic.resetWhiteBalance()
-            for index in layers.indices { layers[index].basic.resetWhiteBalance() }
-        }
+        if formatVersion < 2 { basic.resetWhiteBalance() }
         // Format 2 had no turn, flips or ratio in `crop`, which read as none. No version of Proof
         // wrote or rendered a format 2 crop, so its rectangle and angle are kept as they are.
         formatVersion = Self.currentFormatVersion
@@ -439,18 +439,5 @@ public struct Look: Codable, Equatable, Sendable {
     public init(lut: String, strength: Double = 1) {
         self.lut = lut
         self.strength = strength
-    }
-}
-
-/// A mask with its own adjustments. Masks arrive in v1.2; the type exists now so the format doesn't change.
-public struct Layer: Codable, Equatable, Sendable {
-    public var name: String
-    public var isEnabled: Bool
-    public var basic: BasicAdjustments
-
-    public init(name: String, isEnabled: Bool = true, basic: BasicAdjustments = BasicAdjustments()) {
-        self.name = name
-        self.isEnabled = isEnabled
-        self.basic = basic
     }
 }

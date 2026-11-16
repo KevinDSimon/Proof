@@ -12,7 +12,7 @@ struct CopySettingsSheet: View {
     @State private var items: Set<SettingsItem> = []
 
     /// The cards in the inspector's order, split into columns of about equal height, with Crop
-    /// and Spot Removal (`nil`) beside Transform.
+    /// Spot Removal and Masks (`nil`) beside Transform.
     private static let columns: [[AdjustmentGroup?]] = [
         [.look, .whiteBalance, .basic],
         [.curve, .selectiveColor, .detail, .lens],
@@ -24,8 +24,8 @@ struct CopySettingsSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Copy Settings")
                     .font(.headline)
-                // Transform, Crop and Spot Removal fit the photo they came from, so they start unticked.
-                Text("Transform and Crop suit photos taken from the same spot, as on a tripod. Spot Removal suits photos with the same sensor dust.")
+                // Transform, Crop, Spot Removal and Masks fit the photo they came from, so they start unticked.
+                Text("Transform and Crop suit photos taken from the same spot, as on a tripod. Spot Removal suits photos with the same sensor dust, and Masks photos framed alike.")
                     .foregroundStyle(.secondary)
             }
             HStack(alignment: .top, spacing: 32) {
@@ -64,7 +64,7 @@ struct CopySettingsSheet: View {
     /// while only some of its items are ticked, and its items are indented under it.
     @ViewBuilder
     private func section(_ group: AdjustmentGroup?) -> some View {
-        let groupItems = group.map(SettingsItem.items(in:)) ?? [.crop, .spotRemoval]
+        let groupItems = group.map(SettingsItem.items(in:)) ?? [.crop, .spotRemoval, .masks]
         if group == nil {
             // Tools rather than cards, each a checkbox of its own.
             VStack(alignment: .leading, spacing: 12) {
@@ -139,6 +139,7 @@ struct CopySettingsSheet: View {
         case .transform: "Transform"
         case .crop: "Crop"
         case .spotRemoval: "Spot Removal"
+        case .masks: "Masks"
         case .vignette: "Vignette"
         case .grain: "Grain"
         case .halation: "Halation"

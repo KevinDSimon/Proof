@@ -52,6 +52,7 @@ struct PhotoCanvas: NSViewRepresentable {
         context.coordinator.setBackdrop(backdrop)
         context.coordinator.setAngle(angle)
         context.coordinator.setViewport(viewport)
+        context.coordinator.setHidesPanPointer(zoom.hidesPanPointer)
         context.coordinator.show(url, recipe: recipe)
     }
 }
@@ -116,7 +117,7 @@ final class CanvasView: MTKView {
 
     /// An open hand while there is somewhere to pan to.
     override func resetCursorRects() {
-        if zoom?.canPan == true { addCursorRect(bounds, cursor: .openHand) }
+        if zoom?.canPan == true, zoom?.hidesPanPointer != true { addCursorRect(bounds, cursor: .openHand) }
     }
 }
 
@@ -190,6 +191,14 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
         guard angle != self.angle else { return }
         self.angle = angle
         view?.needsDisplay = true
+    }
+
+    private var hidesPanPointer = false
+
+    func setHidesPanPointer(_ hides: Bool) {
+        guard hides != hidesPanPointer else { return }
+        hidesPanPointer = hides
+        if let view { view.window?.invalidateCursorRects(for: view) }
     }
 
     func setViewport(_ viewport: Viewport) {

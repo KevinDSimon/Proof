@@ -168,6 +168,9 @@ struct ProofApp: App {
                                                      set: { _ in library.toggleSpotRemoval() }))
                     .keyboardShortcut("q", modifiers: [])
                     .disabled(!library.isEditing || library.isCropping || library.selectedEdit == nil)
+                Toggle("Masks", isOn: Binding(get: { library.isMasking }, set: { _ in library.toggleMasks() }))
+                    .keyboardShortcut("m", modifiers: [])
+                    .disabled(!library.isEditing || library.isCropping || library.selectedEdit == nil)
                 // W, as in Lightroom; while it's open, Esc closes it instead of leaving Edit.
                 if library.isPickingWhiteBalance {
                     Button("Cancel White Balance Selector") { library.isPickingWhiteBalance = false }
@@ -280,6 +283,8 @@ struct ContentView: View {
                         CropInspector(library: library, renderer: renderer)
                     } else if library.isRemovingSpots {
                         SpotRemovalInspector(library: library)
+                    } else if library.isMasking {
+                        MasksInspector(library: library, renderer: renderer)
                     } else {
                         AdjustmentsInspector(library: library, renderer: renderer)
                     }
@@ -530,6 +535,11 @@ struct ContentView: View {
                     }
                     .help("Remove dust and small spots (Q)")
                     .disabled(library.selectedEdit == nil)
+                    Toggle(isOn: Binding(get: { library.isMasking }, set: { _ in library.toggleMasks() })) {
+                        Label("Masks", systemImage: "circle.lefthalf.filled")
+                    }
+                    .help("Adjust part of the photo with gradients, a brush or its subject (M)")
+                    .disabled(library.selectedEdit == nil)
                 }
             }
             // The crop tool and the inspector are separate groups.
@@ -696,6 +706,8 @@ struct EditCanvas: View {
                            backdrop: library.canvasColor.color)
             } else if library.isRemovingSpots, let size = library.selectedEdit?.size {
                 SpotOverlay(library: library, renderer: renderer, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
+            } else if library.isMasking, let size = library.selectedEdit?.size {
+                MaskOverlay(library: library, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
             } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
@@ -734,6 +746,7 @@ struct EditCanvas: View {
         var recipe = library.selectedEdit?.recipe ?? EditRecipe()
         if library.browse.isShowingOriginal { return recipe.original }
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
+        recipe.maskOverlay = library.overlaidLayer
         return recipe.without(library.offGroups)
     }
 }
@@ -1438,33 +1451,33 @@ struct AdjustmentsInspector: View {
     /// photo's colors, so they are the one place the inspector isn't gray. Each color fades out
     /// toward the middle rather than blending into the other: opposite colors blend to gray,
     /// which reads as a dark band. The faded middle takes the panel's color in either appearance.
-    private static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
-    private static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
+    static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
+    static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
     /// Dark to light, the way exposure moves the photo. A soft range of grays rather than black to
     /// white, as Lightroom draws it, so the tracks don't compete with the photo.
-    private static let exposureTrack = [Color(white: 0.12), Color(white: 0.62)]
+    static let exposureTrack = [Color(white: 0.12), Color(white: 0.62)]
     /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
-    private static let contrastTrack = exposureTrack
+    static let contrastTrack = exposureTrack
     /// Texture, Clarity and Dehaze run light to dark, the reverse of the tone sliders, as Lightroom draws them.
-    private static let textureTrack = Array(exposureTrack.reversed())
-    private static let clarityTrack = textureTrack
-    private static let dehazeTrack = textureTrack
+    static let textureTrack = Array(exposureTrack.reversed())
+    static let clarityTrack = textureTrack
+    static let dehazeTrack = textureTrack
     /// Dark to light, the way the edges move, as Lightroom draws Vignette's Amount.
-    private static let vignetteAmountTrack = exposureTrack
-    private static let highlightsTrack = exposureTrack
-    private static let shadowsTrack = exposureTrack
-    private static let whitesTrack = exposureTrack
-    private static let blacksTrack = exposureTrack
+    static let vignetteAmountTrack = exposureTrack
+    static let highlightsTrack = exposureTrack
+    static let shadowsTrack = exposureTrack
+    static let whitesTrack = exposureTrack
+    static let blacksTrack = exposureTrack
     /// Gray to a full spectrum, teal through blue and magenta to red, growing more colorful
     /// toward the right. A single color would suggest the slider pushes the photo toward it.
-    private static let vibranceTrack = [
+    static let vibranceTrack = [
         Color(white: 0.5),
         Color(hue: 0.47, saturation: 0.3, brightness: 0.7),
         Color(hue: 0.6, saturation: 0.6, brightness: 0.85),
         Color(hue: 0.83, saturation: 0.75, brightness: 0.9),
         Color(hue: 1, saturation: 0.85, brightness: 0.95),
     ]
-    private static let saturationTrack = vibranceTrack
+    static let saturationTrack = vibranceTrack
 
     private static func fading(_ start: Color, into end: Color) -> [Color] {
         [start, start.opacity(0.15), end.opacity(0.15), end]

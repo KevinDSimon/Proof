@@ -18,6 +18,8 @@ final class CanvasZoom {
     @ObservationIgnored var shown: (photo: RenderedPhoto, detail: RenderedPhoto?)?
     /// Off while the crop tool is open, which always shows the whole photo.
     var isEnabled = true
+    /// A tool on the photo shows its own pointers, so the canvas doesn't show its open hand.
+    var hidesPanPointer = false
 
     private var hasSizes: Bool {
         isEnabled && photoSize.width > 0 && viewSize.width > 0

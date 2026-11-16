@@ -81,16 +81,16 @@ struct CopiedSettingsTests {
         #expect(pasted.crop == Self.target.crop)
     }
 
-    @Test("Every card has at least one item, and every item but Crop and Spot Removal belongs to one card")
+    @Test("Every card has at least one item, and every item but Crop, Spot Removal and Masks belongs to one card")
     func groupsCoverEveryItem() {
         let grouped = AdjustmentGroup.allCases.flatMap { SettingsItem.items(in: $0) }
         #expect(AdjustmentGroup.allCases.allSatisfy { !SettingsItem.items(in: $0).isEmpty })
-        #expect(grouped.count == SettingsItem.allCases.count - 2)
-        #expect(Set(grouped) == Set(SettingsItem.allCases).subtracting([.crop, .spotRemoval]))
+        #expect(grouped.count == SettingsItem.allCases.count - 3)
+        #expect(Set(grouped) == Set(SettingsItem.allCases).subtracting([.crop, .spotRemoval, .masks]))
     }
 
-    @Test("Transform, Crop and Spot Removal start unticked; every other item starts ticked")
+    @Test("Transform, Crop, Spot Removal and Masks start unticked; every other item starts ticked")
     func defaultItems() {
-        #expect(SettingsItem.defaultItems == Set(SettingsItem.allCases).subtracting([.transform, .crop, .spotRemoval]))
+        #expect(SettingsItem.defaultItems == Set(SettingsItem.allCases).subtracting([.transform, .crop, .spotRemoval, .masks]))
     }
 }
