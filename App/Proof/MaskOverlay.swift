@@ -2,15 +2,14 @@ import AppKit
 import ProofKit
 import SwiftUI
 
-/// The Masks tool on the photo. A gradient chosen in the inspector is drawn by dragging: a
-/// linear one from where its full effect starts to where it fades out, a radial one from its
-/// center outward. The selected gradient shows its handles: a linear one three lines, the
-/// middle to move it and the outer two to change the fade; a radial one its ellipse, with a pin
-/// to move it, handles on its sides to size it and one above it to turn it. A brush mask is
-/// painted by dragging, and erased with Option held or Erase chosen. Other masks show a pin to
-/// select them by. Delete removes the selected mask, O shows it in red, [ and ] size the brush,
-/// and Return, Esc and M close the tool. Pinching zooms and dragging with the space bar held
-/// pans, as on the canvas. A temporary tool, so it may sit on the photo.
+/// The Masks tool on the photo. Every mask shows a pin: click one to select its mask, and drag a
+/// gradient's or brush mask's pin to move it. The selected linear gradient shows three lines:
+/// drag the middle one to turn it and an outer one to change the fade. The selected radial
+/// gradient shows its ellipse: drag inside to move it, the handles on its sides to size it and
+/// the one above it to turn it (Shift steps by 15°). On a selected brush mask, dragging paints,
+/// and erases with Option held or Erase chosen. Delete removes the selected mask, O shows it in
+/// red, [ and ] size the brush, and Return, Esc and M close the tool. Pinching zooms and dragging
+/// with the space bar held pans, as on the canvas. A temporary tool, so it may sit on the photo.
 struct MaskOverlay: View {
     let library: Library
     let zoom: CanvasZoom
@@ -20,14 +19,14 @@ struct MaskOverlay: View {
     let photoSize: CGSize
 
     private enum Part: Equatable {
-        case linearStart, linearEnd, linearMiddle
-        case radialCenter, radialWidth, radialHeight, radialAngle
+        case linearStart, linearEnd, linearTurn
+        case radialWidth, radialHeight, radialTurn, radialInside
+        /// A mask's pin, by its place in `layers`.
         case pin(Int)
     }
 
     /// What a drag does, with what it started from.
     private enum Drag {
-        case drawing(Mask.Kind, start: CGPoint, layer: Int?)
         case moving(Part, layer: Int, original: Mask, start: CGPoint)
         case painting(last: CGPoint)
         case panning(last: CGSize)
@@ -42,6 +41,7 @@ struct MaskOverlay: View {
 
     /// How near a handle or line a press must be, in points.
     private static let reach = 7.0
+    private static let pinRadius = 5.0
     private static let sizeStep = 1.15
 
     var body: some View {
@@ -50,9 +50,14 @@ struct MaskOverlay: View {
             let _ = updateFrame(geometry.frame(in: .global))
             let layers = library.layers
             Canvas { context, _ in
-                var thin = Path(), bold = Path(), dashed = Path(), handles = Path(), pins = Path(), chosenPins = Path()
-                for (index, layer) in layers.enumerated() where index != library.selectedLayer {
-                    if let pin = pinPoint(of: layer.mask, photo: photo) { pins.addEllipse(in: square(pin, 4)) }
+                var thin = Path(), bold = Path(), dashed = Path(), handles = Path(), pins = Path(), chosenPin = Path()
+                for (index, layer) in layers.enumerated() {
+                    guard let pin = pinPoint(of: layer.mask, photo: photo) else { continue }
+                    if index == library.selectedLayer {
+                        chosenPin.addEllipse(in: square(pin, Self.pinRadius))
+                    } else {
+                        pins.addEllipse(in: square(pin, Self.pinRadius))
+                    }
                 }
                 if let layer = library.shownLayer {
                     switch layer.mask.shape {
@@ -64,23 +69,21 @@ struct MaskOverlay: View {
                             line.addLine(to: CGPoint(x: point.x + lines.across.dx * 5000, y: point.y + lines.across.dy * 5000))
                             if isMiddle { bold.addPath(line) } else { thin.addPath(line) }
                         }
-                        chosenPins.addEllipse(in: square(lines.middle, 5))
                     case let .radial(gradient):
                         let shape = radialShape(gradient, photo: photo)
                         bold.addPath(shape.outline)
                         dashed.addPath(shape.inner)
                         for handle in [shape.width, shape.height] { handles.addRect(square(handle, 4)) }
-                        handles.addEllipse(in: square(shape.angle, 4))
+                        handles.addEllipse(in: square(shape.turn, 4))
                         thin.move(to: shape.height)
-                        thin.addLine(to: shape.angle)
-                        chosenPins.addEllipse(in: square(shape.center, 5))
+                        thin.addLine(to: shape.turn)
                     case .brush, .subject, .unknown:
-                        if let pin = pinPoint(of: layer.mask, photo: photo) { chosenPins.addEllipse(in: square(pin, 5)) }
+                        break
                     }
                 }
                 // The brush's size at the pointer, and where its feather starts.
                 var brush = Path(), brushInner = Path()
-                if isPainting, let pointer, drag == nil || isDrawingStroke, !isSpaceDown, photo.contains(pointer) {
+                if isPainting, let pointer, hovered == nil || isDrawingStroke, !isSpaceDown, photo.contains(pointer) {
                     let radius = shownRadius(library.nextStroke.radius, photo: photo)
                     brush.addEllipse(in: square(pointer, radius))
                     let inner = radius * (1 - library.nextStroke.feather / 100)
@@ -95,27 +98,31 @@ struct MaskOverlay: View {
                 var shadowed = context
                 shadowed.addFilter(.shadow(color: .black.opacity(0.6), radius: 1.5))
                 shadowed.fill(handles, with: .color(.white))
-                shadowed.fill(pins, with: .color(.white.opacity(0.6)))
-                shadowed.stroke(pins, with: .color(.white), lineWidth: 1)
-                shadowed.fill(chosenPins, with: .color(.black))
-                shadowed.stroke(chosenPins, with: .color(.white), lineWidth: 2)
+                // Gray pins with a white ring; the selected mask's is black.
+                shadowed.fill(pins, with: .color(Color(white: 0.55)))
+                shadowed.stroke(pins, with: .color(.white), lineWidth: 2)
+                shadowed.fill(chosenPin, with: .color(.black))
+                shadowed.stroke(chosenPin, with: .color(.white), lineWidth: 2)
                 shadowed.stroke(brush, with: .color(.white.opacity(0.8)), lineWidth: 1)
                 shadowed.stroke(brushInner, with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
             }
             .contentShape(Rectangle())
             // Not focusable: the keys are watched below, and taking focus would cost the first
-            // press after a click in the inspector, such as on Linear or Radial.
-            .onAppear(perform: watchKeys)
+            // press after a click in the inspector.
+            .onAppear {
+                zoom.hidesPanPointer = true
+                watchKeys()
+            }
             .onDisappear {
+                zoom.hidesPanPointer = false
                 if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
                 keyMonitor = nil
             }
             .accessibilityElement()
             .accessibilityLabel("Photo")
             .accessibilityValue(layers.count == 1 ? "1 mask" : "\(layers.count) masks")
-            .accessibilityHint(library.drawingGradient != nil ? "Drag to draw the gradient"
-                               : isPainting ? "Drag to paint the mask" : "")
-            .pointerStyle(pointerStyle)
+            .accessibilityHint(isPainting ? "Drag to paint the mask" : "")
+            .pointerStyle(pointerStyle(photo: photo))
             .onContinuousHover { phase in
                 if case let .active(location) = phase {
                     pointer = location
@@ -145,10 +152,8 @@ struct MaskOverlay: View {
             Group {
                 Button("Done with Masks") { library.finishMasking() }
                     .keyboardShortcut(.return, modifiers: [])
-                Button("Close Masks") {
-                    if library.drawingGradient != nil { library.drawingGradient = nil } else { library.finishMasking() }
-                }
-                .keyboardShortcut(.cancelAction)
+                Button("Close Masks") { library.finishMasking() }
+                    .keyboardShortcut(.cancelAction)
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -159,7 +164,7 @@ struct MaskOverlay: View {
     // MARK: Gestures
 
     private var isPainting: Bool {
-        guard library.drawingGradient == nil, case .brush = library.shownLayer?.mask.shape else { return false }
+        guard case .brush = library.shownLayer?.mask.shape else { return false }
         return true
     }
 
@@ -179,38 +184,25 @@ struct MaskOverlay: View {
                 pan(value.translation, last: .zero, viewSize: viewSize)
                 return
             }
-            guard let start = point(at: value.startLocation, photo: photo, clamped: false) else { return }
-            let pressed = part(at: value.startLocation, photo: photo)
-            if case let .pin(index) = pressed {
+            guard let start = point(at: value.startLocation, photo: photo) else { return }
+            switch part(at: value.startLocation, photo: photo) {
+            case let .pin(index):
                 library.selectLayer(index)
                 drag = .moving(.pin(index), layer: index, original: library.layers[index].mask, start: start)
-            } else if let pressed, let index = library.selectedLayer, let layer = library.shownLayer {
+            case let pressed?:
+                guard let index = library.selectedLayer, let layer = library.shownLayer else { return }
                 drag = .moving(pressed, layer: index, original: layer.mask, start: start)
-            } else if let kind = library.drawingGradient {
-                drag = .drawing(kind, start: start, layer: nil)
-            } else if isPainting, photo.contains(value.startLocation) {
+            case nil:
+                guard isPainting, photo.contains(value.startLocation) else { return }
                 library.isAdjusting = true
                 let erasing = library.isErasing != NSEvent.modifierFlags.contains(.option)
                 library.startStroke(at: start, erasing: erasing)
                 drag = .painting(last: start)
                 return
-            } else {
-                return
             }
         }
-        guard let current = point(at: value.location, photo: photo, clamped: false) else { return }
+        guard let current = point(at: value.location, photo: photo) else { return }
         switch drag {
-        case let .drawing(kind, start, layer):
-            guard hypot(value.translation.width, value.translation.height) >= 3 else { return }
-            library.isAdjusting = true
-            let mask = Mask(kind == .linear ? .linear(LinearMask(start: start, end: current))
-                                            : .radial(radial(center: start, corner: current)))
-            if let layer {
-                library.changeLayer(at: layer) { $0.mask.shape = mask.shape }
-            } else if let index = library.appendLayer(mask) {
-                library.selectLayer(index)
-                drag = .drawing(kind, start: start, layer: index)
-            }
         case let .moving(part, layer, original, start):
             guard hypot(value.translation.width, value.translation.height) >= 2 else { return }
             library.isAdjusting = true
@@ -232,9 +224,9 @@ struct MaskOverlay: View {
         defer { drag = nil }
         switch drag {
         case let .painting(last):
-            if let end = point(at: value.location, photo: photo, clamped: false), end != last { library.continueStroke(to: end) }
+            if let end = point(at: value.location, photo: photo), end != last { library.continueStroke(to: end) }
             library.isAdjusting = false
-        case .drawing, .moving:
+        case .moving:
             library.isAdjusting = false
         case .panning, nil:
             break
@@ -248,17 +240,6 @@ struct MaskOverlay: View {
         drag = .panning(last: translation)
     }
 
-    /// A radial gradient centered at `center` reaching to `corner`, in mask coordinates: as wide
-    /// and tall as the drag, but at least a little round.
-    private func radial(center: CGPoint, corner: CGPoint) -> RadialMask {
-        let long = max(photoSize.width, photoSize.height, 1)
-        let rx = abs(corner.x - center.x) * photoSize.width / long
-        let ry = abs(corner.y - center.y) * photoSize.height / long
-        let least = max(rx, ry) / 5
-        return RadialMask(center: center, radiusX: max(rx, least, RadialMask.radiusRange.lowerBound),
-                              radiusY: max(ry, least, RadialMask.radiusRange.lowerBound))
-    }
-
     /// `mask` with `part` dragged from `start` to `end`, both in mask coordinates.
     private static func moved(_ mask: Mask, part: Part, from start: CGPoint, to end: CGPoint, photoSize: CGSize) -> Mask {
         var mask = mask
@@ -270,6 +251,19 @@ struct MaskOverlay: View {
             switch part {
             case .linearStart: gradient.start = shifted(gradient.start)
             case .linearEnd: gradient.end = shifted(gradient.end)
+            case .linearTurn:
+                // Both ends turn around the middle, in pixels with y down so the turn is true.
+                let middle = CGPoint(x: (gradient.startX + gradient.endX) / 2, y: (gradient.startY + gradient.endY) / 2)
+                let from = atan2((start.y - middle.y) * photoSize.height, (start.x - middle.x) * photoSize.width)
+                let to = atan2((end.y - middle.y) * photoSize.height, (end.x - middle.x) * photoSize.width)
+                let angle = to - from
+                func turned(_ point: CGPoint) -> CGPoint {
+                    let x = (point.x - middle.x) * photoSize.width, y = (point.y - middle.y) * photoSize.height
+                    return CGPoint(x: middle.x + (x * cos(angle) - y * sin(angle)) / photoSize.width,
+                                   y: middle.y + (x * sin(angle) + y * cos(angle)) / photoSize.height)
+                }
+                gradient.start = turned(gradient.start)
+                gradient.end = turned(gradient.end)
             default:
                 gradient.start = shifted(gradient.start)
                 gradient.end = shifted(gradient.end)
@@ -285,7 +279,7 @@ struct MaskOverlay: View {
                 gradient.radiusX = min(max(abs(dx * cos(angle) + dy * sin(angle)) / long, range.lowerBound), range.upperBound)
             case .radialHeight:
                 gradient.radiusY = min(max(abs(-dx * sin(angle) + dy * cos(angle)) / long, range.lowerBound), range.upperBound)
-            case .radialAngle:
+            case .radialTurn:
                 // The handle sits above the center when the angle is 0.
                 var degrees = atan2(dx, -dy) * 180 / .pi
                 if NSEvent.modifierFlags.contains(.shift) { degrees = (degrees / 15).rounded() * 15 }
@@ -294,7 +288,16 @@ struct MaskOverlay: View {
                 gradient.center = shifted(gradient.center)
             }
             mask.shape = .radial(gradient)
-        case .brush, .subject, .unknown:
+        case var .brush(brush):
+            // Only its pin moves a brush mask, and every stroke moves with it.
+            guard case .pin = part else { break }
+            for index in brush.strokes.indices {
+                brush.strokes[index].points = brush.strokes[index].points.enumerated().map { offset, value in
+                    value + (offset.isMultiple(of: 2) ? shift.x : shift.y)
+                }
+            }
+            mask.shape = .brush(brush)
+        case .subject, .unknown:
             break
         }
         return mask
@@ -302,47 +305,78 @@ struct MaskOverlay: View {
 
     // MARK: Hit testing
 
-    /// The selected mask's handles first, then the other masks' pins.
+    /// Pins first, then the selected mask's handles and lines, then the inside of its ellipse.
     private func part(at location: CGPoint, photo: CGRect) -> Part? {
         func near(_ point: CGPoint, _ distance: Double = Self.reach) -> Bool {
             hypot(location.x - point.x, location.y - point.y) <= distance
         }
-        if library.drawingGradient == nil, let layer = library.shownLayer {
-            switch layer.mask.shape {
-            case let .linear(gradient):
-                let lines = linearLines(gradient, photo: photo)
-                // How far along the gradient's direction the location is from each line.
-                func off(_ point: CGPoint) -> Double {
-                    abs((location.x - point.x) * lines.across.dy - (location.y - point.y) * lines.across.dx)
-                }
-                if near(lines.middle, 9) || off(lines.middle) <= Self.reach { return .linearMiddle }
-                if off(lines.start) <= Self.reach { return .linearStart }
-                if off(lines.end) <= Self.reach { return .linearEnd }
-            case let .radial(gradient):
-                let shape = radialShape(gradient, photo: photo)
-                if near(shape.angle) { return .radialAngle }
-                if near(shape.width) { return .radialWidth }
-                if near(shape.height) { return .radialHeight }
-                if near(shape.center, 9) || shape.outline.contains(location) { return .radialCenter }
-            case .brush, .subject, .unknown:
-                break
-            }
+        let layers = library.layers
+        // The selected mask's pin first, then the topmost of the others.
+        let order = (library.selectedLayer.map { [$0] } ?? []) + layers.indices.reversed().filter { $0 != library.selectedLayer }
+        for index in order where layers.indices.contains(index) {
+            if let pin = pinPoint(of: layers[index].mask, photo: photo), near(pin, Self.pinRadius + 3) { return .pin(index) }
         }
-        for (index, layer) in library.layers.enumerated().reversed() where index != library.selectedLayer {
-            if let pin = pinPoint(of: layer.mask, photo: photo), near(pin) { return .pin(index) }
+        guard let layer = library.shownLayer else { return nil }
+        switch layer.mask.shape {
+        case let .linear(gradient):
+            let lines = linearLines(gradient, photo: photo)
+            // How far along the gradient's direction the location is from each line.
+            func off(_ point: CGPoint) -> Double {
+                abs((location.x - point.x) * lines.across.dy - (location.y - point.y) * lines.across.dx)
+            }
+            guard photo.contains(location) else { return nil }
+            if off(lines.middle) <= Self.reach { return .linearTurn }
+            if off(lines.start) <= Self.reach { return .linearStart }
+            if off(lines.end) <= Self.reach { return .linearEnd }
+        case let .radial(gradient):
+            let shape = radialShape(gradient, photo: photo)
+            if near(shape.turn) { return .radialTurn }
+            if near(shape.width) { return .radialWidth }
+            if near(shape.height) { return .radialHeight }
+            if shape.outline.contains(location) { return .radialInside }
+        case .brush, .subject, .unknown:
+            break
         }
         return nil
     }
 
-    private var pointerStyle: PointerStyle {
+    private func pointerStyle(photo: CGRect) -> PointerStyle {
         if case .panning = drag { return .grabActive }
         if isSpaceDown { return .grabIdle }
-        if library.drawingGradient != nil { return .default }
-        switch hovered {
-        case .some(.linearStart), .some(.linearEnd), .some(.linearMiddle), .some(.radialCenter): return .grabIdle
-        case .some(.radialWidth), .some(.radialHeight), .some(.radialAngle): return .grabIdle
-        case .some(.pin): return .link
-        case nil: return .default
+        let part: Part?
+        if case let .moving(moving, _, _, _) = drag { part = moving } else { part = hovered }
+        switch part {
+        case let .pin(index):
+            if index != library.selectedLayer, drag == nil { return .link }
+            return drag == nil ? .grabIdle : .grabActive
+        case .radialInside:
+            return drag == nil ? .grabIdle : .grabActive
+        case .linearTurn, .radialTurn:
+            return .image(Image(systemName: "arrow.clockwise"), hotSpot: .center)
+        case .linearStart, .linearEnd:
+            guard case let .linear(gradient) = library.shownLayer?.mask.shape else { return .default }
+            let lines = linearLines(gradient, photo: photo)
+            // An outer line moves square to itself.
+            return Self.resizePointer(dx: lines.across.dy, dy: -lines.across.dx)
+        case .radialWidth, .radialHeight:
+            guard case let .radial(gradient) = library.shownLayer?.mask.shape else { return .default }
+            let shape = radialShape(gradient, photo: photo)
+            let handle = part == .radialWidth ? shape.width : shape.height
+            return Self.resizePointer(dx: handle.x - shape.center.x, dy: handle.y - shape.center.y)
+        case nil:
+            return isPainting ? .rectSelection : .default
+        }
+    }
+
+    /// The resize pointer closest to dragging along (`dx`, `dy`), with y down.
+    private static func resizePointer(dx: Double, dy: Double) -> PointerStyle {
+        var degrees = (atan2(dy, dx) * 180 / .pi).truncatingRemainder(dividingBy: 180)
+        if degrees < 0 { degrees += 180 }
+        switch degrees {
+        case ..<22.5, 157.5...: return .columnResize
+        case ..<67.5: return .frameResize(position: .bottomTrailing)
+        case ..<112.5: return .rowResize
+        default: return .frameResize(position: .bottomLeading)
         }
     }
 
@@ -422,7 +456,7 @@ struct MaskOverlay: View {
     /// The ellipse and where its feather starts, as paths on the canvas, with its handles: on the
     /// end of its width axis, on the top of its height axis, and above that, the turning handle.
     private func radialShape(_ gradient: RadialMask, photo: CGRect)
-        -> (outline: Path, inner: Path, center: CGPoint, width: CGPoint, height: CGPoint, angle: CGPoint) {
+        -> (outline: Path, inner: Path, center: CGPoint, width: CGPoint, height: CGPoint, turn: CGPoint) {
         // Points of the ellipse in mask coordinates, from its angle and radii in pixels with y down.
         let long = max(photoSize.width, photoSize.height, 1)
         let angle = gradient.angle * .pi / 180
@@ -448,8 +482,8 @@ struct MaskOverlay: View {
                 CGPoint(x: top.x + up.dx / length * 22, y: top.y + up.dy / length * 22))
     }
 
-    /// Where an unselected mask's pin goes: a gradient's middle, a brush's first stroke, or the
-    /// middle of a subject's picture.
+    /// Where a mask's pin goes: a linear gradient's middle, a radial one's center, where a brush
+    /// mask's first stroke starts, or the middle of the subject.
     private func pinPoint(of mask: Mask, photo: CGRect) -> CGPoint? {
         switch mask.shape {
         case let .linear(gradient):
@@ -458,7 +492,9 @@ struct MaskOverlay: View {
             shown(gradient.center, photo: photo)
         case let .brush(brush):
             brush.strokes.first { !$0.erases }?.path.first.map { shown($0, photo: photo) }
-        case .subject, .unknown:
+        case let .subject(subject):
+            subject.center.map { shown($0, photo: photo) }
+        case .unknown:
             nil
         }
     }
@@ -488,13 +524,11 @@ struct MaskOverlay: View {
         return max(radius * max(photoSize.width, photoSize.height) * photo.width / zoom.photoSize.width, 2)
     }
 
-    /// The point of the uncropped photo, from 0 to 1, that shows at `location`. Gradients may
-    /// reach past the photo, so their points aren't kept on it; `nil` before the photo is laid out.
-    private func point(at location: CGPoint, photo: CGRect, clamped: Bool) -> CGPoint? {
+    /// The point of the uncropped photo, from 0 to 1, that shows at `location`. Masks may reach
+    /// past the photo, so it isn't kept on it; `nil` before the photo is laid out.
+    private func point(at location: CGPoint, photo: CGRect) -> CGPoint? {
         guard photo.width > 0, photo.height > 0 else { return nil }
         let shown = CGPoint(x: (location.x - photo.minX) / photo.width, y: (location.y - photo.minY) / photo.height)
-        let point = crop?.photoPoint(of: shown, photoSize: photoSize) ?? shown
-        guard clamped else { return point }
-        return CGPoint(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1))
+        return crop?.photoPoint(of: shown, photoSize: photoSize) ?? shown
     }
 }

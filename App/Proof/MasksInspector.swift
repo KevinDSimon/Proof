@@ -13,28 +13,23 @@ struct MasksInspector: View {
     var body: some View {
         let layers = library.layers
         InspectorPanel {
-            InspectorCard(title: "Masks", canReset: !layers.isEmpty, reset: library.clearMasks) {
+            // Adding apart from the masks already made, so it reads as where new ones come from.
+            InspectorCard(title: "Add Mask") {
                 addButtons
-                if layers.isEmpty {
-                    Text(library.drawingGradient == nil ? "Add a mask to adjust part of the photo."
-                                                        : "Drag on the photo to draw the gradient.")
-                        .foregroundStyle(.secondary)
-                } else {
+            }
+            if !layers.isEmpty {
+                InspectorCard(title: "Masks", canReset: true, reset: library.clearMasks) {
                     VStack(spacing: 2) {
                         ForEach(Array(layers.enumerated()), id: \.offset) { index, layer in
                             row(index, layer)
                         }
                     }
-                    if library.drawingGradient != nil {
-                        Text("Drag on the photo to draw the gradient.")
-                            .foregroundStyle(.secondary)
-                    }
+                    Toggle("Show Overlay", isOn: Binding(get: { library.showsMaskOverlay }, set: { library.showsMaskOverlay = $0 }))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .tint(.green)
+                        .help("Tint the selected mask red on the photo (O). Moving a slider turns it off.")
                 }
-                Toggle("Show Overlay", isOn: Binding(get: { library.showsMaskOverlay }, set: { library.showsMaskOverlay = $0 }))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .tint(.green)
-                    .help("Tint the selected mask red on the photo (O)")
             }
             if let index = library.selectedLayer, let layer = library.shownLayer {
                 shapeCard(index, layer)
@@ -57,8 +52,8 @@ struct MasksInspector: View {
     private var addButtons: some View {
         Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             GridRow {
-                addButton(.linear, "Linear", "rectangle.tophalf.inset.filled", "Darken or brighten toward one edge, such as the sky (drag on the photo)")
-                addButton(.radial, "Radial", "circle.dashed", "Adjust inside or outside an ellipse (drag on the photo)")
+                addButton(.linear, "Linear", "rectangle.tophalf.inset.filled", "Adjust toward one edge, such as the sky")
+                addButton(.radial, "Radial", "circle.dashed", "Adjust inside or outside an ellipse")
             }
             GridRow {
                 addButton(.brush, "Brush", "paintbrush.pointed", "Paint where the adjustments apply")
@@ -141,9 +136,7 @@ struct MasksInspector: View {
         InspectorCard(title: layer.mask.kind?.title ?? "Mask") {
             switch layer.mask.shape {
             case .linear:
-                Text("Full effect before the first line, fading out by the last. Drag the middle line to move it, an outer line to change the fade.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                EmptyView()
             case let .radial(gradient):
                 AdjustmentSlider(
                     title: "Feather",

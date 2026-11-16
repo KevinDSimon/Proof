@@ -104,6 +104,24 @@ struct MaskTests {
         #expect(abs(twice[200 * 600 + 300] - 0.75) < 0.01)
     }
 
+    @Test("A stroke painted a little at a time, and a stroke added after it, give the same mask as drawing them at once")
+    func brushGrowsIncrementally() throws {
+        let aspect = CGSize(width: 600, height: 400)
+        var stroke = BrushStroke(points: [CGPoint(x: 0.2, y: 0.5)], radius: 0.02, flow: 70)
+        var brush = BrushMask(strokes: [BrushStroke(points: [CGPoint(x: 0.5, y: 0.2), CGPoint(x: 0.5, y: 0.8)], erases: false), stroke])
+        _ = BrushRaster.image(of: brush, aspect: aspect)
+        for x in stride(from: 0.25, through: 0.8, by: 0.05) {
+            stroke.append(CGPoint(x: x, y: 0.5 + (x - 0.5) * 0.3))
+            brush.strokes[1] = stroke
+            _ = BrushRaster.image(of: brush, aspect: aspect)
+        }
+        brush.strokes.append(BrushStroke(points: [CGPoint(x: 0.3, y: 0.3), CGPoint(x: 0.7, y: 0.7)], radius: 0.01, erases: true))
+        let grown = try #require(BrushRaster.image(of: brush, aspect: aspect))
+        let drawn = try #require(BrushRaster.grayImage(BrushRaster.draw(brush, width: grown.width, height: grown.height),
+                                                       width: grown.width, height: grown.height))
+        #expect(grown.dataProvider?.data as Data? == drawn.dataProvider?.data as Data?)
+    }
+
     @Test("A subject mask applies where its picture is white")
     func subject() throws {
         // The left half white.
@@ -112,6 +130,14 @@ struct MaskTests {
         let result = MaskStage.apply([brighter(Mask(.subject(SubjectMask(png: png))))], to: gray(0.18))
         #expect(abs(try value(result, at: CGPoint(x: 100, y: 200)) - 0.36) < 0.002)
         #expect(abs(try value(result, at: CGPoint(x: 500, y: 200)) - 0.18) < 0.002)
+    }
+
+    @Test("A subject mask's pin goes to the middle of the subject")
+    func subjectCenter() throws {
+        let weights = (0..<(60 * 40)).map { Float($0 % 60 < 30 ? 1 : 0) }
+        let png = try #require(BrushRaster.grayImage(weights, width: 60, height: 40).flatMap(SubjectDetection.png(of:)))
+        let center = try #require(SubjectMask(png: png).center)
+        #expect(abs(center.x - 0.25) < 0.02 && abs(center.y - 0.5) < 0.02)
     }
 
     @Test("A layer that is off changes nothing; layers apply in order, each to the one before's result")

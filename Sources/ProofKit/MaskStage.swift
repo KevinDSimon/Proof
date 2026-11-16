@@ -177,11 +177,13 @@ extension LocalAdjustments {
 
 /// Brush strokes drawn into a grayscale image of the whole photo, `longEdge` pixels on its long
 /// edge whatever the render's size, so the canvas, thumbnails and export use the same mask.
-/// The last few are kept, since a render repeats while a slider moves.
+/// The last few images are kept, since a render repeats while a slider moves. The last brush
+/// drawn is kept too, so while a stroke is painted only its newest part is drawn.
 enum BrushRaster {
     static let longEdge = 2048
 
     private static let cache = OSAllocatedUnfairLock(initialState: [(key: Key, image: CGImage)]())
+    private static let last = OSAllocatedUnfairLock<Canvas?>(initialState: nil)
 
     private struct Key: Hashable {
         var brush: BrushMask
@@ -195,8 +197,13 @@ enum BrushRaster {
         let key = Key(brush: brush, width: max(Int((aspect.width * scale).rounded()), 1),
                       height: max(Int((aspect.height * scale).rounded()), 1))
         if let hit = cache.withLock({ $0.first { $0.key == key }?.image }) { return hit }
-        let weights = draw(brush, width: key.width, height: key.height)
-        guard let image = grayImage(weights, width: key.width, height: key.height) else { return nil }
+        let image = last.withLock { canvas -> CGImage? in
+            if canvas == nil || !canvas!.extend(to: brush, width: key.width, height: key.height) {
+                canvas = Canvas(brush, width: key.width, height: key.height)
+            }
+            return canvas!.image
+        }
+        guard let image else { return nil }
         cache.withLock { entries in
             entries.removeAll { $0.key == key }
             entries.insert((key, image), at: 0)
@@ -205,36 +212,129 @@ enum BrushRaster {
         return image
     }
 
+    /// The mask's weights, from the top row down.
+    static func draw(_ brush: BrushMask, width: Int, height: Int) -> [Float] {
+        Canvas(brush, width: width, height: height).mask
+    }
+
     /// Each stroke is drawn on its own as the farthest its brush reached each pixel, so going
     /// back and forth within one stroke doesn't build up; then it adds to the mask, or takes
-    /// away from it, by its flow.
-    static func draw(_ brush: BrushMask, width: Int, height: Int) -> [Float] {
-        var mask = [Float](repeating: 0, count: width * height)
-        let long = Double(max(width, height))
-        for stroke in brush.strokes {
+    /// away from it, by its flow. The mask before the last stroke and the last stroke's reach are
+    /// kept, so the last stroke can grow without drawing the others again.
+    private struct Canvas {
+        var brush: BrushMask
+        let width: Int
+        let height: Int
+        /// The mask before the last stroke.
+        var base: [Float]
+        /// How far the last stroke's brush reached each pixel.
+        var reach: [Float]
+        var mask: [Float]
+        var bytes: [UInt8]
+
+        init(_ brush: BrushMask, width: Int, height: Int) {
+            self.brush = brush
+            self.width = width
+            self.height = height
+            let count = width * height
+            base = [Float](repeating: 0, count: count)
+            reach = base
+            mask = base
+            bytes = [UInt8](repeating: 0, count: count)
+            for (index, stroke) in brush.strokes.enumerated() {
+                let isLast = index == brush.strokes.count - 1
+                if isLast { base = mask }
+                guard let box = paint(stroke, from: 0) else { continue }
+                if isLast {
+                    composite(stroke, in: box)
+                } else {
+                    // Earlier strokes go straight into the mask, and their reach is cleared.
+                    let flow = Self.flow(of: stroke)
+                    for y in box.minY...box.maxY {
+                        for x in box.minX...box.maxX {
+                            let i = y * width + x
+                            let r = reach[i] * flow
+                            reach[i] = 0
+                            guard r > 0 else { continue }
+                            mask[i] = stroke.erases ? mask[i] * (1 - r) : mask[i] + (1 - mask[i]) * r
+                        }
+                    }
+                }
+            }
+            for i in 0..<count { bytes[i] = Self.byte(mask[i]) }
+        }
+
+        /// Draws only what `brush` adds to this one: the newest part of its last stroke, or a new
+        /// stroke after it. `false` when it changes more than that.
+        mutating func extend(to brush: BrushMask, width: Int, height: Int) -> Bool {
+            guard width == self.width, height == self.height else { return false }
+            let old = self.brush.strokes, new = brush.strokes
+            if old == new { return true }
+            if new.count == old.count, let lastOld = old.last, let lastNew = new.last,
+               Array(old.dropLast()) == Array(new.dropLast()),
+               lastNew.radius == lastOld.radius, lastNew.feather == lastOld.feather,
+               lastNew.flow == lastOld.flow, lastNew.erases == lastOld.erases,
+               lastNew.points.count > lastOld.points.count, lastNew.points.starts(with: lastOld.points) {
+                self.brush = brush
+                // From the last point already drawn, so the segment joining it is drawn too.
+                if let box = paint(lastNew, from: max(lastOld.points.count / 2 - 1, 0)) { composite(lastNew, in: box) }
+                return true
+            }
+            if new.count == old.count + 1, Array(new.dropLast()) == old, let stroke = new.last {
+                self.brush = brush
+                base = mask
+                reach = [Float](repeating: 0, count: width * height)
+                if let box = paint(stroke, from: 0) { composite(stroke, in: box) }
+                return true
+            }
+            return false
+        }
+
+        var image: CGImage? {
+            guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+            return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: width,
+                           space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
+                           provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+        }
+
+        /// Puts the last stroke onto the mask before it, within `box`.
+        private mutating func composite(_ stroke: BrushStroke, in box: Box) {
+            let flow = Self.flow(of: stroke)
+            for y in box.minY...box.maxY {
+                for x in box.minX...box.maxX {
+                    let i = y * width + x
+                    let r = reach[i] * flow
+                    mask[i] = stroke.erases ? base[i] * (1 - r) : base[i] + (1 - base[i]) * r
+                    bytes[i] = Self.byte(mask[i])
+                }
+            }
+        }
+
+        private struct Box {
+            var minX: Int, maxX: Int, minY: Int, maxY: Int
+        }
+
+        /// Raises `reach` to how far the stroke's brush reaches along its path from the point at
+        /// `first`, and returns the pixels it may have changed; `nil` for none.
+        private mutating func paint(_ stroke: BrushStroke, from first: Int) -> Box? {
             let points = stroke.path.map { CGPoint(x: $0.x * Double(width), y: $0.y * Double(height)) }
-            guard let first = points.first else { continue }
+            guard first < points.count, Self.flow(of: stroke) > 0 else { return nil }
+            let long = Double(max(width, height))
             let radius = max(MaskStage.clamped(stroke.radius, to: BrushStroke.radiusRange) * long, 0.75)
             let feather = MaskStage.clamped(stroke.feather, to: BrushStroke.featherRange) / 100
-            let flow = Float(MaskStage.clamped(stroke.flow, to: BrushStroke.flowRange) / 100)
-            guard flow > 0 else { continue }
             // At least about a pixel of fade, so a hard brush isn't jagged.
             let inner = min(radius * (1 - feather), radius - 1)
-            let xs = points.map(\.x), ys = points.map(\.y)
-            let minX = max(Int((xs.min()! - radius).rounded(.down)), 0)
-            let maxX = min(Int((xs.max()! + radius).rounded(.up)), width - 1)
-            let minY = max(Int((ys.min()! - radius).rounded(.down)), 0)
-            let maxY = min(Int((ys.max()! + radius).rounded(.up)), height - 1)
-            guard minX <= maxX, minY <= maxY else { continue }
-            let boxWidth = maxX - minX + 1
-            var reach = [Float](repeating: 0, count: boxWidth * (maxY - minY + 1))
-            let segments = points.count == 1 ? [(first, first)] : Array(zip(points, points.dropFirst()))
+            let segments = points.count == 1 ? [(points[0], points[0])]
+                : Array(zip(points[first...], points[first...].dropFirst()))
+            var box: Box?
             for (a, b) in segments {
-                let x0 = max(Int((min(a.x, b.x) - radius).rounded(.down)), minX)
-                let x1 = min(Int((max(a.x, b.x) + radius).rounded(.up)), maxX)
-                let y0 = max(Int((min(a.y, b.y) - radius).rounded(.down)), minY)
-                let y1 = min(Int((max(a.y, b.y) + radius).rounded(.up)), maxY)
+                let x0 = max(Int((min(a.x, b.x) - radius).rounded(.down)), 0)
+                let x1 = min(Int((max(a.x, b.x) + radius).rounded(.up)), width - 1)
+                let y0 = max(Int((min(a.y, b.y) - radius).rounded(.down)), 0)
+                let y1 = min(Int((max(a.y, b.y) + radius).rounded(.up)), height - 1)
                 guard x0 <= x1, y0 <= y1 else { continue }
+                box = Box(minX: min(box?.minX ?? x0, x0), maxX: max(box?.maxX ?? x1, x1),
+                          minY: min(box?.minY ?? y0, y0), maxY: max(box?.maxY ?? y1, y1))
                 let dx = b.x - a.x, dy = b.y - a.y
                 let lengthSquared = dx * dx + dy * dy
                 for y in y0...y1 {
@@ -251,21 +351,21 @@ enum BrushRaster {
                             let s = (distance - inner) / (radius - inner)
                             w = 1 - s * s * (3 - 2 * s)
                         }
-                        let i = (y - minY) * boxWidth + (x - minX)
+                        let i = y * width + x
                         reach[i] = max(reach[i], Float(w))
                     }
                 }
             }
-            for y in minY...maxY {
-                for x in minX...maxX {
-                    let r = reach[(y - minY) * boxWidth + (x - minX)] * flow
-                    guard r > 0 else { continue }
-                    let i = y * width + x
-                    mask[i] = stroke.erases ? mask[i] * (1 - r) : mask[i] + (1 - mask[i]) * r
-                }
-            }
+            return box
         }
-        return mask
+
+        static func flow(of stroke: BrushStroke) -> Float {
+            Float(MaskStage.clamped(stroke.flow, to: BrushStroke.flowRange) / 100)
+        }
+
+        static func byte(_ weight: Float) -> UInt8 {
+            UInt8((min(max(weight, 0), 1) * 255).rounded())
+        }
     }
 
     static func grayImage(_ weights: [Float], width: Int, height: Int) -> CGImage? {
@@ -277,18 +377,61 @@ enum BrushRaster {
     }
 }
 
-/// A subject mask's PNG, decoded once and kept while it is in use.
+/// A subject mask's PNG, decoded once and kept while it is in use, with its middle.
 enum SubjectRaster {
-    private static let cache = OSAllocatedUnfairLock(initialState: [(png: Data, image: CGImage)]())
+    private struct Entry {
+        var png: Data
+        var image: CGImage
+        var center: CGPoint?
+    }
+
+    private static let cache = OSAllocatedUnfairLock(initialState: [Entry]())
 
     static func image(of subject: SubjectMask) -> CGImage? {
-        if let hit = cache.withLock({ $0.first { $0.png == subject.png }?.image }) { return hit }
+        entry(of: subject)?.image
+    }
+
+    static func center(of subject: SubjectMask) -> CGPoint? {
+        entry(of: subject)?.center
+    }
+
+    private static func entry(of subject: SubjectMask) -> Entry? {
+        if let hit = cache.withLock({ $0.first { $0.png == subject.png } }) { return hit }
         guard let source = CGImageSourceCreateWithData(subject.png as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let entry = Entry(png: subject.png, image: image, center: center(of: image))
         cache.withLock { entries in
-            entries.insert((subject.png, image), at: 0)
+            entries.insert(entry, at: 0)
             if entries.count > 4 { entries.removeLast() }
         }
-        return image
+        return entry
     }
+
+    /// The mask's center of weight, from 0 to 1 from the top left, measured on a small copy.
+    private static func center(of image: CGImage) -> CGPoint? {
+        let width = 64, height = 64
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)
+        else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var total = 0.0, x = 0.0, y = 0.0
+        // The context's first row is the image's top.
+        for row in 0..<height {
+            for column in 0..<width {
+                let w = Double(pixels[row * width + column])
+                total += w
+                x += w * (Double(column) + 0.5)
+                y += w * (Double(row) + 0.5)
+            }
+        }
+        guard total > 0 else { return nil }
+        return CGPoint(x: x / total / Double(width), y: y / total / Double(height))
+    }
+}
+
+extension SubjectMask {
+    /// The middle of the subject, from 0 to 1 from the top left of the photo, where the Masks
+    /// tool puts the mask's pin. `nil` for an empty mask.
+    public var center: CGPoint? { SubjectRaster.center(of: self) }
 }

@@ -929,8 +929,6 @@ final class Library {
     private(set) var isMasking = false
     /// The mask the tool's controls change and Delete removes, by its place in the recipe's `layers`.
     var selectedLayer: Int?
-    /// A gradient waiting to be drawn: the next drag on the photo draws it as a new mask.
-    var drawingGradient: Mask.Kind?
     /// Tints the selected mask red on the photo (O).
     var showsMaskOverlay = false
     /// The size, feather and flow of the next brush stroke, as last set.
@@ -947,9 +945,10 @@ final class Library {
     }
 
     /// The layer the canvas tints red: the selected one while Show Overlay is on, and while its
-    /// adjustments are all at 0, so a new mask can be seen as it is drawn.
+    /// adjustments are all at 0, so a new mask can be seen as it is drawn. Moving one of its
+    /// sliders turns Show Overlay off, so the change can be seen.
     var overlaidLayer: Int? {
-        guard isMasking, drawingGradient == nil, let index = selectedLayer, let layer = shownLayer else { return nil }
+        guard isMasking, let index = selectedLayer, let layer = shownLayer else { return nil }
         return showsMaskOverlay || layer.adjustments.isNeutral ? index : nil
     }
 
@@ -970,22 +969,25 @@ final class Library {
 
     func finishMasking() {
         isMasking = false
-        drawingGradient = nil
         selectedLayer = nil
     }
 
-    /// Starts a new mask. A gradient is drawn by the next drag on the photo; a brush mask is added
-    /// at once to paint on; a subject mask is added once Vision has found the subject.
+    /// Adds a new mask and selects it. A gradient appears at once where it is most often wanted,
+    /// to move and shape on the photo: a linear one fading down from the top, over the sky, and
+    /// a radial one in the middle. A brush mask is empty, to paint on. A subject mask is added
+    /// once Vision has found the subject.
     func addMask(_ kind: Mask.Kind, with renderer: RAWRenderer?) async {
         switch kind {
-        case .linear, .radial:
-            drawingGradient = kind
-            selectedLayer = nil
+        case .linear:
+            selectLayer(appendLayer(Mask(.linear(LinearMask(start: CGPoint(x: 0.5, y: 0), end: CGPoint(x: 0.5, y: 0.4))))))
+        case .radial:
+            let size = selectedEdit?.size ?? CGSize(width: 3, height: 2)
+            let short = min(size.width, size.height) / max(size.width, size.height, 1)
+            selectLayer(appendLayer(Mask(.radial(RadialMask(center: CGPoint(x: 0.5, y: 0.5),
+                                                            radiusX: short * 0.4, radiusY: short * 0.3)))))
         case .brush:
-            drawingGradient = nil
             selectLayer(appendLayer(Mask(.brush(BrushMask()))))
         case .subject:
-            drawingGradient = nil
             await addSubjectMask(with: renderer)
         }
     }
@@ -1020,7 +1022,6 @@ final class Library {
 
     func selectLayer(_ index: Int?) {
         selectedLayer = index
-        if index != nil { drawingGradient = nil }
     }
 
     func changeLayer(at index: Int, _ change: (inout Layer) -> Void) {
@@ -1033,6 +1034,7 @@ final class Library {
     /// Changes the selected layer's adjustments.
     func changeAdjustments(_ change: (inout LocalAdjustments) -> Void) {
         guard let index = selectedLayer else { return }
+        showsMaskOverlay = false
         changeLayer(at: index) { change(&$0.adjustments) }
     }
 
