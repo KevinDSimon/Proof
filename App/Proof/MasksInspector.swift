@@ -13,12 +13,13 @@ struct MasksInspector: View {
     var body: some View {
         let layers = library.layers
         InspectorPanel {
-            // Adding apart from the masks already made, so it reads as where new ones come from.
-            InspectorCard(title: "Add Mask") {
+            // Adding is a section of its own, apart from the masks already made, so it reads as
+            // where new ones come from.
+            InspectorCard(title: "Masks", canReset: !layers.isEmpty, reset: library.clearMasks) {
+                heading("Add")
                 addButtons
-            }
-            if !layers.isEmpty {
-                InspectorCard(title: "Masks", canReset: true, reset: library.clearMasks) {
+                if !layers.isEmpty {
+                    heading("Added")
                     VStack(spacing: 2) {
                         ForEach(Array(layers.enumerated()), id: \.offset) { index, layer in
                             row(index, layer)
