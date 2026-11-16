@@ -114,6 +114,7 @@ final class Library {
             isPickingWhiteBalance = false
             isDrawingGuides = false
             finishRemovingSpots()
+            finishMasking()
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
             offGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
@@ -731,7 +732,7 @@ final class Library {
     /// the edit, and the crop tool and eyedropper, show the edited photo again, so a change is
     /// never made out of sight.
     func toggleOriginal() {
-        guard isEditing, !isCropping, !isPickingWhiteBalance, !isRemovingSpots, selectedEdit != nil else { return }
+        guard isEditing, !isCropping, !isPickingWhiteBalance, !isRemovingSpots, !isMasking, selectedEdit != nil else { return }
         browse.toggleOriginal()
     }
 
@@ -824,6 +825,7 @@ final class Library {
         showEdited()
         isPickingWhiteBalance = false
         isDrawingGuides = false
+        finishMasking()
         selectedSpot = nil
         isRemovingSpots = true
     }
@@ -920,6 +922,165 @@ final class Library {
         changeEdit { $0.spots = [] }
     }
 
+    // MARK: Masks
+
+    /// The Masks tool is open: the inspector lists the photo's masks and the photo shows the
+    /// selected one's handles.
+    private(set) var isMasking = false
+    /// The mask the tool's controls change and Delete removes, by its place in the recipe's `layers`.
+    var selectedLayer: Int?
+    /// A gradient waiting to be drawn: the next drag on the photo draws it as a new mask.
+    var drawingGradient: Mask.Kind?
+    /// Tints the selected mask red on the photo (O).
+    var showsMaskOverlay = false
+    /// The size, feather and flow of the next brush stroke, as last set.
+    var nextStroke = BrushStroke()
+    /// The brush takes away from the mask rather than adding to it. Option inverts it while held.
+    var isErasing = false
+    /// Vision is looking for the subject, for a new Subject mask.
+    private(set) var isFindingSubject = false
+
+    var layers: [Layer] { selectedEdit?.recipe.layers ?? [] }
+
+    var shownLayer: Layer? {
+        selectedLayer.flatMap { layers.indices.contains($0) ? layers[$0] : nil }
+    }
+
+    /// The layer the canvas tints red: the selected one while Show Overlay is on, and while its
+    /// adjustments are all at 0, so a new mask can be seen as it is drawn.
+    var overlaidLayer: Int? {
+        guard isMasking, drawingGradient == nil, let index = selectedLayer, let layer = shownLayer else { return nil }
+        return showsMaskOverlay || layer.adjustments.isNeutral ? index : nil
+    }
+
+    /// Opens or closes the Masks tool.
+    func toggleMasks() {
+        if isMasking {
+            finishMasking()
+            return
+        }
+        guard isEditing, !isCropping, selectedEdit != nil else { return }
+        showEdited()
+        isPickingWhiteBalance = false
+        isDrawingGuides = false
+        finishRemovingSpots()
+        selectedLayer = layers.indices.last
+        isMasking = true
+    }
+
+    func finishMasking() {
+        isMasking = false
+        drawingGradient = nil
+        selectedLayer = nil
+    }
+
+    /// Starts a new mask. A gradient is drawn by the next drag on the photo; a brush mask is added
+    /// at once to paint on; a subject mask is added once Vision has found the subject.
+    func addMask(_ kind: Mask.Kind, with renderer: RAWRenderer?) async {
+        switch kind {
+        case .linear, .radial:
+            drawingGradient = kind
+            selectedLayer = nil
+        case .brush:
+            drawingGradient = nil
+            selectLayer(appendLayer(Mask(.brush(BrushMask()))))
+        case .subject:
+            drawingGradient = nil
+            await addSubjectMask(with: renderer)
+        }
+    }
+
+    /// Adds `mask` as a new layer, named for its place, and returns its index.
+    @discardableResult
+    func appendLayer(_ mask: Mask) -> Int? {
+        let names = Set(layers.map(\.name))
+        let number = ((layers.count + 1)...).first { !names.contains("Mask \($0)") }!
+        changeEdit { $0.layers.append(Layer(name: "Mask \(number)", mask: mask)) }
+        return layers.indices.last
+    }
+
+    private func addSubjectMask(with renderer: RAWRenderer?) async {
+        guard let renderer, let photo = browse.selectedPhoto, let url = selectedPhotoURL,
+              let recipe = selectedEdit?.recipe else { return }
+        isFindingSubject = true
+        defer { isFindingSubject = false }
+        do {
+            try await renderer.open(url)
+            let found = try await renderer.subjectMask(recipe: recipe.without(offGroups))
+            guard browse.selectedPhoto == photo, isMasking else { return }
+            guard let found else {
+                errorMessage = "No subject was found in this photo."
+                return
+            }
+            selectLayer(appendLayer(Mask(.subject(found))))
+        } catch {
+            if browse.selectedPhoto == photo { errorMessage = "The subject couldn't be found. (\(error))" }
+        }
+    }
+
+    func selectLayer(_ index: Int?) {
+        selectedLayer = index
+        if index != nil { drawingGradient = nil }
+    }
+
+    func changeLayer(at index: Int, _ change: (inout Layer) -> Void) {
+        changeEdit { recipe in
+            guard recipe.layers.indices.contains(index) else { return }
+            change(&recipe.layers[index])
+        }
+    }
+
+    /// Changes the selected layer's adjustments.
+    func changeAdjustments(_ change: (inout LocalAdjustments) -> Void) {
+        guard let index = selectedLayer else { return }
+        changeLayer(at: index) { change(&$0.adjustments) }
+    }
+
+    func removeLayer(at index: Int) {
+        changeEdit { recipe in
+            guard recipe.layers.indices.contains(index) else { return }
+            recipe.layers.remove(at: index)
+        }
+        selectedLayer = layers.isEmpty ? nil : min(index, layers.count - 1)
+    }
+
+    func duplicateLayer(at index: Int) {
+        guard layers.indices.contains(index) else { return }
+        var copy = layers[index]
+        copy.name += " Copy"
+        changeEdit { $0.layers.insert(copy, at: index + 1) }
+        selectedLayer = index + 1
+    }
+
+    func clearMasks() {
+        selectedLayer = nil
+        changeEdit { $0.layers = [] }
+    }
+
+    /// Starts a brush stroke at `point` on the selected brush mask, with the next stroke's settings.
+    func startStroke(at point: CGPoint, erasing: Bool) {
+        guard let index = selectedLayer, case .brush = shownLayer?.mask.shape else { return }
+        var stroke = nextStroke
+        stroke.points = []
+        stroke.append(point)
+        stroke.erases = erasing
+        changeLayer(at: index) { layer in
+            guard case var .brush(brush) = layer.mask.shape else { return }
+            brush.strokes.append(stroke)
+            layer.mask.shape = .brush(brush)
+        }
+    }
+
+    /// Carries the stroke being painted on to `point`.
+    func continueStroke(to point: CGPoint) {
+        guard let index = selectedLayer else { return }
+        changeLayer(at: index) { layer in
+            guard case var .brush(brush) = layer.mask.shape, !brush.strokes.isEmpty else { return }
+            brush.strokes[brush.strokes.count - 1].append(point)
+            layer.mask.shape = .brush(brush)
+        }
+    }
+
     // MARK: Crop
 
     /// The crop tool is open on the selected photo.
@@ -973,6 +1134,7 @@ final class Library {
         isPickingWhiteBalance = false
         isDrawingGuides = false
         finishRemovingSpots()
+        finishMasking()
         isCropping = true
     }
 
@@ -1056,6 +1218,7 @@ final class Library {
         guard isEditing, !isCropping, selectedEdit?.asShot != nil else { return }
         showEdited()
         finishRemovingSpots()
+        finishMasking()
         isPickingWhiteBalance.toggle()
     }
 
@@ -1144,6 +1307,7 @@ final class Library {
             }
         case .guided:
             finishRemovingSpots()
+            finishMasking()
             isDrawingGuides = true
             let size = selectedEdit?.size
             changeEdit { recipe in

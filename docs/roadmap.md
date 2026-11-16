@@ -15,7 +15,7 @@ Each phase is a GitHub milestone, and each item an issue. Estimates assume part-
 | Phase 7: Many photos | Copy and paste settings, multi-select, context menus, instant previews, filters, crop refinements | Done |
 | Phase 8: Export | JPEG, HEIC and TIFF export; saved export destinations | Done |
 | v1 | Inspector order, the camera's own crop and perspective, relinking renamed photos, history panel, an always-dark interface with a choice of canvas color, a signed and notarized build others can install | — |
-| v1.1 | Spot healing for dust, masks as layers, lens profiles made in Proof, better auto-straighten | — |
+| v1.1 | Spot healing for dust, masks as layers (gradients, brush and subject in #27; brightness and color ranges in #190), lens profiles made in Proof, better auto-straighten | — |
 | v1.2 | Presets, virtual copies with side-by-side compare | — |
 | Later | Matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF, Lightroom and Capture One preset import, iPad and iPhone app | — |
 

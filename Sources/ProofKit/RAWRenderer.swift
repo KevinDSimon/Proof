@@ -202,6 +202,28 @@ public actor RAWRenderer {
                                       luminance: luminance, width: width, height: height, region: region)
     }
 
+    /// A mask of the open photo's main subject, from `SubjectDetection`, for a Subject mask. Vision
+    /// looks at the whole uncropped photo with `recipe`'s global adjustments, without its layers,
+    /// look or effects, at about `SubjectMask.maxPixelSize` on the long edge. `nil` when it finds
+    /// no subject. Only the render runs on the actor; Vision runs beside it.
+    public func subjectMask(recipe: EditRecipe) async throws -> SubjectMask? {
+        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        var measured = recipe
+        measured.crop = nil
+        measured.layers = []
+        measured.maskOverlay = nil
+        measured.look = nil
+        measured.removeEffects()
+        let size = CGSize(width: SubjectMask.maxPixelSize, height: SubjectMask.maxPixelSize)
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                                    fitting: size))
+        guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens),
+              let cgImage = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
+                                                  colorSpace: Self.colorSpace)
+        else { throw RAWRendererError.renderFailed }
+        return try await SubjectDetection.mask(in: cgImage)
+    }
+
     /// The Tone sliders Auto chooses for the open photo, as cropped and white balanced in
     /// `recipe`, from `AutoAdjust`. They don't depend on the Tone sliders already set.
     public func autoTone(recipe: EditRecipe) throws -> AutoAdjust.Tone {
@@ -652,16 +674,20 @@ public actor RAWRenderer {
         let toned = ToneLookup(contrast: recipe.basic.contrast, whites: recipe.basic.whites, blacks: recipe.basic.blacks,
                                curve: recipe.curve)
             .apply(to: dehazed)
-        // 3. Color: vibrance, then saturation, then selective color, then the black-and-white
+        // 3. Layers: each layer's adjustments, blended in by its mask, on the whole photo so a
+        // mask stays on what it covers when the crop changes.
+        let masked = MaskStage.apply(recipe.layers, to: toned)
+        // 4. Color: vibrance, then saturation, then selective color, then the black-and-white
         // mix, so the colors the others shape still set how light each turns out in gray.
-        let saturated = ColorAdjustments.apply(to: toned, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
+        let saturated = ColorAdjustments.apply(to: masked, vibrance: recipe.basic.vibrance, saturation: recipe.basic.saturation)
         let colored = BlackAndWhiteStage.apply(recipe.blackAndWhite,
                                                to: SelectiveColorStage.apply(recipe.selectiveColor, to: saturated))
-        // 4. LUT, blended by strength.
+        // 5. LUT, blended by strength.
         let looked = recipe.look.map { LUTStage.apply(lut, strength: $0.strength, to: colored) } ?? colored
-        // 5. Layers follow here when masks are built.
+        // The Masks tool's red overlay, over the finished colors so they don't tint it.
+        let shown = MaskStage.overlay(recipe.layers, index: recipe.maskOverlay, on: looked)
         // 6. Turn, flip, straighten and crop.
-        let framed = recipe.crop.map { Self.applyGeometry($0, to: looked) } ?? looked
+        let framed = recipe.crop.map { Self.applyGeometry($0, to: shown) } ?? shown
         // 7. Vignette, then grain, on the cropped frame so they follow the crop.
         return Grain.apply(recipe.grain, to: Vignette.apply(recipe.vignette, to: framed))
     }

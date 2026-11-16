@@ -146,7 +146,8 @@ struct EditRecipeTests {
         #expect(recipe.basic.temperature == nil)
         #expect(recipe.basic.tint == nil)
         #expect(recipe.basic.exposure == 0.5)
-        #expect(recipe.layers[0].basic.temperature == nil)
+        // Layers held Basic sliders then, which no version rendered; they read as no adjustment.
+        #expect(recipe.layers[0].adjustments.isNeutral)
     }
 
     @Test("A format 2 white balance survives a JSON round trip")

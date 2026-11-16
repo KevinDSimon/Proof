@@ -88,12 +88,13 @@ struct SidecarTests {
     func unrecognizedSurviveSave() throws {
         let json = #"""
         {"formatVersion": 1, "basic": {"exposure": 1, "texture": 20}, "lightLeak": {"amount": 30},
-         "layers": [{"name": "Sky", "isEnabled": true, "basic": {"exposure": -1}, "mask": {"kind": "sky"}}]}
+         "layers": [{"name": "Sky", "isEnabled": true, "adjustments": {"exposure": -1, "glow": 5},
+                     "mask": {"type": "sky", "sky": {"refine": 2}}}]}
         """#
         try Data(json.utf8).write(to: sidecarURL)
         var recipe = try #require(try Sidecar.read(for: photo)).recipe
         recipe.basic.exposure = 0.5
-        recipe.layers[0].basic.exposure = -0.5
+        recipe.layers[0].adjustments.exposure = -0.5
 
         try Sidecar.save(recipe, for: photo, over: Sidecar.read(for: photo))
         let object = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: sidecarURL)) as? [String: Any])
@@ -102,8 +103,12 @@ struct SidecarTests {
         #expect(basic["texture"] as? Double == 20)
         #expect((object["lightLeak"] as? [String: Any])?["amount"] as? Double == 30)
         let layer = try #require((object["layers"] as? [[String: Any]])?.first)
-        #expect((layer["basic"] as? [String: Any])?["exposure"] as? Double == -0.5)
-        #expect((layer["mask"] as? [String: Any])?["kind"] as? String == "sky")
+        let adjustments = try #require(layer["adjustments"] as? [String: Any])
+        #expect(adjustments["exposure"] as? Double == -0.5)
+        #expect(adjustments["glow"] as? Double == 5)
+        let mask = try #require(layer["mask"] as? [String: Any])
+        #expect(mask["type"] as? String == "sky")
+        #expect((mask["sky"] as? [String: Any])?["refine"] as? Double == 2)
     }
 
     @Test("A sidecar holding only fields Proof knows has none unrecognized, including a null crop")

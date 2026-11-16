@@ -81,7 +81,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `transform` | Perspective correction, described below. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `spots` | Spots covered with Spot Removal, such as sensor dust, applied in order, described below. Empty for none. |
-| `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
+| `layers` | Masks with their own adjustments, applied in order, described below. Empty for none. |
 | `original` | The photo the sidecar was first written for, described below. It identifies the photo, not the edit, and doesn't change how it renders. |
 
 Missing fields take their default (no adjustment). `look` and `crop` are written as `null` when there is none. Proof writes the file with its keys sorted and indented.
@@ -231,6 +231,28 @@ Each spot is a circle filled from another circle of the same size in the photo, 
 | `opacity` | 0 to 100, default 100. How much of the fill covers the spot. |
 
 `radius`, `feather` and `opacity` outside their ranges render as the nearer end; missing ones take their defaults. A spot whose source lies partly off the photo repeats the photo's edge pixels there. Files saved before spots existed have no `spots` and read as none.
+
+## Layers
+
+Each layer is a mask and the adjustments it applies where the mask covers the photo. Layers apply in order after the global tone and before color, each to the result of the one before it. Mask positions are from 0 to 1 of the photo's width and height, measured from its top left, on the whole photo after spot removal and before the crop, as spots' are. See decision 0040.
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Shown in the Masks tool. |
+| `isEnabled` | `false` hides the layer's adjustments. Default `true`. |
+| `mask` | Where the layer applies, described below. |
+| `adjustments` | `temperature`, `tint`, `exposure`, `contrast`, `highlights`, `shadows`, `whites`, `blacks`, `texture`, `clarity`, `dehaze` and `saturation`. Exposure is in stops from −4 to +4; the rest run from −100 to +100. All default to 0. They act like the Basic sliders of the same names on the photo as the global sliders have left it. Temperature warms (positive) or cools, and tint turns toward magenta (positive) or green, without changing a gray's brightness. Values outside the ranges render as the nearer end. |
+
+A mask has a `type`, `isInverted` (default `false`, which applies the layer where the mask doesn't when `true`), and an object named after its type with its shape:
+
+| Type | Fields |
+| --- | --- |
+| `linear` | `startX`, `startY`, `endX`, `endY`. Full effect on the start's side of the line through the start, fading to none at the line through the end; both lines are square to the line from start to end. The points may lie off the photo. |
+| `radial` | `centerX`, `centerY`; `radiusX` and `radiusY`, half the ellipse's width and height before it is turned, as fractions of the photo's long edge, from 0.005 to 2; `angle`, in degrees clockwise; `feather`, 0 to 100, default 50, how far in from the edge the effect fades, as a percentage of the radius. Full effect inside. |
+| `brush` | `strokes`, each with `points` (x and y pairs in one flat list), `radius` (a fraction of the long edge, 0.001 to 0.25, default 0.03), `feather` (0 to 100, default 50), `flow` (0 to 100, default 100: how much the stroke adds) and `erases` (default `false`: takes away from the mask instead). Strokes apply in order. |
+| `subject` | `png`: a grayscale PNG of the whole photo, base64-encoded, white where Vision found the subject when the mask was made, at most 1536 pixels on its long edge. It is kept so the edit renders the same when Vision changes. |
+
+A layer without a `mask` covers nothing. A `type` Proof doesn't recognize covers nothing and is saved back as it was, with its object.
 
 ## Original
 
