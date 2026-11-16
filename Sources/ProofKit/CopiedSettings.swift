@@ -1,5 +1,5 @@
 /// One checkbox in the Copy Settings sheet, as in Lightroom's: a slider, a section of a card,
-/// or a card with one control. The sheet groups them by card, with Crop on its own.
+/// or a card with one control. The sheet groups them by card, with Crop and Spot Removal on their own.
 public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
     case whiteBalance
     case exposure, contrast, highlights, shadows, whites, blacks,
@@ -10,15 +10,17 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
     case lensProfile, chromaticAberration, distortion, lensVignetting
     case transform
     case crop
+    case spotRemoval
     case vignette, grain, halation, bloom
     case look
 
-    /// Ticked the first time the sheet opens: everything but Transform and Crop, which fit the
-    /// photo they came from and suit others only when nothing moved, as on a tripod.
-    public static let defaultItems: Set<SettingsItem> = Set(allCases).subtracting([.transform, .crop])
+    /// Ticked the first time the sheet opens: everything but Transform, Crop and Spot Removal,
+    /// which fit the photo they came from. Transform and Crop suit others only when nothing moved,
+    /// as on a tripod; spots suit others when they cover sensor dust, which stays put on the sensor.
+    public static let defaultItems: Set<SettingsItem> = Set(allCases).subtracting([.transform, .crop, .spotRemoval])
 
     /// The inspector card that shows the item: the sheet groups items by it, and a paste turns
-    /// its switch on. `nil` for Crop, which the crop tool shows.
+    /// its switch on. `nil` for Crop and Spot Removal, which their tools show.
     public var group: AdjustmentGroup? {
         switch self {
         case .whiteBalance: .whiteBalance
@@ -29,7 +31,7 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
         case .sharpening, .noiseReduction, .colorNoiseReduction: .detail
         case .lensProfile, .chromaticAberration, .distortion, .lensVignetting: .lens
         case .transform: .transform
-        case .crop: nil
+        case .crop, .spotRemoval: nil
         case .vignette, .grain, .halation, .bloom: .effects
         case .look: .look
         }
@@ -91,6 +93,8 @@ extension EditRecipe {
             // The rectangle lies in the photo as turned and flipped, so the turns, flips,
             // straighten angle and ratio come with it.
             case .crop: recipe.crop = source.crop
+            // Every spot, replacing the target's, so pasting onto a photo twice doesn't double them.
+            case .spotRemoval: recipe.spots = source.spots
             case .vignette: recipe.vignette = source.vignette
             case .grain: recipe.grain = source.grain
             case .halation: recipe.halation = source.halation

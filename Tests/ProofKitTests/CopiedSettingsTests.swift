@@ -12,6 +12,7 @@ struct CopiedSettingsTests {
         recipe.transform.upright = .level
         recipe.transform.guides = [GuideLine(start: CGPoint(x: 0.1, y: 0.1), end: CGPoint(x: 0.1, y: 0.9))]
         recipe.crop = Crop(width: 0.5, height: 0.5, angle: 3)
+        recipe.spots = [Spot(x: 0.3, y: 0.4, sourceX: 0.35, sourceY: 0.4)]
         return recipe
     }
 
@@ -20,6 +21,7 @@ struct CopiedSettingsTests {
         recipe.basic.exposure = -1
         recipe.basic.clarity = 10
         recipe.crop = Crop(x: 0.2, width: 0.8, rotation: 1)
+        recipe.spots = [Spot(mode: .clone, x: 0.7, y: 0.1, sourceX: 0.7, sourceY: 0.2)]
         return recipe
     }
 
@@ -29,11 +31,12 @@ struct CopiedSettingsTests {
         #expect(pasted == Self.source)
     }
 
-    @Test("Pasting the default items leaves the target's crop and Transform as they were")
+    @Test("Pasting the default items leaves the target's crop, Transform and spots as they were")
     func defaultsKeepGeometry() {
         let pasted = Self.target.pasting(CopiedSettings(from: Self.source, items: SettingsItem.defaultItems))
         #expect(pasted.crop == Self.target.crop)
         #expect(pasted.transform == Self.target.transform)
+        #expect(pasted.spots == Self.target.spots)
         #expect(pasted.basic == Self.source.basic)
     }
 
@@ -71,16 +74,23 @@ struct CopiedSettingsTests {
         #expect(pasted.detail.sharpening == nil)
     }
 
-    @Test("Every card has at least one item, and every item but Crop belongs to one card")
+    @Test("Pasting Spot Removal replaces the target's spots with the copied ones")
+    func pastesSpots() {
+        let pasted = Self.target.pasting(CopiedSettings(from: Self.source, items: [.spotRemoval]))
+        #expect(pasted.spots == Self.source.spots)
+        #expect(pasted.crop == Self.target.crop)
+    }
+
+    @Test("Every card has at least one item, and every item but Crop and Spot Removal belongs to one card")
     func groupsCoverEveryItem() {
         let grouped = AdjustmentGroup.allCases.flatMap { SettingsItem.items(in: $0) }
         #expect(AdjustmentGroup.allCases.allSatisfy { !SettingsItem.items(in: $0).isEmpty })
-        #expect(grouped.count == SettingsItem.allCases.count - 1)
-        #expect(Set(grouped) == Set(SettingsItem.allCases).subtracting([.crop]))
+        #expect(grouped.count == SettingsItem.allCases.count - 2)
+        #expect(Set(grouped) == Set(SettingsItem.allCases).subtracting([.crop, .spotRemoval]))
     }
 
-    @Test("Transform and Crop start unticked; every other item starts ticked")
+    @Test("Transform, Crop and Spot Removal start unticked; every other item starts ticked")
     func defaultItems() {
-        #expect(SettingsItem.defaultItems == Set(SettingsItem.allCases).subtracting([.transform, .crop]))
+        #expect(SettingsItem.defaultItems == Set(SettingsItem.allCases).subtracting([.transform, .crop, .spotRemoval]))
     }
 }

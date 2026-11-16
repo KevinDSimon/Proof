@@ -163,6 +163,11 @@ struct ProofApp: App {
                         .keyboardShortcut("c", modifiers: [])
                         .disabled(!library.isEditing || library.selectedEdit == nil)
                 }
+                // Q, as in Lightroom. A toggle, so the menu marks it while the tool is open.
+                Toggle("Spot Removal", isOn: Binding(get: { library.isRemovingSpots },
+                                                     set: { _ in library.toggleSpotRemoval() }))
+                    .keyboardShortcut("q", modifiers: [])
+                    .disabled(!library.isEditing || library.isCropping || library.selectedEdit == nil)
                 // W, as in Lightroom; while it's open, Esc closes it instead of leaving Edit.
                 if library.isPickingWhiteBalance {
                     Button("Cancel White Balance Selector") { library.isPickingWhiteBalance = false }
@@ -273,6 +278,8 @@ struct ContentView: View {
                             }
                     } else if library.isCropping {
                         CropInspector(library: library, renderer: renderer)
+                    } else if library.isRemovingSpots {
+                        SpotRemovalInspector(library: library)
                     } else {
                         AdjustmentsInspector(library: library, renderer: renderer)
                     }
@@ -514,10 +521,15 @@ struct ContentView: View {
                         .help("Keep the crop (Return)")
                 }
             } else {
-                ToolbarItem {
+                ToolbarItemGroup {
                     Button("Crop", systemImage: "crop") { library.startCropping() }
                         .help("Crop, straighten, rotate and flip the photo (C)")
                         .disabled(library.selectedEdit == nil)
+                    Toggle(isOn: Binding(get: { library.isRemovingSpots }, set: { _ in library.toggleSpotRemoval() })) {
+                        Label("Spot Removal", systemImage: "bandage")
+                    }
+                    .help("Remove dust and small spots (Q)")
+                    .disabled(library.selectedEdit == nil)
                 }
             }
             // The crop tool and the inspector are separate groups.
@@ -682,6 +694,8 @@ struct EditCanvas: View {
             if library.isCropping, let frame = library.selectedCropFrame {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect,
                            backdrop: library.canvasColor.color)
+            } else if library.isRemovingSpots, let size = library.selectedEdit?.size {
+                SpotOverlay(library: library, renderer: renderer, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
             } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
@@ -1213,17 +1227,30 @@ struct AdjustmentsInspector: View {
         }
     }
 
-    /// Guided's way in and out of drawing: one button that keeps its shape, so nothing moves as
-    /// guides are drawn. Clear, Done and the count sit on the photo while drawing.
+    /// Guided's way in and out of drawing, with Clear All while drawing, so nothing covers the
+    /// photo but the guides.
     private func guidedButtons(_ transform: PerspectiveTransform) -> some View {
-        Button {
-            library.isDrawingGuides.toggle()
-        } label: {
-            Text(library.isDrawingGuides ? "Done" : transform.guides.isEmpty ? "Draw Guides" : "Edit Guides")
-                .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Button {
+                    library.isDrawingGuides.toggle()
+                } label: {
+                    Text(library.isDrawingGuides ? "Done" : transform.guides.isEmpty ? "Draw Guides" : "Edit Guides")
+                        .frame(maxWidth: .infinity)
+                }
+                .help(library.isDrawingGuides ? "Stop drawing guides (Return or Esc)"
+                                              : "Draw along edges that should be upright or level. Two each way set every slider")
+                if library.isDrawingGuides {
+                    Button {
+                        library.clearGuides()
+                    } label: {
+                        Text("Clear All").frame(maxWidth: .infinity)
+                    }
+                    .disabled(transform.guides.isEmpty)
+                    .accessibilityLabel("Clear All Guides")
+                }
+            }
         }
-        .help(library.isDrawingGuides ? "Stop drawing guides (Esc)"
-                                      : "Draw along edges that should be upright or level. Two each way set every slider")
     }
 
     private func transformSlider(_ title: String, _ keyPath: WritableKeyPath<PerspectiveTransform, Double>,

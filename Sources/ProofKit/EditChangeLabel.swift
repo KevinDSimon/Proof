@@ -59,6 +59,7 @@ extension EditRecipe {
             ("Lens Corrections", lens != previous.lens),
             ("Transform", transform != previous.transform),
             ("Crop", crop != previous.crop),
+            ("Spot Removal", spots != previous.spots),
             ("Masks", layers != previous.layers),
         ]
         parts += sections.filter(\.1).map(\.0)
