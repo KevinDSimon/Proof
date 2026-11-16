@@ -53,6 +53,9 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
     "x": 0.08, "y": 0.1, "width": 0.8, "height": 0.75, "angle": -2.5,
     "rotation": 90, "flipHorizontal": false, "flipVertical": false, "aspect": [4, 5]
   },
+  "spots": [
+    { "mode": "heal", "x": 0.48, "y": 0.4, "sourceX": 0.524, "sourceY": 0.428, "radius": 0.006, "feather": 50, "opacity": 100 }
+  ],
   "layers": [],
   "original": { "size": 61203456, "captureTime": "2025:06:01 14:03:22.417", "uniqueID": "0aff3c2e91d04b7a8e6f1c0d2b3a4e5f" }
 }
@@ -77,6 +80,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `lens` | Lens corrections, described below. |
 | `transform` | Perspective correction, described below. |
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
+| `spots` | Spots covered with Spot Removal, such as sensor dust, applied in order, described below. Empty for none. |
 | `layers` | Masks with their own adjustments, applied in order. Empty until v1.2; present from the first version so masks don't need a format change. |
 | `original` | The photo the sidecar was first written for, described below. It identifies the photo, not the edit, and doesn't change how it renders. |
 
@@ -212,6 +216,21 @@ As Shot is `whiteBalance: "asShot"` with `temperature` and `tint` both `null`, a
 Missing crop fields take their default: the whole photo, no straighten, no turn or flips, freeform. The rectangle is expected to lie within the photo once straightened; Proof keeps it there. A crop that changes nothing is written as `null`.
 
 A photo without a sidecar opens with the crop and perspective correction its camera saved in the file, if any: the DNG `DefaultUserCrop` as `crop`, and Leica's perspective control as `transform` (decision 0035). They are ordinary values once saved. Because of this, a sidecar is written when the edit differs from those settings, even if every value in it is neutral, so a photo whose camera crop was removed keeps showing the whole frame.
+
+## Spots
+
+Each spot is a circle filled from another circle of the same size in the photo, its source. Positions are from 0 to 1 of the photo's width and height, measured from its top left, on the whole photo after lens corrections and perspective and before the crop, so a spot stays on what it covers when the crop, turn or flips change. Spots apply in order after perspective and before halation and bloom, each to the result of the ones before it. See decision 0039.
+
+| Field | Meaning |
+| --- | --- |
+| `mode` | `heal` takes the source's texture and matches it to the color and brightness around the spot; `clone` copies the source as it is. A mode Proof doesn't recognize reads as `heal`. |
+| `x`, `y` | The spot's center. |
+| `sourceX`, `sourceY` | The source's center. |
+| `radius` | The circle's radius as a fraction of the photo's long edge, from 0.001 to 0.1. Default 0.006. |
+| `feather` | 0 to 100, default 50. How far in from the edge the fill fades into the photo, as a percentage of the radius. 0 is a hard edge. |
+| `opacity` | 0 to 100, default 100. How much of the fill covers the spot. |
+
+`radius`, `feather` and `opacity` outside their ranges render as the nearer end; missing ones take their defaults. A spot whose source lies partly off the photo repeats the photo's edge pixels there. Files saved before spots existed have no `spots` and read as none.
 
 ## Original
 

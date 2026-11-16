@@ -242,6 +242,28 @@ struct EditRecipeTests {
         #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
     }
 
+    @Test("A file saved before Spot Removal reads no spots and stays neutral; spots survive a round trip")
+    func migratesWithoutSpots() throws {
+        let old = #"{"formatVersion": 3, "processVersion": 1, "crop": null, "layers": []}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        #expect(recipe.spots.isEmpty)
+        #expect(recipe.isNeutral)
+        #expect(recipe.processVersion == 1)
+
+        let partial = #"{"formatVersion": 3, "spots": [{"x": 0.2, "y": 0.3, "sourceX": 0.25, "sourceY": 0.3, "mode": "smudge"}]}"#
+        let read = try JSONDecoder().decode(EditRecipe.self, from: Data(partial.utf8))
+        #expect(read.spots == [Spot(x: 0.2, y: 0.3, sourceX: 0.25, sourceY: 0.3)])
+
+        var edited = recipe
+        edited.spots = [Spot(mode: .clone, x: 0.41, y: 0.62, sourceX: 0.44, sourceY: 0.6, radius: 0.012, feather: 20, opacity: 80)]
+        #expect(!edited.isNeutral)
+        #expect(edited.original.spots.isEmpty)
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        let spot = try #require((written?["spots"] as? [[String: Any]])?.first)
+        #expect(spot["mode"] as? String == "clone" && spot["radius"] as? Double == 0.012)
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
+    }
+
     @Test("A file saved before Vignette reads it as off and stays neutral; a partial one keeps its other defaults")
     func migratesWithoutVignette() throws {
         let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"dehaze": 0}}"#

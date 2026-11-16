@@ -142,23 +142,19 @@ struct GuideOverlay: View {
                         }
                     })
         }
-        // What to do, then how far along, with the tool's own buttons, on the photo where it happens.
-        .overlay(alignment: .top) {
-            ToolPill(message: instructions + (transform.guides.isEmpty ? "" : " · \(transform.guides.count) of \(Library.maximumGuides)"),
-                     doneHelp: "Keep the guides and stop drawing (Return)",
-                     done: { library.isDrawingGuides = false }) {
-                Button("Clear All") { library.clearGuides() }
-                    .disabled(transform.guides.isEmpty)
-                    .accessibilityLabel("Clear All Guides")
+        // Return and Esc stop drawing, wherever the keyboard focus is. Clear All is in the
+        // Transform card, so nothing covers the photo but the guides.
+        .background {
+            Group {
+                Button("Done Drawing Guides") { library.isDrawingGuides = false }
+                    .keyboardShortcut(.return, modifiers: [])
+                Button("Stop Drawing Guides") { library.isDrawingGuides = false }
+                    .keyboardShortcut(.cancelAction)
             }
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
         }
-    }
-
-    /// What to do next, leading the pill.
-    private var instructions: String {
-        if selected != nil { return "Press Delete to remove the selected guide" }
-        if transform.guides.isEmpty { return "Drag along an edge that should be straight" }
-        return "Drag along another edge, or drag a guide to adjust"
     }
 
     private var pointer: PointerStyle {

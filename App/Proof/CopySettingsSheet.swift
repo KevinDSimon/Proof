@@ -12,7 +12,7 @@ struct CopySettingsSheet: View {
     @State private var items: Set<SettingsItem> = []
 
     /// The cards in the inspector's order, split into columns of about equal height, with Crop
-    /// (`nil`) beside Transform.
+    /// and Spot Removal (`nil`) beside Transform.
     private static let columns: [[AdjustmentGroup?]] = [
         [.look, .whiteBalance, .basic],
         [.curve, .selectiveColor, .detail, .lens],
@@ -24,8 +24,8 @@ struct CopySettingsSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Copy Settings")
                     .font(.headline)
-                // Transform and Crop fit the photo they came from, so they start unticked.
-                Text("Transform and Crop suit photos taken from the same spot, as on a tripod.")
+                // Transform, Crop and Spot Removal fit the photo they came from, so they start unticked.
+                Text("Transform and Crop suit photos taken from the same spot, as on a tripod. Spot Removal suits photos with the same sensor dust.")
                     .foregroundStyle(.secondary)
             }
             HStack(alignment: .top, spacing: 32) {
@@ -64,8 +64,16 @@ struct CopySettingsSheet: View {
     /// while only some of its items are ticked, and its items are indented under it.
     @ViewBuilder
     private func section(_ group: AdjustmentGroup?) -> some View {
-        let groupItems = group.map(SettingsItem.items(in:)) ?? [.crop]
-        if groupItems.count == 1 {
+        let groupItems = group.map(SettingsItem.items(in:)) ?? [.crop, .spotRemoval]
+        if group == nil {
+            // Tools rather than cards, each a checkbox of its own.
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(groupItems, id: \.self) { item in
+                    Toggle(Self.title(of: item), isOn: binding(for: item))
+                        .toggleStyle(.checkbox)
+                }
+            }
+        } else if groupItems.count == 1 {
             Toggle(Self.title(of: groupItems[0]), isOn: binding(for: groupItems[0]))
                 .toggleStyle(.checkbox)
         } else {
@@ -130,6 +138,7 @@ struct CopySettingsSheet: View {
         case .lensVignetting: "Vignetting"
         case .transform: "Transform"
         case .crop: "Crop"
+        case .spotRemoval: "Spot Removal"
         case .vignette: "Vignette"
         case .grain: "Grain"
         case .halation: "Halation"

@@ -157,6 +157,51 @@ public actor RAWRenderer {
         }
     }
 
+    /// Where a new spot at `center` with `radius`, in `Spot`'s coordinates, takes from in the open
+    /// photo: a nearby circle like its surroundings and free of detail, from
+    /// `SpotRemoval.bestSource`. The photo is measured uncropped, with `recipe`'s spots already
+    /// healed, so one spot doesn't take another's dust. `nil` when no circle nearby fits on the photo.
+    public func spotSource(center: CGPoint, radius: Double, mode: Spot.Mode = .heal, recipe: EditRecipe) throws -> CGPoint? {
+        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        var measured = Self.measuring(recipe)
+        measured.crop = nil
+        measured.spots = recipe.spots
+        let photo = Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation, crop: nil)
+        guard photo.width > 0, photo.height > 0 else { throw RAWRendererError.renderFailed }
+        let long = max(photo.width, photo.height)
+        let reach = radius * 5.4 * long
+        // The canvas's scale when the spot is a few pixels across at it, so the decode it cached
+        // is reused: a new scale decodes the photo again, which takes most of the time. Otherwise
+        // out to the farthest candidate's ring is about 160 pixels across.
+        let current = CGFloat(filter.scaleFactor)
+        let shownRadius = radius * long * current
+        if !(4...40).contains(shownRadius) {
+            filter.scaleFactor = Float(min(160 / (reach * 2), 1))
+        }
+        guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens) else {
+            throw RAWRendererError.renderFailed
+        }
+        let full = image.extent.integral
+        let scale = full.width / photo.width
+        let x = full.minX + center.x * full.width, y = full.maxY - center.y * full.height
+        let extent = CGRect(x: x - reach * scale, y: y - reach * scale, width: reach * scale * 2, height: reach * scale * 2)
+            .integral.intersection(full)
+        let width = Int(extent.width), height = Int(extent.height)
+        guard width > 0, height > 0 else { throw RAWRendererError.renderFailed }
+        var bitmap = [Float](repeating: 0, count: width * height * 4)
+        histogramContext.render(image, toBitmap: &bitmap, rowBytes: width * 4 * MemoryLayout<Float>.size,
+                                bounds: extent, format: .RGBAf,
+                                colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB))
+        // Rows come from the top of `extent` first, as `render(toBitmap:)` writes them.
+        let luminance = stride(from: 0, to: bitmap.count, by: 4).map {
+            0.2126 * bitmap[$0] + 0.7152 * bitmap[$0 + 1] + 0.0722 * bitmap[$0 + 2]
+        }
+        let region = CGRect(x: (extent.minX - full.minX) / full.width, y: (full.maxY - extent.maxY) / full.height,
+                            width: extent.width / full.width, height: extent.height / full.height)
+        return SpotRemoval.bestSource(center: center, radius: radius, mode: mode, aspect: photo.width / photo.height,
+                                      luminance: luminance, width: width, height: height, region: region)
+    }
+
     /// The Tone sliders Auto chooses for the open photo, as cropped and white balanced in
     /// `recipe`, from `AutoAdjust`. They don't depend on the Tone sliders already set.
     public func autoTone(recipe: EditRecipe) throws -> AutoAdjust.Tone {
@@ -573,7 +618,7 @@ public actor RAWRenderer {
                       cameraDetail: CameraDetail, cameraLens: CameraLens,
                       lut: PreparedLUT? = nil) -> CIImage? {
         // 1. RAW decode in linear light, with the lens profile, then chromatic aberration, lens
-        // vignetting, distortion and perspective. White
+        // vignetting, distortion, perspective and spot removal. White
         // balance is in Kelvin and tint; exposure in stops.
         // Sharpening and noise reduction are the decoder's own; it sharpens only above half size.
         let whiteBalance = recipe.basic.whiteBalance(asShot: asShot)
@@ -593,7 +638,9 @@ public actor RAWRenderer {
                                                to: LensVignetting.apply(recipe.lens.vignetting, to: aligned))
         // Then perspective, on lines the lens corrections have made straight, and before the
         // crop's turns, so it stays with the photo as it is turned.
-        let decoded = PerspectiveTransform.apply(recipe.transform, to: undistorted)
+        let corrected = PerspectiveTransform.apply(recipe.transform, to: undistorted)
+        // Then spot removal, on the whole photo so a spot can take from outside the crop.
+        let decoded = SpotRemoval.apply(recipe.spots, to: corrected)
         // Then halation and bloom, light spreading from the highlights as it reached the film,
         // over the whole photo so light from outside the crop still spreads into it.
         let glowing = Glow.apply(halation: recipe.halation, bloom: recipe.bloom, to: decoded)

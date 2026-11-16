@@ -113,6 +113,7 @@ final class Library {
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
             isPickingWhiteBalance = false
             isDrawingGuides = false
+            finishRemovingSpots()
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
             offGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
@@ -730,7 +731,7 @@ final class Library {
     /// the edit, and the crop tool and eyedropper, show the edited photo again, so a change is
     /// never made out of sight.
     func toggleOriginal() {
-        guard isEditing, !isCropping, !isPickingWhiteBalance, selectedEdit != nil else { return }
+        guard isEditing, !isCropping, !isPickingWhiteBalance, !isRemovingSpots, selectedEdit != nil else { return }
         browse.toggleOriginal()
     }
 
@@ -802,6 +803,123 @@ final class Library {
         }
     }
 
+    // MARK: Spot Removal
+
+    /// The Spot Removal tool is open: a click on the photo covers a spot, such as sensor dust.
+    private(set) var isRemovingSpots = false
+    /// The spot the tool's controls change and Delete removes, by its place in the recipe's `spots`.
+    var selectedSpot: Int?
+    /// The mode, size, feather and opacity the next spot gets: the last ones set, as in Lightroom.
+    private(set) var nextSpot = Spot(x: 0, y: 0, sourceX: 0, sourceY: 0)
+    /// A source is being looked for, for the spot at this place in `spots`.
+    private(set) var findingSourceFor: Int?
+
+    /// Opens or closes the Spot Removal tool.
+    func toggleSpotRemoval() {
+        if isRemovingSpots {
+            finishRemovingSpots()
+            return
+        }
+        guard isEditing, !isCropping, selectedEdit != nil else { return }
+        showEdited()
+        isPickingWhiteBalance = false
+        isDrawingGuides = false
+        selectedSpot = nil
+        isRemovingSpots = true
+    }
+
+    func finishRemovingSpots() {
+        isRemovingSpots = false
+        selectedSpot = nil
+    }
+
+    /// The spot the controls show: the selected one, or the settings the next one gets.
+    var shownSpot: Spot {
+        selectedSpot.flatMap { index in selectedEdit?.recipe.spots.indices.contains(index) == true
+            ? selectedEdit?.recipe.spots[index] : nil } ?? nextSpot
+    }
+
+    /// Selects the spot at `index`, or none. The next spot takes its settings.
+    func selectSpot(_ index: Int?) {
+        selectedSpot = index
+        if let index, let spots = selectedEdit?.recipe.spots, spots.indices.contains(index) { nextSpot = spots[index] }
+    }
+
+    /// Changes the selected spot's settings, and the next spot's.
+    func changeSpot(_ change: (inout Spot) -> Void) {
+        change(&nextSpot)
+        guard let index = selectedSpot else { return }
+        changeEdit { recipe in
+            guard recipe.spots.indices.contains(index) else { return }
+            change(&recipe.spots[index])
+        }
+    }
+
+    /// Covers a spot at `center`, in `Spot`'s coordinates, with the next spot's settings, and
+    /// selects it. It shows at once, taking from beside it; the source Proof chooses replaces that
+    /// when it has been found, in the same undo step.
+    func addSpot(at center: CGPoint, with renderer: RAWRenderer) async {
+        guard let photo = browse.selectedPhoto, let url = selectedPhotoURL, let size = selectedEdit?.size else { return }
+        var spot = nextSpot
+        spot.center = center
+        spot.source = Self.besideSpot(center: center, radius: spot.radius, photoSize: size)
+        changeEdit { $0.spots.append(spot) }
+        guard let index = selectedEdit?.recipe.spots.indices.last, let recipe = selectedEdit?.recipe else { return }
+        selectedSpot = index
+        // Held until the source is in, so adding a spot is one step.
+        commitTask?.cancel()
+        findingSourceFor = index
+        defer { if findingSourceFor == index { findingSourceFor = nil } }
+        var before = recipe
+        before.spots.removeLast()
+        let found: CGPoint?
+        do {
+            try await renderer.open(url)
+            found = try await renderer.spotSource(center: center, radius: spot.radius, mode: spot.mode, recipe: before)
+        } catch {
+            found = nil
+        }
+        // The spot keeps the source beside it if it was moved, removed or replaced meanwhile.
+        guard browse.selectedPhoto == photo, let found else {
+            if browse.selectedPhoto == photo { changeEdit { _ in } }
+            return
+        }
+        changeEdit { recipe in
+            guard recipe.spots.indices.contains(index), recipe.spots[index] == spot else { return }
+            recipe.spots[index].source = found
+        }
+    }
+
+    /// The same distance away as Proof's own choice at its nearest, to the right or, near the
+    /// photo's right edge, to the left.
+    static func besideSpot(center: CGPoint, radius: Double, photoSize: CGSize) -> CGPoint {
+        let across = radius * 2.4 * max(photoSize.width, photoSize.height) / max(photoSize.width, 1)
+        let x = center.x + across + radius <= 1 ? center.x + across : center.x - across
+        return CGPoint(x: x, y: center.y)
+    }
+
+    /// Moves the spot at `index`, keeping its source where it was, or its source alone.
+    func moveSpot(at index: Int, to center: CGPoint? = nil, source: CGPoint? = nil) {
+        changeEdit { recipe in
+            guard recipe.spots.indices.contains(index) else { return }
+            if let center { recipe.spots[index].center = center }
+            if let source { recipe.spots[index].source = source }
+        }
+    }
+
+    func removeSpot(at index: Int) {
+        selectedSpot = nil
+        changeEdit { recipe in
+            guard recipe.spots.indices.contains(index) else { return }
+            recipe.spots.remove(at: index)
+        }
+    }
+
+    func clearSpots() {
+        selectedSpot = nil
+        changeEdit { $0.spots = [] }
+    }
+
     // MARK: Crop
 
     /// The crop tool is open on the selected photo.
@@ -854,6 +972,7 @@ final class Library {
         unstraightenedFrame = nil
         isPickingWhiteBalance = false
         isDrawingGuides = false
+        finishRemovingSpots()
         isCropping = true
     }
 
@@ -936,6 +1055,7 @@ final class Library {
     func toggleWhiteBalancePicker() {
         guard isEditing, !isCropping, selectedEdit?.asShot != nil else { return }
         showEdited()
+        finishRemovingSpots()
         isPickingWhiteBalance.toggle()
     }
 
@@ -1023,6 +1143,7 @@ final class Library {
                 recipe.transform.guides = []
             }
         case .guided:
+            finishRemovingSpots()
             isDrawingGuides = true
             let size = selectedEdit?.size
             changeEdit { recipe in

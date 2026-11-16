@@ -23,6 +23,7 @@ Proof is a Mac RAW photo editor in Swift, built on Core Image and Metal. These r
 - Rendering always takes a target size. Nothing renders a full 60 MP image except export.
 - No change may alter how an existing saved edit renders without bumping `EditRecipe.processVersion`. Old versions keep rendering as they did.
 - The edit recipe format is documented in `docs/edit-format.md`. Any change to it updates that document and adds a migration test.
+- Every new adjustment or tool that changes the recipe is added to Copy Settings (`SettingsItem`) in the same PR. Settings that fit only the photo they were made on, such as Transform, Crop and Spot Removal, start unticked.
 - Original photos are never written to. Ratings and flags are written only to XMP sidecars (#52), keeping every other tag in them.
 
 ## Interface

@@ -35,6 +35,7 @@ struct ReferenceRenderTests {
         ("chromatic-aberration", chromaticAberration, nil),
         ("lens-manual", lensManual, nil),
         ("perspective", perspective, nil),
+        ("spots", spots, nil),
     ]
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
@@ -227,6 +228,18 @@ struct ReferenceRenderTests {
 
     /// Every Transform slider, with Constrain Crop, and a turn, so the correction shows it
     /// comes before the crop's turns.
+    /// A healed spot on the rock and a softer cloned one in the sky, under a crop that turns the
+    /// photo, so a change to where spots land relative to the crop shows too.
+    static let spots: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.spots = [
+            Spot(x: 0.48, y: 0.4, sourceX: 0.524, sourceY: 0.428, radius: 0.02),
+            Spot(mode: .clone, x: 0.3, y: 0.15, sourceX: 0.2, sourceY: 0.17, radius: 0.03, feather: 30, opacity: 80),
+        ]
+        recipe.crop = Crop(x: 0.1, y: 0.05, width: 0.8, height: 0.8, rotation: 90)
+        return recipe
+    }()
+
     static let perspective: EditRecipe = {
         var recipe = EditRecipe()
         recipe.transform = PerspectiveTransform(vertical: -25, horizontal: 10, rotate: 1.5, aspect: 10,

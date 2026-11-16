@@ -22,10 +22,11 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var lens: LensCorrections
     public var transform: PerspectiveTransform
     public var crop: Crop?
+    public var spots: [Spot]
     public var layers: [Layer]
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, layers
+        case formatVersion, processVersion, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, spots, layers
     }
 
     public init(
@@ -42,6 +43,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         lens: LensCorrections = LensCorrections(),
         transform: PerspectiveTransform = PerspectiveTransform(),
         crop: Crop? = nil,
+        spots: [Spot] = [],
         layers: [Layer] = []
     ) {
         formatVersion = Self.currentFormatVersion
@@ -59,6 +61,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         self.lens = lens
         self.transform = transform
         self.crop = crop
+        self.spots = spots
         self.layers = layers
     }
 
@@ -87,6 +90,8 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         // Edits saved before Transform have none.
         transform = try c.decodeIfPresent(PerspectiveTransform.self, forKey: .transform) ?? PerspectiveTransform()
         crop = try c.decodeIfPresent(Crop.self, forKey: .crop)
+        // Edits saved before Spot Removal have none.
+        spots = try c.decodeIfPresent([Spot].self, forKey: .spots) ?? []
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
         // Format 1 held temperature and tint as −100 to 100 offsets. Nothing rendered them, so
         // they are dropped and the photo keeps the camera's white balance, as it always showed.
@@ -118,12 +123,13 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(lens, forKey: .lens)
         try c.encode(transform, forKey: .transform)
         try c.encode(crop, forKey: .crop)
+        try c.encode(spots, forKey: .spots)
         try c.encode(layers, forKey: .layers)
     }
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && layers.isEmpty
+        basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && spots.isEmpty && layers.isEmpty
     }
 
     /// The photo without its adjustments, for Show Original: lens corrections, the perspective
