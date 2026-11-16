@@ -15,11 +15,11 @@ struct MasksInspector: View {
         InspectorPanel {
             // Adding is a section of its own, apart from the masks already made, so it reads as
             // where new ones come from.
-            InspectorCard(title: "Masks", canReset: !layers.isEmpty, reset: library.clearMasks) {
-                heading("Add")
+            InspectorCard(title: "Masking", canReset: !layers.isEmpty, reset: library.clearMasks) {
+                heading("New")
                 addButtons
                 if !layers.isEmpty {
-                    heading("Added")
+                    heading("Masks")
                     VStack(spacing: 2) {
                         ForEach(Array(layers.enumerated()), id: \.offset) { index, layer in
                             row(index, layer)
