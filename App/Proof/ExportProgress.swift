@@ -1,9 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// The toolbar's export button: a progress ring while photos export, then a checkmark, or a
-/// warning when some failed, until the summary is dismissed. Its popover says how far the export
-/// has got and can stop it.
+/// The toolbar's export button: a spinner and how many photos are done while photos export, then
+/// a checkmark, or a warning when some failed, until the summary is dismissed. A render can't
+/// report how far it has got, so the spinner shows the current photo is still rendering. Its
+/// popover says how far the export has got and can stop it.
 struct ExportProgressButton: View {
     let exports: ExportQueue
     @State private var isShowingDetails = false
@@ -13,14 +14,17 @@ struct ExportProgressButton: View {
             isShowingDetails.toggle()
         } label: {
             if exports.isRunning {
-                ProgressView(value: exports.fractionDone)
-                    .progressViewStyle(.circular)
-                    .controlSize(.small)
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(exports.total == 1 ? "Exporting" : "\(exports.position) of \(exports.total)")
+                        .monospacedDigit()
+                }
             } else {
                 Label("Export", systemImage: exports.failures.isEmpty ? "checkmark.circle" : "exclamationmark.triangle")
             }
         }
-        .help(exports.isRunning ? "Exporting \(exports.finished + 1) of \(exports.total)" : "Export finished")
+        .help(exports.isRunning ? "Exporting \(exports.position) of \(exports.total)" : "Export finished")
         .accessibilityLabel(exports.isRunning ? "Export progress" : "Export finished")
         .accessibilityValue(exports.isRunning ? "\(exports.finished) of \(exports.total) photos" : "")
         .popover(isPresented: $isShowingDetails, arrowEdge: .bottom) {
@@ -36,9 +40,14 @@ private struct ExportDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if exports.isRunning {
-                Text("Exporting \(min(exports.finished + 1, exports.total)) of \(exports.total)")
+                Text("Exporting \(exports.position) of \(exports.total)")
                     .font(.headline)
-                ProgressView(value: exports.fractionDone)
+                if exports.total == 1 {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                } else {
+                    ProgressView(value: exports.fractionDone)
+                }
                 if let current = exports.current {
                     Text(current)
                         .foregroundStyle(.secondary)

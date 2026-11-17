@@ -72,6 +72,37 @@ struct DNGTimingTests {
         report("Open and full render (\(size))", totals)
     }
 
+    /// A full-size export, for issue #196: the render, reading the original's metadata, and
+    /// encoding the file, each timed on its own. Each run uses a new renderer, as an export does.
+    @Test("Export timings")
+    func exportTimings() async throws {
+        let url = try #require(timingDNG)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for format in [ExportSettings.Format.jpeg, .tiff] {
+            let settings = ExportSettings(format: format)
+            var renders: [Double] = [], encodes: [Double] = [], totals: [Double] = []
+            var size = ""
+            for _ in 0..<3 {
+                let renderer = try RAWRenderer()
+                let start = ContinuousClock.now
+                let image = try await renderer.export(url, recipe: EditRecipe(), settings: settings)
+                let rendered = ContinuousClock.now
+                try PhotoExport.write(image, to: PhotoExport.destination(for: url, format: format, in: folder),
+                                      format: format, quality: settings.quality, properties: [:])
+                let end = ContinuousClock.now
+                renders.append((rendered - start) / .milliseconds(1))
+                encodes.append((end - rendered) / .milliseconds(1))
+                totals.append((end - start) / .milliseconds(1))
+                size = "\(image.width)×\(image.height)"
+            }
+            report("\(format.title) export render (\(size))", renders)
+            report("\(format.title) export encode and write", encodes)
+            report("\(format.title) export total", totals)
+        }
+    }
+
     /// The preview the camera embedded in the file, decoded no larger than `maxPixelSize` on its
     /// long side. A smaller size is much faster because the JPEG decoder skips detail it would
     /// discard. Never decodes the RAW data: if the file has no preview this returns nil.

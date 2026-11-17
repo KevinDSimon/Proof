@@ -44,6 +44,15 @@ public actor RAWRenderer {
         .cacheIntermediates: false,
     ])
 
+    /// For `export` only, with a command queue of its own at low GPU priority, so the canvas's
+    /// renders go first while a full-resolution export runs and the interface doesn't stall (#196).
+    private lazy var exportContext = CIContext(mtlDevice: device, options: [
+        .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
+        .workingFormat: CIFormat.RGBAh,
+        .cacheIntermediates: false,
+        .priorityRequestLow: true,
+    ])
+
     /// For the histogram only. Float, so sparse bins keep their precision; nonisolated, so
     /// measuring never queues behind the next render on the actor. `CIContext` is thread-safe.
     private nonisolated let histogramContext: CIContext
@@ -510,7 +519,7 @@ public actor RAWRenderer {
               let data = bitmap.data
         else { throw RAWRendererError.renderFailed }
         // `render(toBitmap:)` writes the top row first, as a CGImage holds it.
-        thumbnailContext.render(image, toBitmap: data, rowBytes: bitmap.bytesPerRow, bounds: bounds,
+        exportContext.render(image, toBitmap: data, rowBytes: bitmap.bytesPerRow, bounds: bounds,
                                 format: is16Bit ? .RGBA16 : .RGBA8, colorSpace: colorSpace)
         guard let result = bitmap.makeImage() else { throw RAWRendererError.renderFailed }
         return result
