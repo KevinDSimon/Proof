@@ -51,6 +51,8 @@ final class ExportQueue {
     /// The toolbar shows the queue while it runs and until its summary is dismissed.
     var isVisible: Bool { total > 0 }
     var fractionDone: Double { total > 0 ? Double(finished) / Double(total) : 0 }
+    /// The number of the photo being exported, counting from 1.
+    var position: Int { min(finished + 1, total) }
 
     /// Queues `items` for `folder`, a folder chosen in the open panel, with `settings`. The
     /// photos' sidecars are read first, so each export has the edit it had when Export was clicked.

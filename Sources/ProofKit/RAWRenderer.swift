@@ -44,6 +44,18 @@ public actor RAWRenderer {
         .cacheIntermediates: false,
     ])
 
+    /// For `export` only, with a command queue of its own at low GPU priority, so the canvas's
+    /// renders go first while a full-resolution export runs and the interface doesn't stall. It
+    /// caches intermediates: without them, the whole-photo maps that clarity, dehaze and highlights
+    /// and shadows build were made again for each part of a full-size render, and an M11 photo
+    /// with those edits took 7 minutes instead of 20 seconds (#196).
+    private lazy var exportContext = CIContext(mtlDevice: device, options: [
+        .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
+        .workingFormat: CIFormat.RGBAh,
+        .cacheIntermediates: true,
+        .priorityRequestLow: true,
+    ])
+
     /// For the histogram only. Float, so sparse bins keep their precision; nonisolated, so
     /// measuring never queues behind the next render on the actor. `CIContext` is thread-safe.
     private nonisolated let histogramContext: CIContext
@@ -484,8 +496,14 @@ public actor RAWRenderer {
                                                            crop: recipe.crop))
         // Decoded at the scale that fits, as the canvas is, so a smaller export looks like the canvas
         // at that size and costs a smaller decode.
-        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
-                                                    crop: recipe.crop, fitting: size))
+        var scale = Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                                     crop: recipe.crop, fitting: size)
+        // Full size is rounded down to whole pixels, which left the scale a hair under 1. The
+        // decoder resamples the whole photo for any scale under 1, which made a full-size export with
+        // clarity, dehaze and highlights and shadows twice as slow and softer than the canvas at
+        // full size; within a pixel of full size it decodes at 1 (decision 0043).
+        if scale < 1, (1 - scale) * max(size.width, size.height) < 1 { scale = 1 }
+        filter.scaleFactor = Float(scale)
         let asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
         guard var image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: CameraDetail(of: filter),
                                      cameraLens: CameraLens(of: filter), lut: lut)
@@ -509,9 +527,22 @@ public actor RAWRenderer {
                                      bitmapInfo: bitmapInfo),
               let data = bitmap.data
         else { throw RAWRendererError.renderFailed }
-        // `render(toBitmap:)` writes the top row first, as a CGImage holds it.
-        thumbnailContext.render(image, toBitmap: data, rowBytes: bitmap.bytesPerRow, bounds: bounds,
-                                format: is16Bit ? .RGBA16 : .RGBA8, colorSpace: colorSpace)
+        // Rendered into one texture the size of the export, not straight into the bitmap: into a
+        // bitmap Core Image works in tiles and, for a full edit, builds the whole-photo maps that
+        // clarity, dehaze and highlights and shadows use again for each tile, which took minutes (#196).
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: is16Bit ? .rgba16Unorm : .rgba8Unorm, width: Int(size.width), height: Int(size.height),
+            mipmapped: false)
+        descriptor.usage = [.shaderWrite, .renderTarget]
+        descriptor.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: descriptor) else { throw RAWRendererError.renderFailed }
+        let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: nil)
+        destination.colorSpace = colorSpace
+        // Flipped, so row 0 holds the top of the photo, as a CGImage does.
+        destination.isFlipped = true
+        try exportContext.startTask(toRender: image.cropped(to: bounds), to: destination).waitUntilCompleted()
+        texture.getBytes(data, bytesPerRow: bitmap.bytesPerRow,
+                         from: MTLRegionMake2D(0, 0, Int(size.width), Int(size.height)), mipmapLevel: 0)
         guard let result = bitmap.makeImage() else { throw RAWRendererError.renderFailed }
         return result
     }

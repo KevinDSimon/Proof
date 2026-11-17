@@ -315,9 +315,14 @@ struct ContentView: View {
         .sheet(isPresented: $library.isChoosingSettingsToCopy) {
             CopySettingsSheet(library: library)
         }
-        .sheet(isPresented: Binding(get: { !library.photosToExport.isEmpty },
+        // Export turns the sheet into the export's progress, which stays until Done (#196).
+        .sheet(isPresented: Binding(get: { !library.photosToExport.isEmpty || library.exports.isVisible },
                                     set: { if !$0 { library.photosToExport = [] } })) {
-            ExportSheet(library: library, photos: library.photosToExport)
+            if library.photosToExport.isEmpty {
+                ExportProgressView(exports: library.exports)
+            } else {
+                ExportSheet(library: library, photos: library.photosToExport)
+            }
         }
         // A single photo reverts without asking, as Undo brings it back right there. Several may
         // include photos out of sight, each with its own undo history.
@@ -356,12 +361,6 @@ struct ContentView: View {
         // On a filter row it narrows the row's photos further.
         if library.selection != nil {
             ToolbarItem { filterButton }
-        }
-        if library.exports.isVisible {
-            ToolbarSpacer(.fixed)
-            ToolbarItem {
-                ExportProgressButton(exports: library.exports)
-            }
         }
         // Only while the Info panel is open; View › Show Info, ⌘I and a photo's right-click menu
         // open it. The same symbol as the inspector button in Edit, which also hides a side panel.
@@ -544,12 +543,6 @@ struct ContentView: View {
             }
             // The crop tool and the inspector are separate groups.
             ToolbarSpacer(.fixed)
-            if library.exports.isVisible {
-                ToolbarItem {
-                    ExportProgressButton(exports: library.exports)
-                }
-                ToolbarSpacer(.fixed)
-            }
             ToolbarItem {
                 Button("Inspector", systemImage: "sidebar.trailing") { library.isInspectorShown.toggle() }
                     .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")

@@ -72,6 +72,85 @@ struct DNGTimingTests {
         report("Open and full render (\(size))", totals)
     }
 
+    /// A full-size export, for issue #196: the render, reading the original's metadata, and
+    /// encoding the file, each timed on its own. Each run uses a new renderer, as an export does.
+    @Test("Export timings")
+    func exportTimings() async throws {
+        let url = try #require(timingDNG)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        // The photo's saved edit and look, when it has them, as the app exports it.
+        let recipe = (try? Sidecar.read(for: url))??.recipe ?? EditRecipe()
+        let lut = await LUTLibrary().lut(for: recipe.look)
+        print("Exporting with \(recipe == EditRecipe() ? "no edit" : "the saved edit"), look: \(lut != nil)")
+        for format in [ExportSettings.Format.jpeg, .tiff] {
+            let settings = ExportSettings(format: format)
+            var renders: [Double] = [], encodes: [Double] = [], totals: [Double] = []
+            var size = ""
+            for _ in 0..<3 {
+                let renderer = try RAWRenderer()
+                let start = ContinuousClock.now
+                let image = try await renderer.export(url, recipe: recipe, lut: lut, settings: settings)
+                let rendered = ContinuousClock.now
+                try PhotoExport.write(image, to: PhotoExport.destination(for: url, format: format, in: folder),
+                                      format: format, quality: settings.quality, properties: [:])
+                let end = ContinuousClock.now
+                renders.append((rendered - start) / .milliseconds(1))
+                encodes.append((end - rendered) / .milliseconds(1))
+                totals.append((end - start) / .milliseconds(1))
+                size = "\(image.width)×\(image.height)"
+            }
+            report("\(format.title) export render (\(size))", renders)
+            report("\(format.title) export encode and write", encodes)
+            report("\(format.title) export total", totals)
+        }
+    }
+
+    /// One full-size JPEG render for each part of the photo's saved edit on its own, and for the
+    /// whole edit, to find which stage makes an export slow (#196). Needs a sidecar beside the photo.
+    @Test("Export render timing per edit stage")
+    func exportStageTimings() async throws {
+        let url = try #require(timingDNG)
+        let saved = try #require((try? Sidecar.read(for: url))??.recipe)
+        let lut = await LUTLibrary().lut(for: saved.look)
+        var stages: [(String, EditRecipe, PreparedLUT?)] = [("none", EditRecipe(), nil)]
+        func stage(_ name: String, lut: PreparedLUT? = nil, _ change: (inout EditRecipe) -> Void) {
+            var recipe = EditRecipe()
+            change(&recipe)
+            stages.append((name, recipe, lut))
+        }
+        stage("clarity") { $0.basic.clarity = saved.basic.clarity }
+        stage("dehaze") { $0.basic.dehaze = saved.basic.dehaze }
+        stage("highlights/shadows") { $0.basic.highlights = saved.basic.highlights; $0.basic.shadows = saved.basic.shadows }
+        stage("curve") { $0.curve = saved.curve }
+        stage("crop") { $0.crop = saved.crop }
+        stage("look", lut: lut) { $0.look = saved.look }
+        stage("detail") { $0.detail = saved.detail }
+        stage("vignette") { $0.vignette = saved.vignette }
+        stage("spots (\(saved.spots.count))") { $0.spots = saved.spots }
+        stages.append(("whole edit", saved, lut))
+        // The canvas's full-size render of the whole edit, for comparison: the second reuses the decode.
+        let canvas = try RAWRenderer()
+        try await canvas.open(url)
+        for run in 1...2 {
+            let start = ContinuousClock.now
+            _ = try await canvas.render(scaleFactor: 1, recipe: saved, lut: lut)
+            print("Canvas, whole edit, run \(run): \(Self.ms((ContinuousClock.now - start) / .milliseconds(1)))")
+        }
+        // `PROOF_STAGE=whole` times only the stages whose names start with it.
+        let only = ProcessInfo.processInfo.environment["PROOF_STAGE"]
+        let settings = ExportSettings(format: .jpeg)
+        for (name, recipe, lut) in stages where only.map({ name.hasPrefix($0) }) ?? true {
+            let renderer = try RAWRenderer()
+            for run in 1...2 {
+                let start = ContinuousClock.now
+                _ = try await renderer.export(url, recipe: recipe, lut: lut, settings: settings)
+                print("Stage \(name), run \(run): \(Self.ms((ContinuousClock.now - start) / .milliseconds(1)))")
+            }
+        }
+    }
+
     /// The preview the camera embedded in the file, decoded no larger than `maxPixelSize` on its
     /// long side. A smaller size is much faster because the JPEG decoder skips detail it would
     /// discard. Never decodes the RAW data: if the file has no preview this returns nil.
