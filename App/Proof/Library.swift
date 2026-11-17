@@ -598,11 +598,12 @@ final class Library {
     /// The photos the export sheet is open for; empty while it is closed.
     var photosToExport: [PhotoReference] = []
 
-    var canExport: Bool { !isCropping && !browse.selectedPhotos.isEmpty }
+    /// One export at a time: its progress sheet stays open until it ends.
+    var canExport: Bool { !isCropping && !exports.isVisible && !browse.selectedPhotos.isEmpty }
 
     /// File › Export…: opens the export sheet for `photos`, every selected photo by default.
     func requestExport(of photos: [PhotoReference]? = nil) {
-        guard !isCropping else { return }
+        guard !isCropping, !exports.isVisible else { return }
         photosToExport = photos ?? selectedPhotosInOrder
     }
 
@@ -617,13 +618,15 @@ final class Library {
             }
         }
         exports.start(items, settings: settings, folder: folder)
+        // The export sheet, if it is open, shows the export's progress instead.
+        photosToExport = []
     }
 
     /// File › Export To: exports `photos`, the selected photos by default, to a saved destination
     /// with its settings. When its folder can't be found, the export sheet opens on it instead, to
     /// show why and let the person choose the folder again.
     func export(_ photos: [PhotoReference]? = nil, to destinationID: UUID) {
-        guard !isCropping, let destination = exportDestinations?.destination(destinationID) else { return }
+        guard !isCropping, !exports.isVisible, let destination = exportDestinations?.destination(destinationID) else { return }
         let photos = photos ?? selectedPhotosInOrder
         guard !photos.isEmpty else { return }
         UserDefaults.standard.set(destinationID.uuidString, forKey: ExportSheet.destinationKey)

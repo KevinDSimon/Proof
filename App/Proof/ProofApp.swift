@@ -255,12 +255,6 @@ struct ContentView: View {
                     FolderSidebar(library: library)
                 }
             }
-                // Export progress stays at the foot of the sidebar in Browse and Edit (#196).
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if library.exports.isVisible {
-                        ExportFooter(exports: library.exports)
-                    }
-                }
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 360)
                 .toolbar(removing: library.isEditing ? .sidebarToggle : nil)
         } detail: {
@@ -274,15 +268,6 @@ struct ContentView: View {
                         // toolbar keeps its groups apart.
                         .toolbar { browseToolbar }
                         .background(Color.interfaceBackground.ignoresSafeArea())
-                }
-            }
-            .toolbar {
-                // With the sidebar collapsed its export footer can't be seen, so a spinner beside
-                // the sidebar button says an export is running.
-                if columnVisibility == .detailOnly, library.exports.isRunning {
-                    ToolbarItem(placement: .navigation) {
-                        ExportBadge(exports: library.exports) { columnVisibility = .all }
-                    }
                 }
             }
             .inspector(isPresented: Binding(get: { library.isEditing ? library.isInspectorShown : library.isInfoShown },
@@ -330,9 +315,14 @@ struct ContentView: View {
         .sheet(isPresented: $library.isChoosingSettingsToCopy) {
             CopySettingsSheet(library: library)
         }
-        .sheet(isPresented: Binding(get: { !library.photosToExport.isEmpty },
+        // Export turns the sheet into the export's progress, which stays until Done (#196).
+        .sheet(isPresented: Binding(get: { !library.photosToExport.isEmpty || library.exports.isVisible },
                                     set: { if !$0 { library.photosToExport = [] } })) {
-            ExportSheet(library: library, photos: library.photosToExport)
+            if library.photosToExport.isEmpty {
+                ExportProgressView(exports: library.exports)
+            } else {
+                ExportSheet(library: library, photos: library.photosToExport)
+            }
         }
         // A single photo reverts without asking, as Undo brings it back right there. Several may
         // include photos out of sight, each with its own undo history.

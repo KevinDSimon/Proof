@@ -255,7 +255,6 @@ struct ExportSheet: View {
         guard let destinationFolder, let destinationID else { return }
         storedDestination = destinationID.uuidString
         library.export(photos, settings: settings, to: destinationFolder)
-        dismiss()
     }
 
     private func chose(_ folder: URL, for purpose: FolderPurpose) {
@@ -265,7 +264,6 @@ struct ExportSheet: View {
             storedSettings = (try? JSONEncoder().encode(settings)) ?? Data()
             storedDestination = ""
             library.export(photos, settings: settings, to: folder)
-            dismiss()
         case .newDestination:
             nameDraft = folder.lastPathComponent
             newDestinationFolder = folder
