@@ -255,6 +255,12 @@ struct ContentView: View {
                     FolderSidebar(library: library)
                 }
             }
+                // Export progress stays at the foot of the sidebar in Browse and Edit (#196).
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if library.exports.isVisible {
+                        ExportFooter(exports: library.exports)
+                    }
+                }
                 .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 360)
                 .toolbar(removing: library.isEditing ? .sidebarToggle : nil)
         } detail: {
@@ -268,6 +274,15 @@ struct ContentView: View {
                         // toolbar keeps its groups apart.
                         .toolbar { browseToolbar }
                         .background(Color.interfaceBackground.ignoresSafeArea())
+                }
+            }
+            .toolbar {
+                // With the sidebar collapsed its export footer can't be seen, so a spinner beside
+                // the sidebar button says an export is running.
+                if columnVisibility == .detailOnly, library.exports.isRunning {
+                    ToolbarItem(placement: .navigation) {
+                        ExportBadge(exports: library.exports) { columnVisibility = .all }
+                    }
                 }
             }
             .inspector(isPresented: Binding(get: { library.isEditing ? library.isInspectorShown : library.isInfoShown },
@@ -356,12 +371,6 @@ struct ContentView: View {
         // On a filter row it narrows the row's photos further.
         if library.selection != nil {
             ToolbarItem { filterButton }
-        }
-        if library.exports.isVisible {
-            ToolbarSpacer(.fixed)
-            ToolbarItem {
-                ExportProgressButton(exports: library.exports)
-            }
         }
         // Only while the Info panel is open; View › Show Info, ⌘I and a photo's right-click menu
         // open it. The same symbol as the inspector button in Edit, which also hides a side panel.
@@ -544,12 +553,6 @@ struct ContentView: View {
             }
             // The crop tool and the inspector are separate groups.
             ToolbarSpacer(.fixed)
-            if library.exports.isVisible {
-                ToolbarItem {
-                    ExportProgressButton(exports: library.exports)
-                }
-                ToolbarSpacer(.fixed)
-            }
             ToolbarItem {
                 Button("Inspector", systemImage: "sidebar.trailing") { library.isInspectorShown.toggle() }
                     .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")

@@ -1,35 +1,93 @@
 import AppKit
 import SwiftUI
 
-/// The toolbar's export button: a spinner and how many photos are done while photos export, then
-/// a checkmark, or a warning when some failed, until the summary is dismissed. A render can't
-/// report how far it has got, so the spinner shows the current photo is still rendering. Its
-/// popover says how far the export has got and can stop it.
-struct ExportProgressButton: View {
+/// A small spinner beside the sidebar button while the sidebar, and the export footer with it,
+/// is collapsed. Clicking it opens the sidebar. Once the export ends it goes, and the footer keeps
+/// the summary.
+struct ExportBadge: View {
+    let exports: ExportQueue
+    let showSidebar: () -> Void
+
+    var body: some View {
+        Button(action: showSidebar) {
+            ProgressView()
+                .controlSize(.small)
+        }
+        .help("Exporting \(exports.position) of \(exports.total). Click to show the sidebar.")
+        .accessibilityLabel("Export progress")
+        .accessibilityValue("\(exports.position) of \(exports.total) photos")
+    }
+}
+
+/// The export's progress at the foot of the sidebar, where it's seen without being looked for:
+/// a bar and which photo is being exported, with Stop, then how many photos were exported, with
+/// Show in Finder and the failures, until it is closed. A render can't report how far it has got,
+/// so for one photo the bar runs without a value; for several it counts the photos done.
+struct ExportFooter: View {
     let exports: ExportQueue
     @State private var isShowingDetails = false
 
     var body: some View {
-        Button {
-            isShowingDetails.toggle()
-        } label: {
-            if exports.isRunning {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(exports.total == 1 ? "Exporting" : "\(exports.position) of \(exports.total)")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                if exports.isRunning {
+                    Text("Exporting \(exports.position) of \(exports.total)")
                         .monospacedDigit()
+                } else {
+                    Label(exports.summary, systemImage: exports.failures.isEmpty ? "checkmark.circle" : "exclamationmark.triangle")
+                }
+                Spacer(minLength: 0)
+                Group {
+                    if exports.isRunning {
+                        Button("Stop Export", systemImage: "xmark.circle.fill") { exports.cancel() }
+                            .help("Stop after the photo being exported")
+                    } else {
+                        Button("Close", systemImage: "xmark.circle.fill") { exports.clear() }
+                            .help("Close")
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+            }
+            .font(.callout)
+            if exports.isRunning {
+                Group {
+                    if exports.total == 1 {
+                        ProgressView()
+                    } else {
+                        ProgressView(value: exports.fractionDone)
+                    }
+                }
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+                if let current = exports.current {
+                    Text(current)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             } else {
-                Label("Export", systemImage: exports.failures.isEmpty ? "checkmark.circle" : "exclamationmark.triangle")
+                HStack {
+                    if !exports.failures.isEmpty {
+                        Button(exports.failures.count == 1 ? "1 Failed" : "\(exports.failures.count) Failed") {
+                            isShowingDetails = true
+                        }
+                        .popover(isPresented: $isShowingDetails, arrowEdge: .trailing) {
+                            ExportDetails(exports: exports) { isShowingDetails = false }
+                        }
+                    }
+                    if !exports.exported.isEmpty {
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(exports.exported) }
+                    }
+                }
+                .controlSize(.small)
             }
         }
-        .help(exports.isRunning ? "Exporting \(exports.position) of \(exports.total)" : "Export finished")
-        .accessibilityLabel(exports.isRunning ? "Export progress" : "Export finished")
-        .accessibilityValue(exports.isRunning ? "\(exports.finished) of \(exports.total) photos" : "")
-        .popover(isPresented: $isShowingDetails, arrowEdge: .bottom) {
-            ExportDetails(exports: exports) { isShowingDetails = false }
-        }
+        .padding(12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Export")
     }
 }
 
@@ -93,9 +151,14 @@ private struct ExportDetails: View {
         .frame(width: 300)
     }
 
-    private var title: String {
-        let count = exports.exported.count
+    private var title: String { exports.summary }
+}
+
+extension ExportQueue {
+    /// How the finished export went, as the footer and the popover title it.
+    var summary: String {
+        let count = exported.count
         let photos = count == 1 ? "1 Photo" : "\(count) Photos"
-        return exports.wasCancelled ? "Export Stopped: \(photos) Exported" : "Exported \(photos)"
+        return wasCancelled ? "Export Stopped: \(photos) Exported" : "Exported \(photos)"
     }
 }
