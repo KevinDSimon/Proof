@@ -5,6 +5,7 @@ Proof is a Mac RAW photo editor in Swift, built on Core Image and Metal. These r
 ## Workflow
 
 - Every change starts from a GitHub issue. Branch from `main` as `<issue-number>-<short-slug>` (e.g. `12-exposure-slider`).
+- Every issue belongs to a milestone, set when it's filed: the release it must ship in, or `Later` if it isn't scheduled. Bugs go in the release they must be fixed before; there is no separate bug milestone, and the `bug` label lists them across releases.
 - Open a pull request whose description says `Closes #<issue>`, what changed, and how it was tested. Fill in the PR template.
 - Never push to `main` directly. `main` only changes through merged pull requests.
 - Keep pull requests small: one issue, one concern. Split work that touches unrelated areas.
