@@ -179,6 +179,7 @@ struct MaskOverlay: View {
             return
         }
         if drag == nil {
+            endTextEditing()
             if isSpaceDown {
                 drag = .panning(last: .zero)
                 pan(value.translation, last: .zero, viewSize: viewSize)
@@ -218,6 +219,14 @@ struct MaskOverlay: View {
         case .panning, nil:
             break
         }
+    }
+
+    /// A click on the canvas ends typing in an inspector field, keeping what was typed, so the
+    /// tool's keys reach the tool again. The canvas isn't a responder, so AppKit leaves the
+    /// field editor in place on its own.
+    private func endTextEditing() {
+        guard let window = NSApp.keyWindow, window.firstResponder is NSText else { return }
+        window.makeFirstResponder(nil)
     }
 
     private func ended(_ value: DragGesture.Value, photo: CGRect) {

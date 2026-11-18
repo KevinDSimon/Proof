@@ -123,6 +123,7 @@ struct SpotOverlay: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        if dragging == nil, panned == nil { endTextEditing() }
                         if panned != nil || (dragging == nil && isSpaceDown) {
                             let last = panned ?? .zero
                             let pixelsPerPoint = zoom.viewSize.width / max(geometry.size.width, 1)
@@ -191,6 +192,14 @@ struct SpotOverlay: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
         }
+    }
+
+    /// A click on the canvas ends typing in an inspector field, keeping what was typed, so the
+    /// tool's keys reach the tool again. Setting the focus state alone leaves the field editor
+    /// in place.
+    private func endTextEditing() {
+        guard let window = NSApp.keyWindow, window.firstResponder is NSText else { return }
+        window.makeFirstResponder(nil)
     }
 
     private var pointerStyle: PointerStyle {
