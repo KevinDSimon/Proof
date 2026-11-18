@@ -95,7 +95,7 @@ struct DetailTests {
     /// Records how long a detail slider change takes on the 60 MP sample: at a full-screen fit,
     /// where the decoder doesn't sharpen, and on a Retina window's region at 100%, where it does.
     /// Every change repeats the RAW decode, since these are the decoder's own controls.
-    @Test("Detail slider render timings", .enabled(if: sampleDNG != nil))
+    @Test("Detail slider render timings", .enabled(if: timesSamplePhoto))
     func detailTimings() async throws {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))

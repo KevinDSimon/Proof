@@ -2,9 +2,14 @@ import Foundation
 
 /// Whether the tests check render times against their limits. Off unless `PROOF_TIMING` is set,
 /// because the other suites render on the GPU at the same moment and can slow any render many
-/// times over. The renders still run, and print their times, in every run; CONTRIBUTING.md has
-/// the command that checks them on their own.
+/// times over. CONTRIBUTING.md has the command that checks them on their own.
 let checksTiming = ProcessInfo.processInfo.environment["PROOF_TIMING"] != nil
+
+/// Whether the tests that only time renders of the sample photo run. They take minutes, check
+/// little besides the time, and slow every other test by sharing the GPU, so a normal run with
+/// `PROOF_SAMPLE_DNG` leaves them out. Tests that check a result and also time it, such as the
+/// histogram and spot source tests, run whenever the sample is set.
+let timesSamplePhoto = checksTiming && sampleDNG != nil
 
 /// One frame at 30 fps, in milliseconds.
 let frameBudget = 1000.0 / 30

@@ -33,10 +33,11 @@ Reference renders of that photo, with no edit and with an edit, are kept as PNGs
 PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG PROOF_RECORD_REFERENCES=1 swift test --filter ReferenceRenderTests
 ```
 
-The tests that time a slider change, the histogram or a new spot on that photo print their times in every run, but check them against their limits only when `PROOF_TIMING` is set. Run them on their own, one at a time, since other tests rendering at the same moment slow them down. Run this before a pull request that changes rendering:
+The tests whose job is timing, such as reading, rendering and exporting that photo or a slider change at full-screen size, run only when `PROOF_TIMING` is set, so a normal run stays short. The histogram and spot source tests check their results in every run and check their times only with `PROOF_TIMING`. Run all of them on their own, one at a time, since other tests rendering at the same moment slow them down. Run this before a pull request that changes rendering:
 
 ```bash
-PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG PROOF_TIMING=1 swift test --no-parallel --filter "fullScreenTiming|picksSourceOnRealPhoto|measuresSample"
+PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG PROOF_TIMING=1 swift test --no-parallel --filter "Timing|picksSourceOnRealPhoto|measuresSample"
+```|picksSourceOnRealPhoto|measuresSample"
 ```
 
 To compare Highlights and Shadows with Core Image's `CIHighlightShadowAdjust`, point `PROOF_COMPARE_DIR` at a folder of RAW photos. The test writes one strip per photo and method to `PROOF_COMPARE_OUTPUT`, or to a temporary folder:

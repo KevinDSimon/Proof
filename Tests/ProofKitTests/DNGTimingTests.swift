@@ -5,13 +5,14 @@ import Testing
 @testable import ProofKit
 
 /// Times the three ways Proof reads a DNG, for issue #4. Runs only when `PROOF_SAMPLE_DNG` names
-/// a file, so the same test measures local disk and a network share by pointing it at each copy:
-/// `PROOF_SAMPLE_DNG=/Volumes/photo/L1000725.DNG swift test --filter DNGTimingTests`.
+/// a file and `PROOF_TIMING` is set, so the same test measures local disk and a network share by
+/// pointing it at each copy:
+/// `PROOF_SAMPLE_DNG=/Volumes/photo/L1000725.DNG PROOF_TIMING=1 swift test --filter DNGTimingTests`.
 ///
 /// The first read of each kind is reported on its own because it is the only one that can miss
 /// the operating system's file cache. Unmount and remount a share, or copy a fresh file, before a
 /// run to measure a cold read.
-@Suite(.serialized, .enabled(if: timingDNG != nil))
+@Suite(.serialized, .enabled(if: checksTiming && timingDNG != nil))
 struct DNGTimingTests {
     /// A filmstrip thumbnail, a window-sized preview, a Retina full-screen preview and the whole
     /// embedded image. Each read opens the file again.
