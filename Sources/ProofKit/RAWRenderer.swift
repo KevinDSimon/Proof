@@ -30,7 +30,15 @@ public actor RAWRenderer {
     private let commandQueue: MTLCommandQueue
     private var filter: CIRAWFilter?
     private var openURL: URL?
-    /// The open photo's camera white balance, read before any render changes the filter's.
+    /// The open photo's profiles, with what the decoder gives under each, read before any render
+    /// changes the filter.
+    private var profiles: CameraProfiles?
+    /// The decoder version Core Image chose for the open photo, which Apple's profile uses.
+    private var defaultDecoder: CIRAWDecoderVersion?
+    /// The sensor's size under the profile last rendered, read before any render. The `.dng`
+    /// decoders report `nativeSize` already scaled by the last `scaleFactor`, so it isn't read again.
+    private var nativeSize = CGSize.zero
+    /// The camera white balance under the profile last rendered, read before any render changes the filter's.
     private var asShot = WhiteBalance(temperature: 6500, tint: 0)
     /// The open photo's default sharpening and noise reduction, read before any render changes the filter's.
     private var cameraDetail = CameraDetail(sharpness: 0, luminanceNoiseReduction: 0, detail: 0, colorNoiseReduction: 0)
@@ -100,10 +108,28 @@ public actor RAWRenderer {
         // Only one photo's decode stays in GPU memory.
         context.clearCaches()
         self.filter = filter
+        defaultDecoder = filter.decoderVersion
+        profiles = CameraProfiles(of: filter)
+        nativeSize = filter.nativeSize
         asShot = WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
         cameraDetail = CameraDetail(of: filter)
         cameraLens = CameraLens(of: filter)
         openURL = url
+    }
+
+    /// The open photo's filter, set to decode with the profile `recipe` asks for, with the camera's
+    /// white balance, detail and lens as that profile reads them. Set before the scale is worked
+    /// out, since the embedded profile's frame can be a few pixels larger.
+    private func decoder(for recipe: EditRecipe) throws -> CIRAWFilter {
+        guard let filter, let profiles, let defaultDecoder else { throw RAWRendererError.noPhotoOpen }
+        profiles.select(recipe.profile, on: filter, default: defaultDecoder)
+        if let defaults = profiles.defaults(for: recipe.profile) {
+            nativeSize = defaults.nativeSize
+            asShot = defaults.asShot
+            cameraDetail = defaults.detail
+            cameraLens = defaults.lens
+        }
+        return filter
     }
 
     /// Renders the open photo with `recipe` applied, scaled to fit `targetSize` (in pixels) and
@@ -111,9 +137,9 @@ public actor RAWRenderer {
     /// `lut` is the loaded LUT that `recipe.look` names; without one the look is skipped.
     public func render(fitting targetSize: CGSize, recipe: EditRecipe = EditRecipe(),
                        lut: PreparedLUT? = nil) throws -> RenderedPhoto {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         let scale = Self.scaleFactor(
-            nativeSize: filter.nativeSize,
+            nativeSize: nativeSize,
             orientation: filter.orientation,
             crop: recipe.crop,
             fitting: targetSize
@@ -126,13 +152,13 @@ public actor RAWRenderer {
     /// but not straightened or cropped, at about `targetSize`.
     public func horizonCorrection(fitting targetSize: CGSize, recipe: EditRecipe,
                                   lut: PreparedLUT? = nil) async throws -> Double? {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         var recipe = recipe
         recipe.crop = recipe.crop?.turnedOnly
         // A vignette's darkened edges, grain and glow could read as lines or hide them; they
         // aren't part of the scene.
         recipe.removeEffects()
-        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: targetSize))
         guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens, lut: lut),
               let cgImage = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
@@ -144,6 +170,7 @@ public actor RAWRenderer {
     /// The white balance Auto chooses for the open photo, as cropped in `recipe`, from
     /// `AutoAdjust`. It depends only on the photo and the crop, so choosing it again gives the same.
     public func autoWhiteBalance(recipe: EditRecipe) throws -> WhiteBalance {
+        _ = try decoder(for: recipe)
         var measured = Self.measuring(recipe)
         let found = try AutoAdjust.whiteBalance(from: asShot) { whiteBalance in
             measured.basic.temperature = whiteBalance.temperature
@@ -161,6 +188,7 @@ public actor RAWRenderer {
     /// patch below zero; so picking the same spot always gives the same result. `nil` when the
     /// patch is too dark to tell its color.
     public func whiteBalance(neutralIn patch: CGRect, recipe: EditRecipe) throws -> WhiteBalance? {
+        _ = try decoder(for: recipe)
         var measured = Self.measuring(recipe)
         return try AutoAdjust.whiteBalance(from: asShot) { whiteBalance in
             measured.basic.temperature = whiteBalance.temperature
@@ -174,11 +202,11 @@ public actor RAWRenderer {
     /// `SpotRemoval.bestSource`. The photo is measured uncropped, with `recipe`'s spots already
     /// healed, so one spot doesn't take another's dust. `nil` when no circle nearby fits on the photo.
     public func spotSource(center: CGPoint, radius: Double, mode: Spot.Mode = .heal, recipe: EditRecipe) throws -> CGPoint? {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         var measured = Self.measuring(recipe)
         measured.crop = nil
         measured.spots = recipe.spots
-        let photo = Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation, crop: nil)
+        let photo = Self.photoSize(nativeSize: nativeSize, orientation: filter.orientation, crop: nil)
         guard photo.width > 0, photo.height > 0 else { throw RAWRendererError.renderFailed }
         let long = max(photo.width, photo.height)
         let reach = radius * 5.4 * long
@@ -219,7 +247,7 @@ public actor RAWRenderer {
     /// look or effects, at about `SubjectMask.maxPixelSize` on the long edge. `nil` when it finds
     /// no subject. Only the render runs on the actor; Vision runs beside it.
     public func subjectMask(recipe: EditRecipe) async throws -> SubjectMask? {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         var measured = recipe
         measured.crop = nil
         measured.layers = []
@@ -227,7 +255,7 @@ public actor RAWRenderer {
         measured.look = nil
         measured.removeEffects()
         let size = CGSize(width: SubjectMask.maxPixelSize, height: SubjectMask.maxPixelSize)
-        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: nativeSize, orientation: filter.orientation,
                                                     fitting: size))
         guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens),
               let cgImage = context.createCGImage(image, from: image.extent.integral, format: .RGBA8,
@@ -247,7 +275,7 @@ public actor RAWRenderer {
     /// measurement doesn't depend on the crop or the tone. Only the render runs on the actor; the
     /// measuring runs beside it, so renders of the canvas go on meanwhile.
     public func chromaticAberration(recipe: EditRecipe) async throws -> ChromaticAberration {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         var measured = Self.measuring(recipe)
         measured.crop = nil
         // Measured on the photo as the lens drew it, since the correction comes before the
@@ -257,7 +285,7 @@ public actor RAWRenderer {
         measured.lens.vignetting = nil
         measured.transform = PerspectiveTransform()
         let size = CGSize(width: ChromaticAberration.measuringSize, height: ChromaticAberration.measuringSize)
-        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: nativeSize, orientation: filter.orientation,
                                                     fitting: size))
         guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens)
         else { throw RAWRendererError.renderFailed }
@@ -278,12 +306,12 @@ public actor RAWRenderer {
     /// detail and lens corrections, but no perspective correction, crop or tone. Only the render
     /// runs on the actor; the finding runs beside it.
     public func uprightSegments(recipe: EditRecipe) async throws -> (segments: [LineSegment], size: CGSize) {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         var measured = Self.measuring(recipe)
         measured.crop = nil
         measured.transform = PerspectiveTransform()
         let size = CGSize(width: LineDetector.measuringSize, height: LineDetector.measuringSize)
-        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+        filter.scaleFactor = Float(Self.scaleFactor(nativeSize: nativeSize, orientation: filter.orientation,
                                                     fitting: size))
         guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens)
         else { throw RAWRendererError.renderFailed }
@@ -305,10 +333,10 @@ public actor RAWRenderer {
         return (segments, CGSize(width: width, height: height))
     }
 
-    /// `recipe`'s white balance, detail, lens corrections, perspective and crop with every other adjustment at its default, so
+    /// `recipe`'s profile, white balance, detail, lens corrections, perspective and crop with every other adjustment at its default, so
     /// Auto measures the photo itself and not the tone, color or look already applied.
     static func measuring(_ recipe: EditRecipe) -> EditRecipe {
-        var measured = EditRecipe()
+        var measured = EditRecipe(profile: recipe.profile)
         measured.basic.whiteBalance = recipe.basic.whiteBalance
         measured.basic.temperature = recipe.basic.temperature
         measured.basic.tint = recipe.basic.tint
@@ -323,14 +351,14 @@ public actor RAWRenderer {
     /// With `region`, from 0 to 1 on each axis from the top left, only that part, at a scale that
     /// makes it about `AutoAdjust.patchSize` pixels across, up to full resolution.
     private func samples(of recipe: EditRecipe, in region: CGRect? = nil) throws -> [SIMD3<Float>] {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         if let region {
-            let photo = Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation, crop: recipe.crop)
+            let photo = Self.photoSize(nativeSize: nativeSize, orientation: filter.orientation, crop: recipe.crop)
             let across = max(region.width * photo.width, region.height * photo.height, 1)
             filter.scaleFactor = Float(min(AutoAdjust.patchSize / across, 1))
         } else {
             let size = CGSize(width: AutoAdjust.sampleSize, height: AutoAdjust.sampleSize)
-            filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
+            filter.scaleFactor = Float(Self.scaleFactor(nativeSize: nativeSize, orientation: filter.orientation,
                                                         crop: recipe.crop, fitting: size))
         }
         guard let image = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens) else {
@@ -355,13 +383,6 @@ public actor RAWRenderer {
         return stride(from: 0, to: bitmap.count, by: 4).map { SIMD3(bitmap[$0], bitmap[$0 + 1], bitmap[$0 + 2]) }
     }
 
-    /// The photo's size in pixels as the camera oriented it, before any crop or turn. Blocks on
-    /// file I/O; `nil` if it isn't a RAW photo.
-    public static func orientedSize(of url: URL) -> CGSize? {
-        guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else { return nil }
-        return oriented(filter.nativeSize, filter.orientation)
-    }
-
     /// Renders `region` of the open photo, from 0 to 1 on each axis from the top left, at `scale`
     /// of full resolution, at most 1, for zoom. The caller keeps the region small enough at that
     /// scale to cover about the view, so only the visible part of a large photo is rendered. The
@@ -371,17 +392,21 @@ public actor RAWRenderer {
         try render(scaleFactor: min(max(scale, 0.01), 1), region: region, recipe: recipe, lut: lut)
     }
 
-    /// The photo's size with `crop` applied at full resolution, as a render of it reports it. It is
-    /// read from the file's header with ImageIO, which on a NAS takes about 7 ms where creating a
-    /// `CIRAWFilter` takes 110–340 ms; for the Leica DNGs checked, the two give the same size and
-    /// orientation. Blocks on file I/O; `nil` if the file isn't an image.
-    public static func photoSize(of url: URL, crop: Crop?) -> CGSize? {
+    /// The photo's size with `crop` applied at full resolution, as a render of it with `profile`
+    /// reports it. It is read from the file's header with ImageIO, which on a NAS takes about 7 ms
+    /// where creating a `CIRAWFilter` takes 110–340 ms; for the Leica DNGs checked, the two give the
+    /// same size and orientation. The embedded profile's decoder uses the DNG's DefaultCropSize
+    /// instead, a few pixels larger for the Leica M11. Blocks on file I/O; `nil` if the file isn't an image.
+    public static func photoSize(of url: URL, crop: Crop?, profile: CameraProfile) -> CGSize? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int, width > 0, height > 0 else { return nil }
         let orientation = (properties[kCGImagePropertyOrientation] as? UInt32).flatMap(CGImagePropertyOrientation.init) ?? .up
-        return photoSize(nativeSize: CGSize(width: width, height: height), orientation: orientation, crop: crop)
+        let dng = (properties[kCGImagePropertyDNGDictionary] as? [CFString: Any])
+            .map { Dictionary(uniqueKeysWithValues: $0.map { ($0.key as String, $0.value) }) }
+        let embedded = profile == .embedded ? dng.flatMap(CameraProfiles.embeddedSize) : nil
+        return photoSize(nativeSize: embedded ?? CGSize(width: width, height: height), orientation: orientation, crop: crop)
     }
 
     /// `image`, a small preview such as a cached thumbnail, made into a photo `draw` can show in
@@ -416,7 +441,7 @@ public actor RAWRenderer {
     /// `render(fitting:)` and `render(region:scale:)`.
     func render(scaleFactor scale: CGFloat, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1),
                 recipe: EditRecipe, lut: PreparedLUT? = nil) throws -> RenderedPhoto {
-        guard let filter else { throw RAWRendererError.noPhotoOpen }
+        let filter = try decoder(for: recipe)
         filter.scaleFactor = Float(scale)
         guard let whole = Self.apply(recipe, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens, lut: lut) else { throw RAWRendererError.renderFailed }
 
@@ -461,7 +486,7 @@ public actor RAWRenderer {
             colors = Self.apply(colored, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens, lut: lut)
         }
         return RenderedPhoto(texture: texture, region: shown,
-                             photoSize: Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation,
+                             photoSize: Self.photoSize(nativeSize: nativeSize, orientation: filter.orientation,
                                                        crop: recipe.crop),
                              colors: colors)
     }
@@ -472,6 +497,7 @@ public actor RAWRenderer {
         guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else {
             throw RAWRendererError.unsupportedFile(url)
         }
+        Self.select(recipe.profile, on: filter)
         let size = CGSize(width: maxPixelSize, height: maxPixelSize)
         filter.scaleFactor = Float(Self.scaleFactor(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                     crop: recipe.crop, fitting: size))
@@ -492,6 +518,7 @@ public actor RAWRenderer {
         guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else {
             throw RAWRendererError.unsupportedFile(url)
         }
+        Self.select(recipe.profile, on: filter)
         let size = settings.outputSize(for: Self.photoSize(nativeSize: filter.nativeSize, orientation: filter.orientation,
                                                            crop: recipe.crop))
         // Decoded at the scale that fits, as the canvas is, so a smaller export looks like the canvas
@@ -667,6 +694,8 @@ public actor RAWRenderer {
     /// `cameraDetail` is its default sharpening and noise reduction, which it has lost too.
     /// `cameraLens` is its lens profile and default, which it has lost too.
     /// `lut` is the loaded LUT that `recipe.look` names; the look is skipped without one.
+    /// `filter` must already decode with the profile `recipe` asks for, and `asShot`, `cameraDetail`
+    /// and `cameraLens` be what it gave under that profile before anything changed it.
     static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance,
                       cameraDetail: CameraDetail, cameraLens: CameraLens,
                       lut: PreparedLUT? = nil) -> CIImage? {
@@ -682,6 +711,9 @@ public actor RAWRenderer {
         // The lens profile corrects distortion and vignetting as the decoder reads the file.
         // A photo without one is left alone.
         if cameraLens.hasProfile { filter.isLensCorrectionEnabled = recipe.lens.appliesProfile(for: cameraLens) }
+        // Set again, unchanged: the `.dng` decoders shrink their size by the scale each time they
+        // decode, so a second decode at a scale set once came out half as large.
+        filter.scaleFactor = filter.scaleFactor
         guard let raw = filter.outputImage else { return nil }
         // Chromatic aberration next, about the center of the whole photo, where the lens's was.
         let aligned = ChromaticAberration.apply(recipe.lens.chromaticAberration, to: raw)
@@ -721,6 +753,11 @@ public actor RAWRenderer {
         let framed = recipe.crop.map { Self.applyGeometry($0, to: shown) } ?? shown
         // 7. Vignette, then grain, on the cropped frame so they follow the crop.
         return Grain.apply(recipe.grain, to: Vignette.apply(recipe.vignette, to: framed))
+    }
+
+    /// Sets a filter just made, that nothing has changed, to decode with `profile`.
+    static func select(_ profile: CameraProfile, on filter: CIRAWFilter) {
+        CameraProfiles(of: filter, readingDefaults: false).select(profile, on: filter, default: filter.decoderVersion)
     }
 
     /// Turns and flips `image`, then straightens and crops it, as `Crop` describes. The result
@@ -769,7 +806,7 @@ public actor RAWRenderer {
         return min(max(scale, 0.01), 1)
     }
 
-    private static func oriented(_ nativeSize: CGSize, _ orientation: CGImagePropertyOrientation) -> CGSize {
+    static func oriented(_ nativeSize: CGSize, _ orientation: CGImagePropertyOrientation) -> CGSize {
         let quarterTurn: Set<CGImagePropertyOrientation> = [.left, .leftMirrored, .right, .rightMirrored]
         return quarterTurn.contains(orientation) ? CGSize(width: nativeSize.height, height: nativeSize.width) : nativeSize
     }

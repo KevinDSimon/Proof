@@ -9,6 +9,10 @@ extension EditRecipe {
         var parts: [String] = []
         let basic = basic, old = previous.basic
 
+        if profile != previous.profile {
+            parts.append(profile == .apple ? "Profile: Apple" : "Profile: Embedded")
+        }
+
         if basic.whiteBalance != old.whiteBalance {
             parts.append("White Balance: \(basic.whiteBalance.title)")
         } else if basic.temperature != old.temperature, basic.tint != old.tint {

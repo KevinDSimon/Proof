@@ -98,7 +98,7 @@ struct TextureClarityTests {
             print("Texture and clarity render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
                 + "\(String(format: "%.1f", median)) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
-            #expect(times.first! < frameBudget)
+            if checksTiming { #expect(times.first! < frameBudget) }
         }
     }
 

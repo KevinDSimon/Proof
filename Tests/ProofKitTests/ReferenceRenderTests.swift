@@ -14,8 +14,10 @@ import Testing
 /// `PROOF_SAMPLE_DNG=<photo> PROOF_RECORD_REFERENCES=1 swift test --filter ReferenceRenderTests`
 /// and say in the pull request which renders changed and why.
 struct ReferenceRenderTests {
-    /// Each reference: its file name, the recipe it renders and the LUT its look names.
-    static let references: [(name: String, recipe: EditRecipe, lut: PreparedLUT?)] = [
+    /// Each reference: its file name, the recipe it renders and the LUT its look names. They were
+    /// recorded before the embedded profile (process version 1), so all but `profile-embedded`
+    /// render with Apple's profile, which also shows that older edits render as they did.
+    static let references: [(name: String, recipe: EditRecipe, lut: PreparedLUT?)] = ([
         ("neutral", EditRecipe(), nil),
         ("edited", edited, nil),
         ("contrast-whites-blacks", contrastWhitesBlacks, nil),
@@ -40,7 +42,16 @@ struct ReferenceRenderTests {
         ("mask-radial", maskRadial, nil),
         ("mask-brush", maskBrush, nil),
         ("mask-subject", maskSubject, nil),
+    ] as [(name: String, recipe: EditRecipe, lut: PreparedLUT?)]).map { ($0.name, apple($0.recipe), $0.lut) } + [
+        // The Leica M11's own profile: cooler, with bluer blues, and a frame a few pixels larger.
+        ("profile-embedded", EditRecipe(profile: .embedded), nil),
     ]
+
+    private static func apple(_ recipe: EditRecipe) -> EditRecipe {
+        var recipe = recipe
+        recipe.profile = .apple
+        return recipe
+    }
 
     /// Uses every adjustment the pipeline applies so far. As later stages are built, add their
     /// adjustments here and record the edited reference again.
@@ -315,10 +326,10 @@ struct ReferenceRenderTests {
     /// too, so a change to the defaults shows. The sample is ISO 64, where the decoder's luminance
     /// noise reduction does almost nothing, so the noise reduction render mostly shows color.
     static let detailReferences: [(name: String, recipe: EditRecipe)] = [
-        ("detail-camera", EditRecipe()),
-        ("sharpening", EditRecipe(detail: DetailAdjustments(sharpening: 100))),
-        ("noise-reduction", EditRecipe(detail: DetailAdjustments(sharpening: 0, noiseReduction: 100,
-                                                                 noiseReductionDetail: 0, colorNoiseReduction: 100))),
+        ("detail-camera", EditRecipe(profile: .apple)),
+        ("sharpening", EditRecipe(profile: .apple, detail: DetailAdjustments(sharpening: 100))),
+        ("noise-reduction", EditRecipe(profile: .apple, detail: DetailAdjustments(sharpening: 0, noiseReduction: 100,
+                                                                                  noiseReductionDetail: 0, colorNoiseReduction: 100))),
     ]
 
     static let size = CGSize(width: 400, height: 400)
@@ -366,7 +377,7 @@ struct ReferenceRenderTests {
             result.append((reference.name, try await image(renderer.render(fitting: Self.size, recipe: reference.recipe,
                                                                             lut: reference.lut))))
         }
-        let photo = try await renderer.render(fitting: Self.size).photoSize
+        let photo = try await renderer.render(fitting: Self.size, recipe: EditRecipe(profile: .apple)).photoSize
         let region = CGRect(x: 0.5 - Self.size.width / photo.width / 2, y: 0.5 - Self.size.height / photo.height / 2,
                             width: Self.size.width / photo.width, height: Self.size.height / photo.height)
         for reference in Self.detailReferences {

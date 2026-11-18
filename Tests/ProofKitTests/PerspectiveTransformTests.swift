@@ -225,7 +225,7 @@ struct PerspectiveTransformTests {
     @Test("An edit saved before Transform reads as neutral, and one with it survives a round trip")
     func coding() throws {
         let old = try JSONDecoder().decode(EditRecipe.self, from: Data(#"{"formatVersion": 3, "processVersion": 1}"#.utf8))
-        #expect(old.transform == PerspectiveTransform() && old.isNeutral)
+        #expect(old.transform == PerspectiveTransform() && old.isNeutralButProfile)
         var recipe = EditRecipe()
         recipe.transform = PerspectiveTransform(vertical: -22, horizontal: 4, rotate: -1.2, aspect: 10, scale: 95,
                                                 xOffset: 3, yOffset: -7, constrainCrop: false, upright: .guided,

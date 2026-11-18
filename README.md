@@ -47,6 +47,7 @@ Your original photos are never changed. Edits go into a `.proof` file next to ea
 
 **Edit**
 
+- The camera maker's color profile embedded in DNGs such as the Leica M11's, or Apple's, with the profile in use shown for every photo
 - White balance (with an eyedropper), exposure, contrast, highlights, shadows, whites and blacks
 - Texture, clarity, dehaze, vibrance and saturation, and an Auto button
 - Tone curve for all channels or red, green and blue separately, with a histogram

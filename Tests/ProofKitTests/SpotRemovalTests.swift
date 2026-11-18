@@ -160,7 +160,7 @@ struct SpotSourceTests {
         print("Spot source: \(source) in \(ContinuousClock.now - start)")
         let distance = hypot(source.x - center.x, (source.y - center.y) * 2 / 3)
         #expect(distance > 0.04 && distance < 0.08)
-        #expect(ContinuousClock.now - start < .milliseconds(300))
+        if checksTiming { #expect(ContinuousClock.now - start < .milliseconds(300)) }
         #expect(try await renderer.spotSource(center: center, radius: 0.02, recipe: EditRecipe()) == source)
     }
 }

@@ -103,12 +103,6 @@ public struct CameraDetail: Equatable, Sendable {
         colorNoiseReduction = Double(filter.colorNoiseReductionAmount)
     }
 
-    /// The camera's defaults for the photo at `url`, or `nil` if it isn't a RAW photo. Blocks on file I/O.
-    public static func of(_ url: URL) -> CameraDetail? {
-        guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else { return nil }
-        return CameraDetail(of: filter)
-    }
-
     /// These amounts as slider values, from 0 to 100.
     public var adjustments: DetailAdjustments {
         DetailAdjustments(sharpening: sharpness * Self.sharpnessScale, noiseReduction: luminanceNoiseReduction * 100,

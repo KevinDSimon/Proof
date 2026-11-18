@@ -212,7 +212,7 @@ struct EditRecipeTests {
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
         #expect(recipe.basic.texture == 0)
         #expect(recipe.basic.clarity == 0)
-        #expect(recipe.isNeutral)
+        #expect(recipe.isNeutralButProfile)
         #expect(recipe.processVersion == 1)
 
         var edited = recipe
@@ -231,7 +231,7 @@ struct EditRecipeTests {
         let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"texture": 0, "clarity": 0}}"#
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
         #expect(recipe.basic.dehaze == 0)
-        #expect(recipe.isNeutral)
+        #expect(recipe.isNeutralButProfile)
         #expect(recipe.processVersion == 1)
 
         var edited = recipe
@@ -248,7 +248,7 @@ struct EditRecipeTests {
         let old = #"{"formatVersion": 3, "processVersion": 1, "crop": null, "layers": []}"#
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
         #expect(recipe.spots.isEmpty)
-        #expect(recipe.isNeutral)
+        #expect(recipe.isNeutralButProfile)
         #expect(recipe.processVersion == 1)
 
         let partial = #"{"formatVersion": 3, "spots": [{"x": 0.2, "y": 0.3, "sourceX": 0.25, "sourceY": 0.3, "mode": "smudge"}]}"#
@@ -270,7 +270,7 @@ struct EditRecipeTests {
         let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"dehaze": 0}}"#
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
         #expect(recipe.vignette == VignetteAdjustments(amount: 0, midpoint: 50, roundness: 0, feather: 50))
-        #expect(recipe.isNeutral)
+        #expect(recipe.isNeutralButProfile)
         #expect(recipe.processVersion == 1)
 
         let partial = #"{"formatVersion": 3, "vignette": {"amount": -30}}"#
@@ -292,7 +292,7 @@ struct EditRecipeTests {
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
         #expect(recipe.selectiveColor.isNeutral)
         #expect(ColorRange.allCases.allSatisfy { recipe.selectiveColor[$0] == ColorRangeAdjustment() })
-        #expect(recipe.isNeutral)
+        #expect(recipe.isNeutralButProfile)
         #expect(recipe.processVersion == 1)
 
         let partial = #"{"formatVersion": 3, "selectiveColor": {"green": {"saturation": -40}, "teal": {"hue": 10}}}"#
@@ -311,7 +311,7 @@ struct EditRecipeTests {
         #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
 
         edited.selectiveColor[.orange] = ColorRangeAdjustment()
-        #expect(edited.isNeutral)
+        #expect(edited.isNeutralButProfile)
     }
 
     @Test("A file saved before Black & White reads as Color with an even mix; a partial one keeps the rest at 0")
@@ -319,7 +319,7 @@ struct EditRecipeTests {
         let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"saturation": 0}}"#
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
         #expect(recipe.blackAndWhite == BlackAndWhite())
-        #expect(recipe.isNeutral)
+        #expect(recipe.isNeutralButProfile)
         #expect(recipe.processVersion == 1)
 
         let partial = #"{"formatVersion": 3, "blackAndWhite": {"isOn": true, "blue": -30}}"#
@@ -337,7 +337,7 @@ struct EditRecipeTests {
 
         // Back to Color keeps the mix, which then doesn't render.
         edited.blackAndWhite.isOn = false
-        #expect(edited.isNeutral)
+        #expect(edited.isNeutralButProfile)
         #expect(edited.original.blackAndWhite == BlackAndWhite())
     }
 

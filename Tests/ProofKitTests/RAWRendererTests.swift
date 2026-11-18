@@ -291,20 +291,22 @@ struct RAWRendererTests {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("not-a-photo-\(UUID().uuidString).dng")
         try Data("hello".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
-        #expect(RAWRenderer.photoSize(of: url, crop: nil) == nil)
+        #expect(RAWRenderer.photoSize(of: url, crop: nil, profile: .embedded) == nil)
     }
 
-    @Test("The photo size read ahead of a render matches the render's, with and without a crop",
+    @Test("The photo size read ahead of a render matches the render's, with and without a crop, under each profile",
           .enabled(if: sampleDNG != nil))
     func photoSizeMatchesRender() async throws {
         let url = try #require(sampleDNG)
         let renderer = try RAWRenderer()
         try await renderer.open(url)
-        var cropped = EditRecipe()
-        cropped.crop = Crop(x: 0.1, y: 0.2, width: 0.5, height: 0.6, rotation: 90)
-        for recipe in [EditRecipe(), cropped] {
-            let photo = try await renderer.render(fitting: CGSize(width: 800, height: 800), recipe: recipe)
-            #expect(RAWRenderer.photoSize(of: url, crop: recipe.crop) == photo.photoSize)
+        for profile in CameraProfile.allCases {
+            var cropped = EditRecipe(profile: profile)
+            cropped.crop = Crop(x: 0.1, y: 0.2, width: 0.5, height: 0.6, rotation: 90)
+            for recipe in [EditRecipe(profile: profile), cropped] {
+                let photo = try await renderer.render(fitting: CGSize(width: 800, height: 800), recipe: recipe)
+                #expect(RAWRenderer.photoSize(of: url, crop: recipe.crop, profile: profile) == photo.photoSize)
+            }
         }
     }
 

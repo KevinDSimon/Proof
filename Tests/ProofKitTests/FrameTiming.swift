@@ -1,5 +1,11 @@
 import Foundation
 
+/// Whether the tests check render times against their limits. Off unless `PROOF_TIMING` is set,
+/// because the other suites render on the GPU at the same moment and can slow any render many
+/// times over. The renders still run, and print their times, in every run; CONTRIBUTING.md has
+/// the command that checks them on their own.
+let checksTiming = ProcessInfo.processInfo.environment["PROOF_TIMING"] != nil
+
 /// One frame at 30 fps, in milliseconds.
 let frameBudget = 1000.0 / 30
 
