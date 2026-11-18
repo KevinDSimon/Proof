@@ -353,6 +353,12 @@ struct ContentView: View {
         } message: {
             Text(library.errorMessage ?? "")
         }
+        .onAppear {
+            TextFieldKeys.watch { [library] in
+                library.isCropping || library.isMasking || library.isRemovingSpots
+                    || library.isDrawingGuides || library.isPickingWhiteBalance
+            }
+        }
         .onChange(of: library.isEditing) { _, isEditing in
             if isEditing {
                 browseColumnVisibility = columnVisibility
