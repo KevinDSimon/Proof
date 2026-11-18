@@ -23,7 +23,7 @@ struct LensCorrectionsTests {
         let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"dehaze": 0}}"#
         let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
         #expect(recipe.lens == LensCorrections(profile: nil))
-        #expect(recipe.isNeutral)
+        #expect(recipe.isNeutralButProfile)
         #expect(recipe.processVersion == 1)
 
         let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(recipe)) as? [String: Any]

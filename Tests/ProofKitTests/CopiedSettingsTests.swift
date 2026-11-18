@@ -5,6 +5,7 @@ import Testing
 struct CopiedSettingsTests {
     static var source: EditRecipe {
         var recipe = AdjustmentGroupTests.edited
+        recipe.profile = .apple
         recipe.basic.highlights = -50
         recipe.blackAndWhite = BlackAndWhite(isOn: true, red: 20)
         recipe.lens.distortion = 12
@@ -81,12 +82,12 @@ struct CopiedSettingsTests {
         #expect(pasted.crop == Self.target.crop)
     }
 
-    @Test("Every card has at least one item, and every item but Crop, Spot Removal and Masks belongs to one card")
+    @Test("Every card has at least one item, and every item but Profile, Crop, Spot Removal and Masks belongs to one card")
     func groupsCoverEveryItem() {
         let grouped = AdjustmentGroup.allCases.flatMap { SettingsItem.items(in: $0) }
         #expect(AdjustmentGroup.allCases.allSatisfy { !SettingsItem.items(in: $0).isEmpty })
-        #expect(grouped.count == SettingsItem.allCases.count - 3)
-        #expect(Set(grouped) == Set(SettingsItem.allCases).subtracting([.crop, .spotRemoval, .masks]))
+        #expect(grouped.count == SettingsItem.allCases.count - 4)
+        #expect(Set(grouped) == Set(SettingsItem.allCases).subtracting([.profile, .crop, .spotRemoval, .masks]))
     }
 
     @Test("Transform, Crop, Spot Removal and Masks start unticked; every other item starts ticked")

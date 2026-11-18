@@ -47,18 +47,21 @@ struct PhotoEdit {
     /// photo is opened.
     var captureSettings: CaptureSettings?
     var unsaved: Unsaved?
-    /// The camera's white balance, which the white balance controls show for As Shot. `nil`
-    /// until it has been read from the photo.
-    var asShot: WhiteBalance?
-    /// The camera's sharpening and noise reduction, which the Detail sliders show where the edit
-    /// has none. `nil` until it has been read from the photo.
-    var cameraDetail: CameraDetail?
+    /// The color profiles the photo offers, with what the decoder gives under each. `nil` until
+    /// they have been read from the photo.
+    var profiles: CameraProfiles?
+    /// The camera's white balance under the edit's profile, which the white balance controls show
+    /// for As Shot. `nil` until it has been read from the photo.
+    var asShot: WhiteBalance? { profiles?.defaults(for: recipe.profile)?.asShot }
+    /// The camera's sharpening and noise reduction under the edit's profile, which the Detail
+    /// sliders show where the edit has none. `nil` until it has been read from the photo.
+    var cameraDetail: CameraDetail? { profiles?.defaults(for: recipe.profile)?.detail }
     /// The lens and whether the file has a correction profile, which the Lens Corrections card
     /// shows. `nil` until it has been read from the photo.
     var cameraLens: CameraLens?
-    /// The photo's size in pixels as the camera oriented it, which the crop tool lays out by.
-    /// `nil` until it has been read from the photo.
-    var size: CGSize?
+    /// The photo's size in pixels as the camera oriented it, under the edit's profile, which the
+    /// crop tool lays out by. `nil` until it has been read from the photo.
+    var size: CGSize? { profiles?.defaults(for: recipe.profile)?.orientedSize }
 }
 
 /// The saved folders, what has been read of them, which folder, filter and photo are chosen, and
@@ -795,15 +798,12 @@ final class Library {
         openedPhotos.insert(photo)
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.
         Task {
-            let (asShot, cameraDetail, cameraLens, settings, size) = await Task.detached {
-                (WhiteBalance.asShot(of: url), CameraDetail.of(url), CameraLens.of(url), CaptureSettings.read(from: url),
-                 RAWRenderer.orientedSize(of: url))
+            let (profiles, cameraLens, settings) = await Task.detached {
+                (CameraProfiles.of(url), CameraLens.of(url), CaptureSettings.read(from: url))
             }.value
-            edits[photo]?.asShot = asShot
-            edits[photo]?.cameraDetail = cameraDetail
+            edits[photo]?.profiles = profiles
             edits[photo]?.cameraLens = cameraLens
             edits[photo]?.captureSettings = settings
-            edits[photo]?.size = size
         }
     }
 

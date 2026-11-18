@@ -235,7 +235,7 @@ final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
             let preview = await Task.detached(priority: .userInitiated) { () -> RenderedPhoto? in
                 guard let image = previews.cachedThumbnail(for: url, edit: recipe),
                       !Task.isCancelled,
-                      let size = RAWRenderer.photoSize(of: url, crop: recipe.crop) else { return nil }
+                      let size = RAWRenderer.photoSize(of: url, crop: recipe.crop, profile: recipe.profile) else { return nil }
                 return try? renderer.placeholder(image, photoSize: size)
             }.value
             guard !Task.isCancelled, url == self.url, photo == nil else { return }

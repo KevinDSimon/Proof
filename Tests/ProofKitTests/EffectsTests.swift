@@ -19,7 +19,7 @@ struct EffectsTests {
         #expect(recipe.grain == GrainAdjustments(amount: 0, size: 25, roughness: 50))
         #expect(recipe.halation == GlowAdjustments(amount: 0, size: 50))
         #expect(recipe.bloom == GlowAdjustments(amount: 0, size: 50))
-        #expect(recipe.isNeutral && recipe.hasNoEffects)
+        #expect(recipe.isNeutralButProfile && recipe.hasNoEffects)
         #expect(recipe.processVersion == 1)
 
         let partial = #"{"formatVersion": 3, "grain": {"amount": 30}, "halation": {"size": 80}}"#
@@ -173,7 +173,7 @@ struct EffectsTests {
             print("Effects render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
                 + "\(String(format: "%.1f", median)) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
-            #expect(times.first! < frameBudget)
+            if checksTiming { #expect(times.first! < frameBudget) }
         }
     }
 

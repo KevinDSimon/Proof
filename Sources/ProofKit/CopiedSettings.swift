@@ -1,6 +1,7 @@
 /// One checkbox in the Copy Settings sheet, as in Lightroom's: a slider, a section of a card,
-/// or a card with one control. The sheet groups them by card, with Crop, Spot Removal and Masks on their own.
+/// or a card with one control. The sheet groups them by card, with Profile, Crop, Spot Removal and Masks on their own.
 public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
+    case profile
     case whiteBalance
     case exposure, contrast, highlights, shadows, whites, blacks,
          texture, clarity, dehaze, treatment, vibrance, saturation
@@ -22,7 +23,8 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
     public static let defaultItems: Set<SettingsItem> = Set(allCases).subtracting([.transform, .crop, .spotRemoval, .masks])
 
     /// The inspector card that shows the item: the sheet groups items by it, and a paste turns
-    /// its switch on. `nil` for Crop, Spot Removal and Masks, which their tools show.
+    /// its switch on. `nil` for Profile, which has no switch, and for Crop, Spot Removal and
+    /// Masks, which their tools show.
     public var group: AdjustmentGroup? {
         switch self {
         case .whiteBalance: .whiteBalance
@@ -33,7 +35,7 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
         case .sharpening, .noiseReduction, .colorNoiseReduction: .detail
         case .lensProfile, .chromaticAberration, .distortion, .lensVignetting: .lens
         case .transform: .transform
-        case .crop, .spotRemoval, .masks: nil
+        case .profile, .crop, .spotRemoval, .masks: nil
         case .vignette, .grain, .halation, .bloom: .effects
         case .look: .look
         }
@@ -64,6 +66,9 @@ extension EditRecipe {
         let source = copied.recipe
         for item in copied.items {
             switch item {
+            // Ticked by default: white balance values mean different colors under each profile.
+            // A photo without the choice ignores it.
+            case .profile: recipe.profile = source.profile
             case .whiteBalance:
                 recipe.basic.whiteBalance = source.basic.whiteBalance
                 recipe.basic.temperature = source.basic.temperature

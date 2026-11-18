@@ -14,7 +14,8 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 ```json
 {
   "formatVersion": 3,
-  "processVersion": 1,
+  "processVersion": 2,
+  "profile": "embedded",
   "basic": {
     "whiteBalance": "custom", "temperature": 4800, "tint": 12, "exposure": 0.3,
     "contrast": 10, "texture": 20, "clarity": 15, "dehaze": 10, "highlights": -40, "shadows": 25,
@@ -66,7 +67,8 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | Field | Meaning |
 | --- | --- |
 | `formatVersion` | Version of this JSON layout. Bumped when fields are renamed or restructured; older files are migrated on read. |
-| `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. |
+| `processVersion` | Version of the render pipeline the edit was made with. A newer Proof renders an old edit with the pipeline it was made with, so saved edits never change appearance. Version 2 added `profile`. |
+| `profile` | The color profile the photo is decoded with: `embedded`, the profile the camera maker wrote into a DNG, or `apple`, Core Image's own profile for the camera. It applies only to a photo that offers both, such as a Leica M11 DNG (see `docs/decisions/0044-camera-profile.md`); a photo with one profile, such as an iPhone ProRAW or a Sony ARW, uses that one whatever this says. New edits write `embedded`. Edits saved at process version 1 have none and read as `apple`, which is how they rendered. |
 | `basic` | Basic panel values. White balance is described below. Exposure is in stops (−5 to +5); the rest run from −100 to +100. Highlights and shadows brighten (positive) or darken (negative) the bright and dark areas of the photo; values outside −100 to +100 render as the nearest end. Contrast steepens (positive) or flattens (negative) the tones around middle gray; whites and blacks raise or lower the tones toward white and toward black, with black and white themselves left in place. These three are clamped the same way. Texture and clarity raise (positive) or lower (negative) local contrast: texture in fine detail a few pixels across, clarity over larger areas, mostly in the midtones. Both are measured against a share of the photo's size, so they look the same at any render size, and are clamped the same way. Files saved before they existed read both as 0. Dehaze removes (positive) or adds (negative) haze, measured against the photo's own haziest area; it is clamped the same way, and files saved before it existed read it as 0. Vibrance raises (positive) or lowers (negative) the strength of muted colors more than vivid ones and leaves grays alone; saturation changes all colors alike, and −100 makes the photo black and white. Both are clamped the same way. |
 | `selectiveColor` | Hue, saturation and brightness for each of eight color ranges, described below. |
 | `blackAndWhite` | The Basic card's Treatment and the black-and-white mix, described below. |
@@ -267,6 +269,8 @@ Proof stores a fingerprint of the original when it first writes the sidecar, so 
 When Proof reads a folder it can write to and finds a sidecar with no photo of the same name, it renames the sidecar to the one photo without a sidecar whose fingerprint matches all three values. With no match, or more than one, the sidecar is left alone. The fingerprint is never updated after it is written. Sidecars written before Proof stored it have no `original`; they are read the same and get one the next time they are saved, from the photo as it is then.
 
 ## Earlier formats
+
+Process version 1 had no `profile` and always decoded with Core Image's default decoder, Apple's profile for cameras it knows. A process version 1 file is read with `profile` set to `apple` and keeps `processVersion` 1, so it renders as it did; it is saved with `"profile": "apple"`.
 
 Format 2 had `crop` with the rectangle and `angle` but no turn, flips or ratio. No version of Proof wrote or rendered one, so a format 2 crop is read with its rectangle and angle as they are, no turn or flips and a freeform ratio, and saved as format 3.
 

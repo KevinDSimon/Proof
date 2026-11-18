@@ -11,8 +11,8 @@ struct CopySettingsSheet: View {
     @AppStorage("copySettingsItems") private var storedItems = ""
     @State private var items: Set<SettingsItem> = []
 
-    /// The cards in the inspector's order, split into columns of about equal height, with Crop
-    /// Spot Removal and Masks (`nil`) beside Transform.
+    /// The cards in the inspector's order, split into columns of about equal height, with Profile
+    /// above them, and Crop, Spot Removal and Masks (`nil`) beside Transform.
     private static let columns: [[AdjustmentGroup?]] = [
         [.look, .whiteBalance, .basic],
         [.curve, .selectiveColor, .detail, .lens],
@@ -31,6 +31,10 @@ struct CopySettingsSheet: View {
             HStack(alignment: .top, spacing: 32) {
                 ForEach(Self.columns, id: \.self) { column in
                     VStack(alignment: .leading, spacing: 12) {
+                        // Profile has no card of its own or switch; it sits in the Histogram card.
+                        if column == Self.columns[0] {
+                            Toggle(Self.title(of: .profile), isOn: binding(for: .profile))
+                        }
                         ForEach(column, id: \.self) { group in
                             section(group)
                         }
@@ -114,6 +118,7 @@ struct CopySettingsSheet: View {
     /// Named after the inspector's sliders and sections, so each item can be found there.
     static func title(of item: SettingsItem) -> String {
         switch item {
+        case .profile: "Profile"
         case .whiteBalance: "White Balance"
         case .exposure: "Exposure"
         case .contrast: "Contrast"

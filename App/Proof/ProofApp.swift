@@ -190,6 +190,19 @@ struct ProofApp: App {
                     .disabled(!library.isEditing || library.selectedEdit == nil)
                 Button("Flip Vertical") { library.flipVertically() }
                     .disabled(!library.isEditing || library.selectedEdit == nil)
+                // The same choice as the Profile row in the inspector. A photo with one profile shows
+                // it checked and can't change it.
+                let profiles = library.isEditing ? library.selectedEdit?.profiles : nil
+                Picker("Profile", selection: Binding(
+                    get: { profiles?.resolved(library.selectedEdit?.recipe.profile ?? .embedded) ?? .embedded },
+                    set: { profile in library.changeEdit { $0.profile = profile } })) {
+                    if let profiles {
+                        ForEach(profiles.offersChoice ? CameraProfile.allCases : [profiles.resolved(.embedded)],
+                                id: \.self) { Text(profiles.label(for: $0)).tag($0) }
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(profiles?.offersChoice != true)
                 Divider()
                 // Steps through the looks in the folder the Looks section shows, to compare them.
                 Button("Next Look") { library.stepLook(by: 1) }
@@ -795,9 +808,12 @@ struct AdjustmentsInspector: View {
             InspectorCard(title: "Histogram") {
                 SelectedHistogram(library: library)
                 CaptureSettingsLine(settings: library.selectedEdit?.captureSettings)
+                // The decoder's profile sets the colors every adjustment starts from. It sits with
+                // the capture settings, in a card without a switch, since it isn't compared on and off.
+                ProfileRow(library: library)
             }
             InfoCard(library: library)
-            // Looks first, as Lightroom's Profile: a look is where an edit starts (decision 0034).
+            // Looks next, as Lightroom's Profile: a look is where an edit starts (decision 0034).
             LookSection(library: library)
             InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
                           canReset: basic.whiteBalance != .asShot,

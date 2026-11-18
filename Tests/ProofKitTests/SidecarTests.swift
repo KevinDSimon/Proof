@@ -122,7 +122,11 @@ struct SidecarTests {
         let json = #"{"formatVersion": 1, "processVersion": 1, "basic": {"exposure": 1}, "curve": {}, "layers": []}"#
         try Data(json.utf8).write(to: sidecarURL)
         let read = try #require(try Sidecar.read(for: photo))
-        #expect(read.recipe == edited(exposure: 1))
+        // Saved at process version 1, so it keeps Apple's profile.
+        var expected = edited(exposure: 1)
+        expected.processVersion = 1
+        expected.profile = .apple
+        #expect(read.recipe == expected)
         #expect(!read.hasUnrecognizedFields)
 
         try Sidecar.save(edited(exposure: 2), for: photo, over: read)

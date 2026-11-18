@@ -5,10 +5,14 @@ import Foundation
 /// The layout is documented in docs/edit-format.md; change both together.
 public struct EditRecipe: Codable, Equatable, Sendable {
     public static let currentFormatVersion = 3
-    public static let currentProcessVersion = 1
+    /// 2 added `profile`. Edits saved at 1 were decoded with Core Image's default profile, so
+    /// they read as `apple` and render as they did.
+    public static let currentProcessVersion = 2
 
     public var formatVersion: Int
     public var processVersion: Int
+    /// The color profile the photo is decoded with, where it offers a choice (see `CameraProfiles`).
+    public var profile: CameraProfile
     public var basic: BasicAdjustments
     public var curve: ToneCurve
     public var selectiveColor: SelectiveColor
@@ -29,10 +33,11 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var maskOverlay: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, spots, layers
+        case formatVersion, processVersion, profile, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, spots, layers
     }
 
     public init(
+        profile: CameraProfile = .embedded,
         basic: BasicAdjustments = BasicAdjustments(),
         curve: ToneCurve = ToneCurve(),
         selectiveColor: SelectiveColor = SelectiveColor(),
@@ -51,6 +56,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     ) {
         formatVersion = Self.currentFormatVersion
         processVersion = Self.currentProcessVersion
+        self.profile = profile
         self.basic = basic
         self.curve = curve
         self.selectiveColor = selectiveColor
@@ -72,6 +78,8 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         formatVersion = try c.decodeIfPresent(Int.self, forKey: .formatVersion) ?? Self.currentFormatVersion
         processVersion = try c.decodeIfPresent(Int.self, forKey: .processVersion) ?? Self.currentProcessVersion
+        // Edits saved before process version 2 always used Core Image's default profile.
+        profile = try c.decodeIfPresent(CameraProfile.self, forKey: .profile) ?? (processVersion < 2 ? .apple : .embedded)
         basic = try c.decodeIfPresent(BasicAdjustments.self, forKey: .basic) ?? BasicAdjustments()
         curve = try c.decodeIfPresent(ToneCurve.self, forKey: .curve) ?? ToneCurve()
         // Edits saved before Selective Color have none.
@@ -110,6 +118,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(formatVersion, forKey: .formatVersion)
         try c.encode(processVersion, forKey: .processVersion)
+        try c.encode(profile, forKey: .profile)
         try c.encode(basic, forKey: .basic)
         try c.encode(curve, forKey: .curve)
         try c.encode(selectiveColor, forKey: .selectiveColor)
@@ -127,17 +136,19 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(layers, forKey: .layers)
     }
 
-    /// Whether the edit leaves the photo as it is. The version numbers don't count.
+    /// Whether the edit leaves the photo as it is. The version numbers don't count; Apple's
+    /// profile does, since for a photo that offers a choice it isn't where the photo starts.
     public var isNeutral: Bool {
-        basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && spots.isEmpty && layers.isEmpty
+        profile == .embedded && basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && spots.isEmpty && layers.isEmpty
     }
 
-    /// The photo without its adjustments, for Show Original: lens corrections, the perspective
-    /// correction and the crop, with its turns and flips, are kept, so the comparison frames the
-    /// same picture. Geometry added later belongs here too.
+    /// The photo without its adjustments, for Show Original: the profile, lens corrections, the
+    /// perspective correction and the crop, with its turns and flips, are kept, so the comparison
+    /// starts from the same colors and frames the same picture. Geometry added later belongs here too.
     public var original: EditRecipe {
         var original = EditRecipe()
         original.processVersion = processVersion
+        original.profile = profile
         original.lens = lens
         original.transform = transform
         original.crop = crop
@@ -309,13 +320,6 @@ public struct WhiteBalance: Equatable, Sendable {
     public init(temperature: Double, tint: Double) {
         self.temperature = temperature
         self.tint = tint
-    }
-
-    /// The camera's white balance for the photo at `url`, or `nil` if it isn't a RAW photo.
-    /// Blocks on file I/O.
-    public static func asShot(of url: URL) -> WhiteBalance? {
-        guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else { return nil }
-        return WhiteBalance(temperature: Double(filter.neutralTemperature), tint: Double(filter.neutralTint))
     }
 
     /// Where `kelvin` sits on the temperature slider, from 0 to 1. The slider is spaced evenly in
