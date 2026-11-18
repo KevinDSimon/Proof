@@ -20,4 +20,4 @@ Three causes, measured one at a time on that photo:
 ## Consequences
 - One export runs at a time, and the sheet keeps the window busy until it ends. Browsing while a long batch exports is no longer possible; decision 0031's background queue still does the work, off the main thread.
 - Stop still takes effect only between photos, because a render can't be stopped once it starts. The sheet says so ("Stopping after this photo…"). Stopping within a photo, and a bar that moves within one, would need the render split into strips.
-- `DNGTimingTests` has export timings, for the whole edit and for each stage alone, that run with `PROOF_SAMPLE_DNG`.
+- `DNGTimingTests` has export timings, for the whole edit and for each stage alone, that run with `PROOF_SAMPLE_DNG` and `PROOF_TIMING` (#204).

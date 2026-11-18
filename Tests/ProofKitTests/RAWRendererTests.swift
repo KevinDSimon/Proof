@@ -140,7 +140,7 @@ struct RAWRendererTests {
 
     /// Records how long an exposure change takes to render, for issue #3. Each size is warmed up
     /// once, then timed over several exposure values; the median is printed.
-    @Test("Exposure render timings at full resolution and a quarter", .enabled(if: sampleDNG != nil))
+    @Test("Exposure render timings at full resolution and a quarter", .enabled(if: timesSamplePhoto))
     func exposureTimings() async throws {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))
@@ -163,7 +163,7 @@ struct RAWRendererTests {
 
     /// Records how long an exposure change takes at window sizes, to decide whether a slider
     /// drag needs a reduced preview. Each size is warmed up once; the median is printed.
-    @Test("Exposure render timings at window sizes", .enabled(if: sampleDNG != nil))
+    @Test("Exposure render timings at window sizes", .enabled(if: timesSamplePhoto))
     func windowTimings() async throws {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))
@@ -220,7 +220,7 @@ struct RAWRendererTests {
     /// Records how long panning at 100% takes to sharpen on a Retina window: region renders of
     /// the view alone and with the canvas's margin, moved across the photo as a drag would, then
     /// an exposure change on one region, as a slider drag while zoomed would.
-    @Test("Region render timings while panning at 100%", .enabled(if: sampleDNG != nil))
+    @Test("Region render timings while panning at 100%", .enabled(if: timesSamplePhoto))
     func panTimings() async throws {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))

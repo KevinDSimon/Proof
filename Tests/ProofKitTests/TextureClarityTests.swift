@@ -75,7 +75,7 @@ struct TextureClarityTests {
     /// so with every tone slider in use a render has to finish within one 30 fps frame. The median
     /// is printed; run this suite on its own to measure it, since other suites share the GPU when
     /// all tests run. The expectation is on the fastest render, which that sharing barely moves.
-    @Test("A texture or clarity change renders within one frame at full-screen size", .enabled(if: sampleDNG != nil))
+    @Test("A texture or clarity change renders within one frame at full-screen size", .enabled(if: timesSamplePhoto))
     func fullScreenTiming() async throws {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))
@@ -98,7 +98,7 @@ struct TextureClarityTests {
             print("Texture and clarity render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
                 + "\(String(format: "%.1f", median)) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
-            if checksTiming { #expect(times.first! < frameBudget) }
+            #expect(times.first! < frameBudget)
         }
     }
 

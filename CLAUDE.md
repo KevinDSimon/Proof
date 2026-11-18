@@ -14,6 +14,7 @@ Proof is a Mac RAW photo editor in Swift, built on Core Image and Metal. These r
 ## Before opening a pull request
 
 - `swift build` and `swift test` pass.
+- A change to rendering, export, opening a photo, or what renders during a slider drag, zoom or pan also passes the timing run in CONTRIBUTING.md. It takes about 9 minutes and uses the GPU, so tell the person before starting it, saying why and how long it will take. When it isn't clear whether a change affects rendering, ask whether to run it.
 - New behavior has a test. Pipeline changes that alter pixels update or add a reference render in the same PR, and the PR says which renders changed and why.
 - Docs that describe the changed behavior are updated in the same PR: `docs/architecture.md`, `docs/edit-format.md`, `README.md`, or a new decision record in `docs/decisions/`.
 

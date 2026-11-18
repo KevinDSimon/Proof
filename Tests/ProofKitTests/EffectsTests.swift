@@ -151,7 +151,7 @@ struct EffectsTests {
 
     /// See `TextureClarityTests.fullScreenTiming`: a slider drag renders at full size on every
     /// change, so with every effect in use a render has to finish within one 30 fps frame.
-    @Test("An effect change renders within one frame at full-screen size", .enabled(if: sampleDNG != nil))
+    @Test("An effect change renders within one frame at full-screen size", .enabled(if: timesSamplePhoto))
     func fullScreenTiming() async throws {
         let renderer = try RAWRenderer()
         try await renderer.open(try #require(sampleDNG))
@@ -173,7 +173,7 @@ struct EffectsTests {
             print("Effects render fitting \(Int(target.width))×\(Int(target.height)) (\(size)): median "
                 + "\(String(format: "%.1f", median)) ms, "
                 + "range \(String(format: "%.1f", times.first!))–\(String(format: "%.1f", times.last!)) ms")
-            if checksTiming { #expect(times.first! < frameBudget) }
+            #expect(times.first! < frameBudget)
         }
     }
 
