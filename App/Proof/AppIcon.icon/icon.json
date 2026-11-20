@@ -1,16 +1,16 @@
 {
   "fill" : {
-    "solid" : "srgb:0.07451,0.07451,0.07451,1.00000"
+    "solid" : "srgb:0.09020,0.09020,0.09020,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
           "glass" : false,
-          "image-name" : "aperture-p.svg",
-          "name" : "aperture-p",
+          "image-name" : "test-strip.svg",
+          "name" : "test-strip",
           "position" : {
-            "scale" : 1.32,
+            "scale" : 1,
             "translation-in-points" : [
               0,
               0
