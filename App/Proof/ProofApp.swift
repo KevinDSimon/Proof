@@ -759,7 +759,7 @@ struct EditCanvas: View {
         if library.browse.isShowingOriginal { return recipe.original }
         if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
         recipe.maskOverlay = library.overlaidLayer
-        return recipe.without(library.offGroups)
+        return recipe
     }
 }
 

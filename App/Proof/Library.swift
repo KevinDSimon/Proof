@@ -120,7 +120,7 @@ final class Library {
             finishMasking()
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
-            offGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
+            closedGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
         }
     }
     /// The edits of photos opened in Edit since Proof started.
@@ -128,18 +128,30 @@ final class Library {
     /// Thumbnails of photos edited since Proof started, showing their current edit. The grid and
     /// the filmstrip show these over the thumbnails they loaded.
     private(set) var editedThumbnails: [PhotoReference: NSImage] = [:]
-    /// Groups switched off: the canvas shows the photo without their adjustments, to compare, and
-    /// their cards are closed. Only the view changes: the edit keeps the adjustments, and opening
-    /// a photo sets the switches again.
-    var offGroups: Set<AdjustmentGroup> = []
+    /// Cards switched off while at their defaults, so their controls stay closed. Switching one
+    /// off changes nothing that renders, so it isn't saved; opening a photo sets these again.
+    /// Cards whose switch changes the render are switched off in the edit (decision 0046).
+    private var closedGroups: Set<AdjustmentGroup> = []
 
     func isOn(_ group: AdjustmentGroup) -> Bool {
-        !offGroups.contains(group)
+        !closedGroups.contains(group) && selectedEdit?.recipe.switchedOff.contains(group) != true
     }
 
+    /// Switching a card off leaves its adjustments out of the edit's render, on the canvas, in
+    /// thumbnails and in export, as one undo step that is saved like any other change.
     func setOn(_ group: AdjustmentGroup, _ isOn: Bool) {
         showEdited()
-        if isOn { offGroups.remove(group) } else { offGroups.insert(group) }
+        if isOn { closedGroups.remove(group) }
+        guard let photo = browse.selectedPhoto, let recipe = edits[photo]?.recipe else { return }
+        if isOn, !recipe.switchedOff.contains(group) { return }
+        if !isOn, !recipe.rendersDifferently(without: group) {
+            closedGroups.insert(group)
+            return
+        }
+        commitTask?.cancel()
+        commitEdit(of: photo)
+        if isOn { edits[photo]!.recipe.switchedOff.remove(group) } else { edits[photo]!.recipe.switchedOff.insert(group) }
+        commitEdit(of: photo)
     }
     /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
     var isAdjusting = false {
@@ -681,7 +693,7 @@ final class Library {
         }
         if isEditing, let shown = browse.selectedPhoto, photos.contains(shown), let recipe = selectedEdit?.recipe {
             let pasted = Set(copied.items.compactMap(\.group))
-            offGroups.subtract(pasted.subtracting(AdjustmentGroup.initiallyOff(for: recipe)))
+            closedGroups.subtract(pasted.subtracting(AdjustmentGroup.initiallyOff(for: recipe)))
         }
     }
 
@@ -1011,7 +1023,7 @@ final class Library {
         defer { isFindingSubject = false }
         do {
             try await renderer.open(url)
-            let found = try await renderer.subjectMask(recipe: recipe.without(offGroups))
+            let found = try await renderer.subjectMask(recipe: recipe)
             guard browse.selectedPhoto == photo, isMasking else { return }
             guard let found else {
                 errorMessage = "No subject was found in this photo."

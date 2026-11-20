@@ -336,6 +336,7 @@ public actor RAWRenderer {
     /// `recipe`'s profile, white balance, detail, lens corrections, perspective and crop with every other adjustment at its default, so
     /// Auto measures the photo itself and not the tone, color or look already applied.
     static func measuring(_ recipe: EditRecipe) -> EditRecipe {
+        let recipe = recipe.rendered
         var measured = EditRecipe(profile: recipe.profile)
         measured.basic.whiteBalance = recipe.basic.whiteBalance
         measured.basic.temperature = recipe.basic.temperature
@@ -480,8 +481,8 @@ public actor RAWRenderer {
         let shown = CGRect(x: (extent.minX - full.minX) / full.width, y: (full.maxY - extent.maxY) / full.height,
                            width: extent.width / full.width, height: extent.height / full.height)
         var colors: CIImage?
-        if recipe.blackAndWhite.isOn {
-            var colored = recipe
+        if recipe.rendered.blackAndWhite.isOn {
+            var colored = recipe.rendered
             colored.blackAndWhite.isOn = false
             colors = Self.apply(colored, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens, lut: lut)
         }
@@ -699,6 +700,8 @@ public actor RAWRenderer {
     static func apply(_ recipe: EditRecipe, to filter: CIRAWFilter, asShot: WhiteBalance,
                       cameraDetail: CameraDetail, cameraLens: CameraLens,
                       lut: PreparedLUT? = nil) -> CIImage? {
+        // Switched-off cards are left out here, so nothing that renders can include them.
+        let recipe = recipe.rendered
         // 1. RAW decode in linear light, with the lens profile, then chromatic aberration, lens
         // vignetting, distortion, perspective and spot removal. White
         // balance is in Kelvin and tint; exposure in stops.

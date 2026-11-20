@@ -78,6 +78,21 @@ struct RAWRendererTests {
         #expect(darker < base)
     }
 
+    @Test("A switched-off card is left out of the canvas render and the thumbnail", .enabled(if: sampleDNG != nil))
+    func switchedOffCardRenders() async throws {
+        let url = try #require(sampleDNG)
+        let renderer = try RAWRenderer()
+        try await renderer.open(url)
+        let target = CGSize(width: 400, height: 400)
+        var off = EditRecipe.exposure(1)
+        off.switchedOff = [.basic]
+        let canvas = try pixels(await renderer.render(fitting: target, recipe: off))
+        #expect(try canvas == pixels(await renderer.render(fitting: target, recipe: EditRecipe())))
+        let thumbnail = try await renderer.thumbnail(of: url, recipe: off, maxPixelSize: 256)
+        let plain = try await renderer.thumbnail(of: url, recipe: EditRecipe(), maxPixelSize: 256)
+        #expect(thumbnail.dataProvider?.data as Data? == plain.dataProvider?.data as Data?)
+    }
+
     /// Renders served from the cached RAW decode must match an uncached first render exactly,
     /// or caching would change how saved edits look.
     @Test("Returning to an exposure renders the same pixels as a fresh renderer", .enabled(if: sampleDNG != nil))

@@ -28,12 +28,15 @@ public struct EditRecipe: Codable, Equatable, Sendable {
     public var crop: Crop?
     public var spots: [Spot]
     public var layers: [Layer]
+    /// The inspector cards switched off. Their adjustments are kept but don't render, on the
+    /// canvas, in thumbnails or in export (decision 0046).
+    public var switchedOff: Set<AdjustmentGroup> = []
     /// The layer whose mask the canvas tints red, by its place in `layers`. Not saved: it is set
     /// only on the recipe the canvas renders while the Masks tool shows a mask.
     public var maskOverlay: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case formatVersion, processVersion, profile, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, spots, layers
+        case formatVersion, processVersion, profile, basic, curve, selectiveColor, blackAndWhite, detail, look, vignette, grain, halation, bloom, lens, transform, crop, spots, layers, switchedOff
     }
 
     public init(
@@ -104,6 +107,9 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         // Edits saved before Spot Removal have none.
         spots = try c.decodeIfPresent([Spot].self, forKey: .spots) ?? []
         layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
+        // Edits saved before switches were saved have every card on. A card a newer Proof adds
+        // is skipped here, and kept in the file by `Sidecar`'s merge only until this one saves.
+        switchedOff = Set(try c.decodeIfPresent([String].self, forKey: .switchedOff)?.compactMap(AdjustmentGroup.init) ?? [])
         // Format 1 held temperature and tint as −100 to 100 offsets. Nothing rendered them, so
         // they are dropped and the photo keeps the camera's white balance, as it always showed.
         if formatVersion < 2 { basic.resetWhiteBalance() }
@@ -134,17 +140,21 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         try c.encode(crop, forKey: .crop)
         try c.encode(spots, forKey: .spots)
         try c.encode(layers, forKey: .layers)
+        // In the inspector's order, so the file doesn't change between saves.
+        try c.encode(AdjustmentGroup.allCases.filter(switchedOff.contains).map(\.rawValue), forKey: .switchedOff)
     }
 
     /// Whether the edit leaves the photo as it is. The version numbers don't count; Apple's
-    /// profile does, since for a photo that offers a choice it isn't where the photo starts.
+    /// profile does, since for a photo that offers a choice it isn't where the photo starts. A
+    /// switched-off card counts only where it changes the render, as Lens Corrections does.
     public var isNeutral: Bool {
-        profile == .embedded && basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && spots.isEmpty && layers.isEmpty
+        !switchedOff.contains { rendersDifferently(without: $0) } && profile == .embedded && basic.isNeutral && curve == ToneCurve() && selectiveColor.isNeutral && blackAndWhite.isNeutral && detail.isNeutral && look == nil && vignette.isNeutral && grain.isNeutral && halation.isNeutral && bloom.isNeutral && lens.isNeutral && transform.isNeutral && (crop?.isIdentity ?? true) && spots.isEmpty && layers.isEmpty
     }
 
     /// The photo without its adjustments, for Show Original: the profile, lens corrections, the
     /// perspective correction and the crop, with its turns and flips, are kept, so the comparison
     /// starts from the same colors and frames the same picture. Geometry added later belongs here too.
+    /// The lens and perspective switches come along, so a switched-off correction stays off.
     public var original: EditRecipe {
         var original = EditRecipe()
         original.processVersion = processVersion
@@ -152,6 +162,7 @@ public struct EditRecipe: Codable, Equatable, Sendable {
         original.lens = lens
         original.transform = transform
         original.crop = crop
+        original.switchedOff = switchedOff.intersection([.lens, .transform])
         return original
     }
 

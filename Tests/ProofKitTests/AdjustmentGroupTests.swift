@@ -89,4 +89,56 @@ struct AdjustmentGroupTests {
         let noDetail = recipe.without([.detail])
         #expect(noDetail.detail == DetailAdjustments() && noDetail.curve == recipe.curve)
     }
+
+    @Test("A switched-off card's adjustments are kept in the edit but left out of how it renders")
+    func switchedOffRenders() {
+        var recipe = Self.edited
+        recipe.switchedOff = [.look, .basic]
+        #expect(recipe.look != nil && recipe.basic.exposure == 1)
+        #expect(recipe.rendered == recipe.without([.look, .basic]))
+        #expect(recipe.rendered.look == nil && recipe.rendered.basic.exposure == 0)
+        #expect(RAWRenderer.measuring(recipe).lens == recipe.lens)
+        recipe.switchedOff = [.transform]
+        #expect(RAWRenderer.measuring(recipe).transform.isNeutral)
+        #expect(Self.edited.rendered == Self.edited)
+    }
+
+    @Test("Only a switch that changes the render keeps an edit from being neutral")
+    func switchedOffNeutral() {
+        var recipe = EditRecipe()
+        recipe.switchedOff = [.curve, .look, .basic]
+        #expect(!recipe.rendersDifferently(without: .curve))
+        #expect(recipe.isNeutral)
+        // Off means no lens profile at all, which renders differently from the default.
+        recipe.switchedOff = [.lens]
+        #expect(recipe.rendersDifferently(without: .lens))
+        #expect(!recipe.isNeutral)
+        // Adjustments that are switched off are still saved.
+        var exposed = EditRecipe()
+        exposed.basic.exposure = 1
+        exposed.switchedOff = [.basic]
+        #expect(!exposed.isNeutral)
+    }
+
+    @Test("A switch names itself in the History panel")
+    func switchLabel() {
+        let recipe = Self.edited
+        var off = recipe
+        off.switchedOff = [.look]
+        #expect(off.changeLabel(from: recipe) == "Look Off")
+        #expect(recipe.changeLabel(from: off) == "Look On")
+        var both = off
+        both.switchedOff.insert(.curve)
+        #expect(both.changeLabel(from: recipe) == "Switches")
+        var pasted = off
+        pasted.basic.exposure = 2
+        #expect(pasted.changeLabel(from: recipe) == "Exposure +2.00")
+    }
+
+    @Test("Show Original keeps the lens and perspective switches, so it frames the same picture")
+    func originalKeepsGeometrySwitches() {
+        var recipe = Self.edited
+        recipe.switchedOff = [.transform, .lens, .basic, .look]
+        #expect(recipe.original.switchedOff == [.transform, .lens])
+    }
 }
