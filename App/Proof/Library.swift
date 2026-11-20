@@ -856,15 +856,19 @@ final class Library {
             ? selectedEdit?.recipe.spots[index] : nil } ?? nextSpot
     }
 
-    /// Selects the spot at `index`, or none. The next spot takes its settings.
+    /// Selects the spot at `index`, or none. The next spot takes its settings, but not a stroke's path.
     func selectSpot(_ index: Int?) {
         selectedSpot = index
-        if let index, let spots = selectedEdit?.recipe.spots, spots.indices.contains(index) { nextSpot = spots[index] }
+        if let index, let spots = selectedEdit?.recipe.spots, spots.indices.contains(index) {
+            nextSpot = spots[index]
+            nextSpot.points = []
+        }
     }
 
     /// Changes the selected spot's settings, and the next spot's.
     func changeSpot(_ change: (inout Spot) -> Void) {
         change(&nextSpot)
+        nextSpot.points = []
         guard let index = selectedSpot else { return }
         changeEdit { recipe in
             guard recipe.spots.indices.contains(index) else { return }
@@ -905,6 +909,81 @@ final class Library {
             guard recipe.spots.indices.contains(index), recipe.spots[index] == spot else { return }
             recipe.spots[index].source = found
         }
+    }
+
+    /// Starts painting a stroke at `point`, in `Spot`'s coordinates, with the next spot's settings,
+    /// and selects it. It takes from itself, changing nothing, until it is finished.
+    func beginStroke(at point: CGPoint) {
+        guard selectedEdit != nil else { return }
+        var spot = nextSpot
+        spot.center = point
+        spot.source = point
+        spot.points = [point.x, point.y]
+        // Painting, and choosing the source after it, is one undo step.
+        isAdjusting = true
+        changeEdit { $0.spots.append(spot) }
+        selectedSpot = selectedEdit?.recipe.spots.indices.last
+    }
+
+    /// Adds `point` to the stroke being painted, the selected spot.
+    func extendStroke(to point: CGPoint) {
+        guard let index = selectedSpot else { return }
+        changeEdit { recipe in
+            guard recipe.spots.indices.contains(index), !recipe.spots[index].points.isEmpty else { return }
+            recipe.spots[index].append(point)
+        }
+    }
+
+    /// Finishes the stroke being painted: it takes from beside it at once, then from the area
+    /// Proof chooses when that has been found, in the same undo step. A stroke too short to be
+    /// one becomes a circle.
+    func finishStroke(with renderer: RAWRenderer) async {
+        defer { isAdjusting = false }
+        guard let photo = browse.selectedPhoto, let url = selectedPhotoURL, let size = selectedEdit?.size,
+              let index = selectedSpot, let recipe = selectedEdit?.recipe, recipe.spots.indices.contains(index)
+        else { return }
+        var spot = recipe.spots[index]
+        if !spot.isStroke { spot.points = [] }
+        spot.source = Self.besideStroke(spot, photoSize: size)
+        changeEdit { $0.spots[index] = spot }
+        findingSourceFor = index
+        defer { if findingSourceFor == index { findingSourceFor = nil } }
+        var before = recipe
+        before.spots.remove(at: index)
+        let found: CGPoint?
+        do {
+            try await renderer.open(url)
+            found = try await renderer.spotSource(center: spot.center, radius: spot.radius, mode: spot.mode,
+                                                  path: spot.path, recipe: before)
+        } catch {
+            found = nil
+        }
+        guard browse.selectedPhoto == photo, let found else { return }
+        changeEdit { recipe in
+            guard recipe.spots.indices.contains(index), recipe.spots[index] == spot else { return }
+            recipe.spots[index].source = found
+        }
+    }
+
+    /// Off to the side of the stroke, square to the line from its first point to its last, as
+    /// far as Proof's own choice at its nearest; a circle as `besideSpot` places it.
+    static func besideStroke(_ spot: Spot, photoSize: CGSize) -> CGPoint {
+        let path = spot.path
+        guard spot.isStroke, let first = path.first, let last = path.last else {
+            return besideSpot(center: spot.center, radius: spot.radius, photoSize: photoSize)
+        }
+        let width = max(photoSize.width, 1), height = max(photoSize.height, 1), long = max(width, height)
+        // In pixels of the photo, so the turn is square on the photo.
+        let dx = (last.x - first.x) * width, dy = (last.y - first.y) * height
+        let length = hypot(dx, dy)
+        let across = spot.radius * 2.4 * long
+        let nx = length > 0 ? -dy / length : 0, ny = length > 0 ? dx / length : 1
+        let side = CGPoint(x: spot.center.x + nx * across / width, y: spot.center.y + ny * across / height)
+        // The other side when that one is off the photo.
+        guard (0...1).contains(side.x), (0...1).contains(side.y) else {
+            return CGPoint(x: spot.center.x - nx * across / width, y: spot.center.y - ny * across / height)
+        }
+        return side
     }
 
     /// The same distance away as Proof's own choice at its nearest, to the right or, near the

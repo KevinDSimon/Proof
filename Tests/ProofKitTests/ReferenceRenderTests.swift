@@ -38,6 +38,7 @@ struct ReferenceRenderTests {
         ("lens-manual", lensManual, nil),
         ("perspective", perspective, nil),
         ("spots", spots, nil),
+        ("spot-stroke", spotStroke, nil),
         ("mask-linear", maskLinear, nil),
         ("mask-radial", maskRadial, nil),
         ("mask-brush", maskBrush, nil),
@@ -250,6 +251,20 @@ struct ReferenceRenderTests {
         recipe.spots = [
             Spot(x: 0.48, y: 0.4, sourceX: 0.524, sourceY: 0.428, radius: 0.02),
             Spot(mode: .clone, x: 0.3, y: 0.15, sourceX: 0.2, sourceY: 0.17, radius: 0.03, feather: 30, opacity: 80),
+        ]
+        recipe.crop = Crop(x: 0.1, y: 0.05, width: 0.8, height: 0.8, rotation: 90)
+        return recipe
+    }()
+
+    /// A long healed stroke across the rock and a cloned one in the sky, under the same crop as
+    /// `spots`, so a change to how strokes are drawn, or where they land, shows.
+    static let spotStroke: EditRecipe = {
+        var recipe = EditRecipe()
+        recipe.spots = [
+            Spot(x: 0.4, y: 0.42, sourceX: 0.4, sourceY: 0.47, radius: 0.008,
+                 path: [CGPoint(x: 0.4, y: 0.42), CGPoint(x: 0.45, y: 0.4), CGPoint(x: 0.5, y: 0.41), CGPoint(x: 0.56, y: 0.38)]),
+            Spot(mode: .clone, x: 0.25, y: 0.12, sourceX: 0.25, sourceY: 0.2, radius: 0.01, feather: 20,
+                 path: [CGPoint(x: 0.25, y: 0.12), CGPoint(x: 0.35, y: 0.14)]),
         ]
         recipe.crop = Crop(x: 0.1, y: 0.05, width: 0.8, height: 0.8, rotation: 90)
         return recipe

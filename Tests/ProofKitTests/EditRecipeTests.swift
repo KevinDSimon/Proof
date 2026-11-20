@@ -288,6 +288,27 @@ struct EditRecipeTests {
         #expect(try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited)) == edited)
     }
 
+    @Test("A spot saved before strokes reads as a circle and is written as it was; a stroke's path survives a round trip")
+    func migratesSpotStrokes() throws {
+        let old = #"{"formatVersion": 3, "spots": [{"mode": "heal", "x": 0.2, "y": 0.3, "sourceX": 0.25, "sourceY": 0.3, "radius": 0.006, "feather": 50, "opacity": 100}]}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(old.utf8))
+        let circle = try #require(recipe.spots.first)
+        #expect(circle.points.isEmpty && !circle.isStroke)
+        let rewritten = try JSONSerialization.jsonObject(with: JSONEncoder().encode(recipe)) as? [String: Any]
+        let written = try #require((rewritten?["spots"] as? [[String: Any]])?.first)
+        #expect(written["points"] == nil)
+
+        var edited = recipe
+        edited.spots.append(Spot(x: 0.4, y: 0.5, sourceX: 0.4, sourceY: 0.56, radius: 0.004,
+                                 path: [CGPoint(x: 0.4, y: 0.5), CGPoint(x: 0.45, y: 0.52), CGPoint(x: 0.5, y: 0.51)]))
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(edited)) as? [String: Any]
+        let stroke = try #require((json?["spots"] as? [[String: Any]])?.last)
+        #expect(stroke["points"] as? [Double] == [0.4, 0.5, 0.45, 0.52, 0.5, 0.51])
+        let read = try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(edited))
+        #expect(read == edited)
+        #expect(read.spots.last?.isStroke == true)
+    }
+
     @Test("A file saved before Vignette reads it as off and stays neutral; a partial one keeps its other defaults")
     func migratesWithoutVignette() throws {
         let old = #"{"formatVersion": 3, "processVersion": 1, "basic": {"dehaze": 0}}"#

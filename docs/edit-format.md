@@ -223,18 +223,19 @@ A photo without a sidecar opens with the crop and perspective correction its cam
 
 ## Spots
 
-Each spot is a circle filled from another circle of the same size in the photo, its source. Positions are from 0 to 1 of the photo's width and height, measured from its top left, on the whole photo after lens corrections and perspective and before the crop, so a spot stays on what it covers when the crop, turn or flips change. Spots apply in order after perspective and before halation and bloom, each to the result of the ones before it. See decision 0039.
+Each spot is a circle, or a painted stroke, filled from an area of the same shape elsewhere in the photo, its source. Positions are from 0 to 1 of the photo's width and height, measured from its top left, on the whole photo after lens corrections and perspective and before the crop, so a spot stays on what it covers when the crop, turn or flips change. Spots apply in order after perspective and before halation and bloom, each to the result of the ones before it. See decisions 0039 and 0047.
 
 | Field | Meaning |
 | --- | --- |
 | `mode` | `heal` takes the source's texture and matches it to the color and brightness around the spot; `clone` copies the source as it is. A mode Proof doesn't recognize reads as `heal`. |
-| `x`, `y` | The spot's center. |
-| `sourceX`, `sourceY` | The source's center. |
-| `radius` | The circle's radius as a fraction of the photo's long edge, from 0.001 to 0.1. Default 0.006. |
+| `x`, `y` | The circle's center, or a stroke's first point. |
+| `sourceX`, `sourceY` | The source's center, or where a stroke's first point lands when the stroke is moved onto its source. |
+| `radius` | The circle's radius, or how far a stroke covers on each side of its path, as a fraction of the photo's long edge, from 0.001 to 0.1. Default 0.006. |
 | `feather` | 0 to 100, default 50. How far in from the edge the fill fades into the photo, as a percentage of the radius. 0 is a hard edge. |
 | `opacity` | 0 to 100, default 100. How much of the fill covers the spot. |
+| `points` | A stroke's path, as x and y pairs in a flat list: `[x1, y1, x2, y2, …]`. Absent for a circle. Fewer than two points read as a circle at `x`, `y`. |
 
-`radius`, `feather` and `opacity` outside their ranges render as the nearer end; missing ones take their defaults. A spot whose source lies partly off the photo repeats the photo's edge pixels there. Files saved before spots existed have no `spots` and read as none.
+`radius`, `feather` and `opacity` outside their ranges render as the nearer end; missing ones take their defaults. A spot whose source lies partly off the photo repeats the photo's edge pixels there. Files saved before spots existed have no `spots` and read as none; spots saved before strokes have no `points` and read as circles.
 
 ## Layers
 

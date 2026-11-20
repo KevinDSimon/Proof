@@ -3,9 +3,9 @@ import ProofKit
 import SwiftUI
 
 /// The Spot Removal tool on the photo: a click covers the spot under it, filled from a nearby
-/// area Proof chooses. Each spot is a circle; the selected one also shows the circle it takes
-/// from, joined to it by a line. Dragging a circle moves it, and Delete removes the selected
-/// spot. Return, Esc and Q close it, and nothing covers the photo but the circles. The pointer shows the next spot's size, which [ and ] change. Pinching zooms and dragging
+/// area Proof chooses, and a drag paints a stroke over a longer mark, such as a hair. Each spot
+/// shows as its outline; the selected one also shows the area it takes from, joined to it by a
+/// line. Dragging a spot moves it, and Delete removes the selected spot. Return, Esc and Q close it, and nothing covers the photo but the circles. The pointer shows the next spot's size, which [ and ] change. Pinching zooms and dragging
 /// with the space bar held pans, as on the canvas, which the tool covers; the keyboard and the
 /// navigator zoom as usual. A temporary tool, so it may sit on the photo.
 struct SpotOverlay: View {
@@ -38,6 +38,8 @@ struct SpotOverlay: View {
     @State private var isSpaceDown = false
     /// The drag's translation when it last panned, while a drag is panning.
     @State private var panned: CGSize?
+    /// Where the stroke being painted last took a point, in points, while painting.
+    @State private var painted: CGPoint?
     /// The pinch's magnification when it last zoomed, while pinching.
     @State private var pinched: CGFloat?
     @State private var keyMonitor: Any?
@@ -46,6 +48,10 @@ struct SpotOverlay: View {
     private static let minimumRadius = 4.0
     /// How much [ and ] change the size by.
     private static let sizeStep = 1.15
+    /// How far the pointer moves, in points, before a press on the photo paints rather than clicks.
+    private static let clickDistance = 4.0
+    /// How far apart a stroke's points are taken, in points on screen.
+    private static let pointSpacing = 2.0
 
     var body: some View {
         GeometryReader { geometry in
@@ -59,18 +65,18 @@ struct SpotOverlay: View {
                 for (index, spot) in spots.enumerated() {
                     let center = shown(spot.center, photo: photo)
                     let radius = shownRadius(spot.radius, photo: photo)
-                    let circle = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
-                                                        width: radius * 2, height: radius * 2))
+                    let circle = outline(of: spot, photo: photo)
                     if index == selected || hovered?.index == index {
                         chosen.addPath(circle)
                     } else {
                         circles.addPath(circle)
                     }
-                    // The source shows once Proof has chosen it, so it doesn't jump.
-                    guard index == selected, library.findingSourceFor != index else { continue }
+                    // The source shows once Proof has chosen it, so it doesn't jump, and not
+                    // while a stroke is painted, when it takes from itself.
+                    guard index == selected, library.findingSourceFor != index, painted == nil else { continue }
                     let source = shown(spot.source, photo: photo)
-                    sourceCircle.addEllipse(in: CGRect(x: source.x - radius, y: source.y - radius,
-                                                       width: radius * 2, height: radius * 2))
+                    sourceCircle.addPath(outline(of: spot, photo: photo,
+                                                 moved: CGVector(dx: source.x - center.x, dy: source.y - center.y)))
                     // From edge to edge, so the line doesn't cross either circle.
                     let dx = source.x - center.x, dy = source.y - center.y
                     let distance = hypot(dx, dy)
@@ -82,7 +88,8 @@ struct SpotOverlay: View {
                 }
                 // The next spot's size at the pointer, over the photo but not over a spot.
                 var brush = Path()
-                if let pointer, hovered == nil, dragging == nil, panned == nil, !isSpaceDown, photo.contains(pointer) {
+                if let pointer, hovered == nil, dragging == nil, panned == nil, painted == nil, !isSpaceDown,
+                   photo.contains(pointer) {
                     let radius = shownRadius(library.nextSpot.radius, photo: photo)
                     brush.addEllipse(in: CGRect(x: pointer.x - radius, y: pointer.y - radius, width: radius * 2, height: radius * 2))
                 }
@@ -109,7 +116,7 @@ struct SpotOverlay: View {
             .accessibilityElement()
             .accessibilityLabel("Photo")
             .accessibilityValue(spots.count == 1 ? "1 spot" : "\(spots.count) spots")
-            .accessibilityHint("Click a blemish to remove it")
+            .accessibilityHint("Click a blemish to remove it, or drag over a longer one, such as a hair")
             .pointerStyle(pointerStyle)
             .onContinuousHover { phase in
                 if case let .active(location) = phase {
@@ -131,8 +138,27 @@ struct SpotOverlay: View {
                             panned = value.translation
                             return
                         }
+                        if let last = painted {
+                            guard hypot(value.location.x - last.x, value.location.y - last.y) >= Self.pointSpacing,
+                                  let point = point(at: value.location, photo: photo) else { return }
+                            library.extendStroke(to: point)
+                            painted = value.location
+                            return
+                        }
                         if dragging == nil {
-                            guard let part = part(at: value.startLocation, spots: spots, selected: selected, photo: photo) else { return }
+                            guard let part = part(at: value.startLocation, spots: spots, selected: selected, photo: photo) else {
+                                // A drag on the photo away from every spot paints a stroke.
+                                guard hypot(value.translation.width, value.translation.height) >= Self.clickDistance,
+                                      photo.contains(value.startLocation),
+                                      let start = point(at: value.startLocation, photo: photo),
+                                      let point = point(at: value.location, photo: photo)
+                                else { return }
+                                isFocused = true
+                                library.beginStroke(at: start)
+                                library.extendStroke(to: point)
+                                painted = value.location
+                                return
+                            }
                             let spot = spots[part.index]
                             dragging = (part, shown(part == .spot(part.index) ? spot.center : spot.source, photo: photo))
                             library.selectSpot(part.index)
@@ -158,8 +184,13 @@ struct SpotOverlay: View {
                             library.isAdjusting = false
                             return
                         }
+                        if painted != nil {
+                            painted = nil
+                            Task { await library.finishStroke(with: renderer) }
+                            return
+                        }
                         // A click on the photo away from every spot covers a new one there.
-                        guard hypot(value.translation.width, value.translation.height) < 4,
+                        guard hypot(value.translation.width, value.translation.height) < Self.clickDistance,
                               photo.contains(value.location), let center = point(at: value.location, photo: photo)
                         else {
                             library.selectSpot(nil)
@@ -256,22 +287,55 @@ struct SpotOverlay: View {
     private var frame: CGRect { frameBox.frame }
     private func updateFrame(_ frame: CGRect) { frameBox.frame = frame }
 
-    /// The selected spot's source before any spot, then the topmost spot, within its circle.
+    /// The selected spot's source before any spot, then the topmost spot, within its outline.
     private func part(at location: CGPoint, spots: [Spot], selected: Int?, photo: CGRect) -> Part? {
         if let selected {
             let spot = spots[selected]
-            let source = shown(spot.source, photo: photo)
-            if hypot(location.x - source.x, location.y - source.y) <= shownRadius(spot.radius, photo: photo) {
+            let center = shown(spot.center, photo: photo), source = shown(spot.source, photo: photo)
+            if distance(from: location, to: spot, photo: photo, moved: CGVector(dx: source.x - center.x, dy: source.y - center.y))
+                <= shownRadius(spot.radius, photo: photo) {
                 return .source(selected)
             }
         }
-        for (index, spot) in spots.enumerated().reversed() {
-            let center = shown(spot.center, photo: photo)
-            if hypot(location.x - center.x, location.y - center.y) <= shownRadius(spot.radius, photo: photo) {
-                return .spot(index)
-            }
+        for (index, spot) in spots.enumerated().reversed()
+        where distance(from: location, to: spot, photo: photo) <= shownRadius(spot.radius, photo: photo) {
+            return .spot(index)
         }
         return nil
+    }
+
+    /// The points a spot is drawn around on the canvas: its center, or a stroke's path, moved by
+    /// `offset` points.
+    private func shownPath(of spot: Spot, photo: CGRect, moved offset: CGVector) -> [CGPoint] {
+        (spot.isStroke ? spot.path : [spot.center]).map {
+            let point = shown($0, photo: photo)
+            return CGPoint(x: point.x + offset.dx, y: point.y + offset.dy)
+        }
+    }
+
+    /// The edge of what a spot covers on the canvas, moved by `offset` points for its source.
+    private func outline(of spot: Spot, photo: CGRect, moved offset: CGVector = .zero) -> Path {
+        let radius = shownRadius(spot.radius, photo: photo)
+        let points = shownPath(of: spot, photo: photo, moved: offset)
+        guard spot.isStroke else {
+            return Path(ellipseIn: CGRect(x: points[0].x - radius, y: points[0].y - radius, width: radius * 2, height: radius * 2))
+        }
+        var line = Path()
+        line.addLines(points)
+        // Normalized, so where the stroke crosses itself only the outer edge shows.
+        return line.strokedPath(StrokeStyle(lineWidth: radius * 2, lineCap: .round, lineJoin: .round)).normalized()
+    }
+
+    /// How far `location` is from a spot's center, or from a stroke's path, in points.
+    private func distance(from location: CGPoint, to spot: Spot, photo: CGRect, moved offset: CGVector = .zero) -> Double {
+        let points = shownPath(of: spot, photo: photo, moved: offset)
+        guard points.count > 1 else { return hypot(location.x - points[0].x, location.y - points[0].y) }
+        return zip(points, points.dropFirst()).map { a, b in
+            let dx = b.x - a.x, dy = b.y - a.y
+            let lengthSquared = dx * dx + dy * dy
+            let t = lengthSquared > 0 ? min(max(((location.x - a.x) * dx + (location.y - a.y) * dy) / lengthSquared, 0), 1) : 0
+            return hypot(location.x - (a.x + t * dx), location.y - (a.y + t * dy))
+        }.min() ?? .infinity
     }
 
     /// The photo's rectangle on the canvas, in points.
