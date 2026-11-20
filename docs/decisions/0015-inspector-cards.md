@@ -1,7 +1,7 @@
 # 0015. Inspector sections as cards with a switch
 
 Date: 2026-11-10
-Status: Accepted; folding changed by 0034
+Status: Accepted; folding changed by 0034, and switches saved in the edit by 0046
 
 ## Context
 Issue #98. The inspector was a grouped SwiftUI `Form`: each section's title and Reset sat above its card, and only Curve and Looks had a switch to compare with and without them. On macOS 26 a grouped form draws pop-up buttons as plain text with arrows, without the filled background they have elsewhere, such as in Finder's settings. The owner wants each adjustment group laid out as a card: the title inside the card, Reset beside a switch that turns the group on or off.

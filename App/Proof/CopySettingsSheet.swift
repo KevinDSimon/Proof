@@ -102,17 +102,7 @@ struct CopySettingsSheet: View {
 
     /// The inspector's card titles.
     static func title(of group: AdjustmentGroup) -> String {
-        switch group {
-        case .whiteBalance: "White Balance"
-        case .basic: "Basic"
-        case .curve: "Curve"
-        case .selectiveColor: "Selective Color"
-        case .detail: "Detail"
-        case .lens: "Lens Corrections"
-        case .transform: "Transform"
-        case .effects: "Effects"
-        case .look: "Look"
-        }
+        group.title
     }
 
     /// Named after the inspector's sliders and sections, so each item can be found there.

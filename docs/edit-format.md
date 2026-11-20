@@ -58,6 +58,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
     { "mode": "heal", "x": 0.48, "y": 0.4, "sourceX": 0.524, "sourceY": 0.428, "radius": 0.006, "feather": 50, "opacity": 100 }
   ],
   "layers": [],
+  "switchedOff": ["curve"],
   "original": { "size": 61203456, "captureTime": "2025:06:01 14:03:22.417", "uniqueID": "0aff3c2e91d04b7a8e6f1c0d2b3a4e5f" }
 }
 ```
@@ -84,6 +85,7 @@ The sidecar travels with the photo when the folder is copied or synced, so a NAS
 | `crop` | Turn, flips, straighten and crop rectangle, described below. `null` for none. |
 | `spots` | Spots covered with Spot Removal, such as sensor dust, applied in order, described below. Empty for none. |
 | `layers` | Masks with their own adjustments, applied in order, described below. Empty for none. |
+| `switchedOff` | The inspector cards whose switch is off, in the inspector's order: `whiteBalance`, `basic`, `selectiveColor`, `curve`, `detail`, `lens`, `transform`, `effects`, `look`. Their values are kept but don't render, as if they were at their defaults; `lens` off renders without the lens profile, even where the decoder applies it by default. A value Proof doesn't recognize is skipped. Empty for none; files saved before switches were saved have none and render every card (decision 0046). |
 | `original` | The photo the sidecar was first written for, described below. It identifies the photo, not the edit, and doesn't change how it renders. |
 
 Missing fields take their default (no adjustment). `look` and `crop` are written as `null` when there is none. Proof writes the file with its keys sorted and indented.

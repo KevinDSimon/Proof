@@ -1,11 +1,28 @@
-/// A group of adjustments that the inspector shows on one card with its own switch.
-public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
+/// A group of adjustments that the inspector shows on one card with its own switch. The raw
+/// values are saved in `EditRecipe.switchedOff`.
+public enum AdjustmentGroup: String, Hashable, Sendable, CaseIterable {
     case whiteBalance, basic, selectiveColor, curve, detail, lens, transform, effects, look
 
-    /// The groups whose switches start off when `recipe` opens: Selective Color, Curve, Detail,
-    /// Transform, Effects and Looks, so their controls stay closed, unless the recipe has a
-    /// selective color adjustment, a curve, changed detail, a perspective correction, an effect
-    /// or a look. Detail is judged at 100% zoom, so most photos never need it open.
+    /// The inspector card's title.
+    public var title: String {
+        switch self {
+        case .whiteBalance: "White Balance"
+        case .basic: "Basic"
+        case .curve: "Curve"
+        case .selectiveColor: "Selective Color"
+        case .detail: "Detail"
+        case .lens: "Lens Corrections"
+        case .transform: "Transform"
+        case .effects: "Effects"
+        case .look: "Look"
+        }
+    }
+
+    /// The groups whose switches start off when `recipe` opens, besides those it switched off:
+    /// Selective Color, Curve, Detail, Transform, Effects and Looks, so their controls stay closed,
+    /// unless the recipe has a selective color adjustment, a curve, changed detail, a perspective
+    /// correction, an effect or a look. Detail is judged at 100% zoom, so most photos never need it
+    /// open. These are at their defaults, so their switches change nothing that renders.
     public static func initiallyOff(for recipe: EditRecipe?) -> Set<AdjustmentGroup> {
         var off: Set<AdjustmentGroup> = []
         if recipe?.selectiveColor.isNeutral ?? true { off.insert(.selectiveColor) }
@@ -19,8 +36,20 @@ public enum AdjustmentGroup: Hashable, Sendable, CaseIterable {
 }
 
 extension EditRecipe {
-    /// The recipe with the adjustments of `groups` left out, as the canvas shows it while their
-    /// switches are off.
+    /// The recipe as it renders: without the adjustments of the groups it switched off. The
+    /// renderer applies this itself, so the canvas, thumbnails and export all leave them out.
+    public var rendered: EditRecipe {
+        switchedOff.isEmpty ? self : without(switchedOff)
+    }
+
+    /// Whether switching `group` off would change how the photo renders: false for a card at its
+    /// defaults, whose switch is then only a way to close it and isn't saved.
+    public func rendersDifferently(without group: AdjustmentGroup) -> Bool {
+        without([group]) != self
+    }
+
+    /// The recipe with the adjustments of `groups` left out, as it renders while their switches
+    /// are off. `switchedOff` is left as it is.
     public func without(_ groups: Set<AdjustmentGroup>) -> EditRecipe {
         var recipe = self
         if groups.contains(.whiteBalance) { recipe.basic.resetWhiteBalance() }

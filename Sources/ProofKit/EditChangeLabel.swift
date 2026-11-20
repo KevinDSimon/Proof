@@ -68,6 +68,12 @@ extension EditRecipe {
         ]
         parts += sections.filter(\.1).map(\.0)
 
+        // A card's switch names itself, "Look Off"; beside other changes, as in a paste, it doesn't count.
+        let switched = AdjustmentGroup.allCases.filter { switchedOff.contains($0) != previous.switchedOff.contains($0) }
+        if parts.isEmpty, let group = switched.first {
+            parts.append(switched.count == 1 ? "\(group.title) \(switchedOff.contains(group) ? "Off" : "On")" : "Switches")
+        }
+
         switch parts.count {
         case 0: return "Edit"
         case 1: return parts[0]

@@ -22,8 +22,8 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
     /// sensor; masks are drawn around what one photo shows.
     public static let defaultItems: Set<SettingsItem> = Set(allCases).subtracting([.transform, .crop, .spotRemoval, .masks])
 
-    /// The inspector card that shows the item: the sheet groups items by it, and a paste turns
-    /// its switch on. `nil` for Profile, which has no switch, and for Crop, Spot Removal and
+    /// The inspector card that shows the item: the sheet groups items by it, and a paste sets
+    /// its switch as the copied photo had it. `nil` for Profile, which has no switch, and for Crop, Spot Removal and
     /// Masks, which their tools show.
     public var group: AdjustmentGroup? {
         switch self {
@@ -59,11 +59,15 @@ public struct CopiedSettings: Equatable, Sendable {
 }
 
 extension EditRecipe {
-    /// The recipe with the copied items replaced by their values in `copied`. Everything else
-    /// stays as it was.
+    /// The recipe with the copied items replaced by their values in `copied`. The switch of each
+    /// card with a copied item comes along, so the pasted settings render as they did on the
+    /// copied photo. Everything else stays as it was.
     public func pasting(_ copied: CopiedSettings) -> EditRecipe {
         var recipe = self
         let source = copied.recipe
+        for group in Set(copied.items.compactMap(\.group)) {
+            if source.switchedOff.contains(group) { recipe.switchedOff.insert(group) } else { recipe.switchedOff.remove(group) }
+        }
         for item in copied.items {
             switch item {
             // Ticked by default: white balance values mean different colors under each profile.

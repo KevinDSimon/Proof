@@ -43,6 +43,29 @@ struct EditRecipeTests {
         #expect(decoded == recipe)
     }
 
+    @Test("Switched-off cards are saved in the inspector's order and survive a round trip")
+    func switchedOffRoundTrip() throws {
+        var recipe = EditRecipe()
+        recipe.look = Look(lut: "Portra.cube", strength: 0.7)
+        recipe.switchedOff = [.look, .whiteBalance, .curve]
+        let data = try JSONEncoder().encode(recipe)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["switchedOff"] as? [String] == ["whiteBalance", "curve", "look"])
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: data) == recipe)
+    }
+
+    @Test("An edit saved before switches were saved opens with every card on and renders as it did")
+    func switchedOffMigration() throws {
+        let json = #"{"formatVersion": 3, "processVersion": 2, "basic": {"exposure": 1}, "look": {"lut": "Portra.cube", "strength": 1}}"#
+        let recipe = try JSONDecoder().decode(EditRecipe.self, from: Data(json.utf8))
+        #expect(recipe.switchedOff.isEmpty)
+        #expect(recipe.rendered == recipe)
+        #expect(recipe.processVersion == 2)
+        // A card this version doesn't know is skipped.
+        let newer = #"{"formatVersion": 3, "switchedOff": ["look", "sharpenMore"]}"#
+        #expect(try JSONDecoder().decode(EditRecipe.self, from: Data(newer.utf8)).switchedOff == [.look])
+    }
+
     @Test("Missing fields fall back to no adjustment")
     func missingFieldsDefault() throws {
         let json = #"{"formatVersion": 1, "basic": {"exposure": 1.5}}"#

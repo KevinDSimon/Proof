@@ -94,4 +94,19 @@ struct CopiedSettingsTests {
     func defaultItems() {
         #expect(SettingsItem.defaultItems == Set(SettingsItem.allCases).subtracting([.transform, .crop, .spotRemoval, .masks]))
     }
+
+    @Test("Pasting a card's settings brings its switch, and leaves the switches of cards not copied")
+    func pastesSwitches() {
+        var source = Self.source
+        source.switchedOff = [.look, .curve]
+        var target = Self.target
+        target.switchedOff = [.basic, .detail]
+        let pasted = target.pasting(CopiedSettings(from: source, items: [.look, .exposure, .sharpening]))
+        #expect(pasted.switchedOff == [.look])
+        #expect(pasted.look == source.look)
+        // Curve wasn't copied, so its switch stays as the target had it.
+        #expect(!pasted.switchedOff.contains(.curve))
+        // Copying no item of a card leaves its switch alone.
+        #expect(target.pasting(CopiedSettings(from: source, items: [.crop])).switchedOff == target.switchedOff)
+    }
 }
