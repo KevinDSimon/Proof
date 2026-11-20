@@ -10,7 +10,7 @@ Proof is an early test version. Things will be missing, and some will break. Rep
 
 You need a Mac with Apple silicon (M1 or later) running macOS 27 or later. Proof doesn't run on Intel Macs.
 
-1. Download `Proof-0.1.dmg` from the [latest release](https://github.com/KevinDSimon/Proof/releases/latest).
+1. Download the `.dmg` file from the [latest release](https://github.com/KevinDSimon/Proof/releases/latest).
 2. Open it and drag Proof to the Applications folder shown beside it.
 3. Open Proof from Applications. The first time, macOS asks you to confirm that you want to open an app downloaded from the internet.
 4. Choose File › Add Folder… (⌘O) and pick a folder of RAW photos. Proof sees only the folders you choose, and remembers them the next time it opens.
@@ -23,6 +23,8 @@ Proof opens the RAW formats macOS supports, including DNG and the formats of mos
 - Select a photo and press Return to edit it. Press ⌘↑, or the back button in the toolbar, to go back to the folder.
 - Drag the sliders in the panel on the right. Press \ to compare with the original.
 - Crop and straighten with C.
+- Remove dust spots with Q: click a spot to heal it, or drag over a hair or a scratch.
+- Add a mask with M to brighten or recolor one part of the photo, such as the sky or the subject.
 - Copy one photo's settings (⌘C) and paste them onto others (⌘V).
 - Export a few photos as JPEG with File › Export (⇧⌘E).
 
@@ -57,6 +59,7 @@ Your original photos are never changed. Edits go into a `.proof` file next to ea
 - Lens corrections from the camera's profile, manual distortion, chromatic aberration and lens vignetting
 - Perspective correction, automatic or guided by lines you draw
 - Crop, straighten, rotate and flip
+- Spot removal for dust and blemishes, as circles or strokes painted over hairs and scratches, healed or cloned from a source Proof picks and you can move
 - Masks: linear and radial gradients, a brush, and the photo's subject, each with its own exposure, tone, presence and color sliders
 - Before and after, undo, and a History panel to step back through changes
 - Copy and paste settings between photos
@@ -75,9 +78,9 @@ Your original photos are never changed. Edits go into a `.proof` file next to ea
 
 ## Roadmap
 
-The first version, v1, is nearly complete; this test build is part of it. Planned next:
+The first version, v1, is complete. This test build also includes the first parts of v1.1: spot removal and masks. Planned next:
 
-- **v1.1:** spot healing for dust, masks limited by brightness or color, and better automatic straightening
+- **v1.1:** masks limited by brightness or color, lens corrections from profiles made in Proof, and better automatic straightening
 - **v1.2:** presets, and virtual copies with side-by-side comparison
 - **Later:** matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF files, importing presets from other editors, and an iPad and iPhone version
 
