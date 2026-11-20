@@ -1,7 +1,7 @@
 # 0042. App icon
 
 Date: 2026-11-16
-Status: Accepted
+Status: Accepted; the drawing is superseded by [0045](0045-test-strip-icon.md)
 
 ## Context
 Issue #194: Proof had no app icon, so the Dock and Finder showed the generic one. The icon is a P whose bowl is a lens with five aperture blades, drawn in white on near-black. The source drawing placed it on its own rounded square, 912 points on a 1024-point canvas, which is not the macOS icon shape or grid.

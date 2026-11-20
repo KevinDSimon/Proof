@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Darker steps are drawn slightly taller so all five look the same height:
+       light areas look larger than dark ones of the same size. -->
+  <rect x="162" y="301" width="140" height="422" fill="#494949"/>
+  <rect x="302" y="302.5" width="140" height="419" fill="#707070"/>
+  <rect x="442" y="304" width="140" height="416" fill="#9A9A9A"/>
+  <rect x="582" y="305.5" width="140" height="413" fill="#C5C5C5"/>
+  <rect x="722" y="307" width="140" height="410" fill="#EEEEEE"/>
+</svg>
