@@ -5,7 +5,8 @@ import SwiftUI
 /// exported, a bar and Stop, then how many photos were exported, which failed and why, and Show in
 /// Finder. It stays open until the export ends and Done is clicked, so an export is never missed
 /// (#196). A render can't report how far it has got, so for one photo the bar runs without a
-/// value; for several it counts the photos done.
+/// value or percentage; for several it counts the photos done and shows the percentage beside it
+/// (#201, `ExportProgress`).
 struct ExportProgressView: View {
     let exports: ExportQueue
 
@@ -15,14 +16,25 @@ struct ExportProgressView: View {
                 Text(exports.total == 1 ? "Exporting 1 Photo" : "Exporting \(exports.position) of \(exports.total)")
                     .font(.headline)
                     .monospacedDigit()
-                Group {
-                    if exports.total == 1 {
-                        ProgressView()
-                    } else {
-                        ProgressView(value: exports.fractionDone)
+                if let fraction = exports.progress.fraction, let percent = exports.progress.percent {
+                    let label = (Double(percent) / 100).formatted(.percent)
+                    HStack(spacing: 8) {
+                        ProgressView(value: fraction)
+                            .progressViewStyle(.linear)
+                            .accessibilityLabel("Export progress")
+                            // Read as shown, rounded down, rather than the bar's own rounding.
+                            .accessibilityValue(label)
+                        Text(label)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 36, alignment: .trailing)
+                            .accessibilityHidden(true)
                     }
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .accessibilityLabel("Export progress")
                 }
-                .progressViewStyle(.linear)
                 // A render can't be stopped once it starts, so Stop takes effect after this photo.
                 Text(exports.wasCancelled ? "Stopping after this photo…" : exports.current ?? " ")
                     .foregroundStyle(.secondary)

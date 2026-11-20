@@ -50,7 +50,8 @@ final class ExportQueue {
     var isRunning: Bool { task != nil || reading > 0 }
     /// The toolbar shows the queue while it runs and until its summary is dismissed.
     var isVisible: Bool { total > 0 }
-    var fractionDone: Double { total > 0 ? Double(finished) / Double(total) : 0 }
+    /// Photos can't join while the export sheet is open, so `total` holds still and this only goes up.
+    var progress: ExportProgress { ExportProgress(total: total, finished: finished) }
     /// The number of the photo being exported, counting from 1.
     var position: Int { min(finished + 1, total) }
 
