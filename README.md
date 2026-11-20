@@ -4,36 +4,6 @@ Proof is a RAW photo editor for the Mac. It opens photos where they already are,
 
 ![Proof editing a photo, with the adjustment panel beside it](docs/images/edit.png)
 
-Proof is an early test version. Things will be missing, and some will break. Reports of what you find are the most useful thing at this stage.
-
-## Try it
-
-You need a Mac with Apple silicon (M1 or later) running macOS 27 or later. Proof doesn't run on Intel Macs.
-
-1. Download the `.dmg` file from the [latest release](https://github.com/KevinDSimon/Proof/releases/latest).
-2. Open it and drag Proof to the Applications folder shown beside it.
-3. Open Proof from Applications. The first time, macOS asks you to confirm that you want to open an app downloaded from the internet.
-4. Choose File › Add Folder… (⌘O) and pick a folder of RAW photos. Proof sees only the folders you choose, and remembers them the next time it opens.
-
-Proof opens the RAW formats macOS supports, including DNG and the formats of most current cameras. It doesn't open JPEG or HEIC files yet.
-
-### Things to try
-
-- Browse a folder in the grid. Rate photos with the 1–5 keys, flag them with P (pick) and X (reject), and filter by rating or flag from the toolbar.
-- Select a photo and press Return to edit it. Press ⌘↑, or the back button in the toolbar, to go back to the folder.
-- Drag the sliders in the panel on the right. Press \ to compare with the original.
-- Crop and straighten with C.
-- Remove dust spots with Q: click a spot to heal it, or drag over a hair or a scratch.
-- Add a mask with M to brighten or recolor one part of the photo, such as the sky or the subject.
-- Copy one photo's settings (⌘C) and paste them onto others (⌘V).
-- Export a few photos as JPEG with File › Export (⇧⌘E).
-
-Your original photos are never changed. Edits go into a `.proof` file next to each photo, and ratings and flags into an `.xmp` file, which other photo apps can read too. To undo everything Proof did to a folder, delete those files.
-
-### Reporting a problem
-
-[Open a bug report](https://github.com/KevinDSimon/Proof/issues/new/choose). Say what you did, what you expected and what happened instead. A screenshot, your Mac model and the camera that took the photo help.
-
 ## Features
 
 ![The photo browser with the folder list, thumbnail grid and filter](docs/images/browse.png)
@@ -76,15 +46,20 @@ Your original photos are never changed. Edits go into a `.proof` file next to ea
 - Several photos at once in the background, keeping camera details, rating and description
 - Saved export destinations for folders you export to often
 
-## Roadmap
+## Install
 
-The first version, v1, is complete. This test build also includes the first parts of v1.1: spot removal and masks. Planned next:
+Proof needs a Mac with Apple silicon (M1 or later) running macOS 27 or later.
 
-- **v1.1:** masks limited by brightness or color, lens corrections from profiles made in Proof, and better automatic straightening
-- **v1.2:** presets, and virtual copies with side-by-side comparison
-- **Later:** matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF files, importing presets from other editors, and an iPad and iPhone version
+1. Download the `.dmg` file from the [latest release](https://github.com/KevinDSimon/Proof/releases/latest).
+2. Open it and drag Proof to the Applications folder shown beside it.
+3. Open Proof from Applications. The first time, macOS asks you to confirm that you want to open an app downloaded from the internet.
+4. Choose File › Add Folder… (⌘O) and pick a folder of RAW photos. Proof sees only the folders you choose, and remembers them the next time it opens.
 
-Proof won't have a catalog or cloud sync. See [docs/roadmap.md](docs/roadmap.md) for the full plan.
+Proof opens the RAW formats macOS supports, including DNG and the formats of most current cameras.
+
+Your original photos are never changed. Edits go into a `.proof` file next to each photo, and ratings and flags into an `.xmp` file, which other photo apps can read too. To remove everything Proof added to a folder, delete those files.
+
+To report a problem, [open a bug report](https://github.com/KevinDSimon/Proof/issues/new/choose).
 
 ## Build from source
 
