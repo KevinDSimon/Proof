@@ -4,7 +4,7 @@ Date: 2026-11-16
 Status: Accepted
 
 ## Context
-Issue #169 adds a tool for removing small blemishes, mainly sensor dust: click a spot to cover it from a nearby area, with an adjustable size, and move or delete spots afterwards. Spots are stored in the edit recipe and have to stay on what they cover after a crop and at every render size. Core Image has no healing filter. Painted strokes, for hairs or wires, and a view that makes dust easier to find were left for later issues.
+Issue #169 adds a tool for removing small blemishes, mainly sensor dust: click a spot to cover it from a nearby area, with an adjustable size, and move or delete spots afterwards. Spots are stored in the edit recipe and have to stay on what they cover after a crop and at every render size. Core Image has no healing filter. Painted strokes, for hairs or wires, came later (decision 0047); a view that makes dust easier to find was left for a later issue.
 
 ## Decision
 - Each spot is a circle and a source circle of the same size. Positions are from 0 to 1 of the whole photo after lens corrections and perspective and before the crop; the radius is a fraction of the long edge. The crop's own point mapping (`Crop.photoPoint` and `resultPoint`) takes the tool's clicks to that space and back, so the turn, flips, straighten and rectangle don't move a spot.

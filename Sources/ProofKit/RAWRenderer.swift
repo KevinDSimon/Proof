@@ -199,9 +199,12 @@ public actor RAWRenderer {
 
     /// Where a new spot at `center` with `radius`, in `Spot`'s coordinates, takes from in the open
     /// photo: a nearby circle like its surroundings and free of detail, from
-    /// `SpotRemoval.bestSource`. The photo is measured uncropped, with `recipe`'s spots already
-    /// healed, so one spot doesn't take another's dust. `nil` when no circle nearby fits on the photo.
-    public func spotSource(center: CGPoint, radius: Double, mode: Spot.Mode = .heal, recipe: EditRecipe) throws -> CGPoint? {
+    /// `SpotRemoval.bestSource`. For a stroke, `path` is its path and `center` its first point,
+    /// and the stroke is moved as a whole (`SpotRemoval.bestOffset`). The photo is measured
+    /// uncropped, with `recipe`'s spots already healed, so one spot doesn't take another's dust.
+    /// `nil` when no area nearby fits on the photo.
+    public func spotSource(center: CGPoint, radius: Double, mode: Spot.Mode = .heal, path: [CGPoint] = [],
+                           recipe: EditRecipe) throws -> CGPoint? {
         let filter = try decoder(for: recipe)
         var measured = Self.measuring(recipe)
         measured.crop = nil
@@ -210,21 +213,30 @@ public actor RAWRenderer {
         guard photo.width > 0, photo.height > 0 else { throw RAWRendererError.renderFailed }
         let long = max(photo.width, photo.height)
         let reach = radius * 5.4 * long
-        // The canvas's scale when the spot is a few pixels across at it, so the decode it cached
-        // is reused: a new scale decodes the photo again, which takes most of the time. Otherwise
-        // out to the farthest candidate's ring is about 160 pixels across.
+        let shape = path.count > 1 ? path : [center]
+        // The path's span in pixels of the photo; none for a circle.
+        let minX = shape.map(\.x).min()!, maxX = shape.map(\.x).max()!
+        let minY = shape.map(\.y).min()!, maxY = shape.map(\.y).max()!
+        let span = max((maxX - minX) * photo.width, (maxY - minY) * photo.height)
+        // The canvas's scale when the spot is a few pixels across at it, and a long stroke's area
+        // isn't too large to measure, so the decode it cached is reused: a new scale decodes the
+        // photo again, which takes most of the time. Otherwise out to the farthest candidate's
+        // ring is about 160 pixels across, and a stroke's area at most 1200.
+        let largest = 1200.0
         let current = CGFloat(filter.scaleFactor)
         let shownRadius = radius * long * current
-        if !(4...40).contains(shownRadius) {
-            filter.scaleFactor = Float(min(160 / (reach * 2), 1))
+        if !(4...40).contains(shownRadius) || (span + reach * 2) * current > largest {
+            filter.scaleFactor = Float(min(160 / (reach * 2), largest / (span + reach * 2), 1))
         }
         guard let image = Self.apply(measured, to: filter, asShot: asShot, cameraDetail: cameraDetail, cameraLens: cameraLens) else {
             throw RAWRendererError.renderFailed
         }
         let full = image.extent.integral
         let scale = full.width / photo.width
-        let x = full.minX + center.x * full.width, y = full.maxY - center.y * full.height
-        let extent = CGRect(x: x - reach * scale, y: y - reach * scale, width: reach * scale * 2, height: reach * scale * 2)
+        let left = full.minX + minX * full.width, right = full.minX + maxX * full.width
+        let top = full.maxY - minY * full.height, bottom = full.maxY - maxY * full.height
+        let extent = CGRect(x: left - reach * scale, y: bottom - reach * scale,
+                            width: right - left + reach * scale * 2, height: top - bottom + reach * scale * 2)
             .integral.intersection(full)
         let width = Int(extent.width), height = Int(extent.height)
         guard width > 0, height > 0 else { throw RAWRendererError.renderFailed }
@@ -238,8 +250,13 @@ public actor RAWRenderer {
         }
         let region = CGRect(x: (extent.minX - full.minX) / full.width, y: (full.maxY - extent.maxY) / full.height,
                             width: extent.width / full.width, height: extent.height / full.height)
-        return SpotRemoval.bestSource(center: center, radius: radius, mode: mode, aspect: photo.width / photo.height,
+        guard path.count > 1 else {
+            return SpotRemoval.bestSource(center: center, radius: radius, mode: mode, aspect: photo.width / photo.height,
+                                          luminance: luminance, width: width, height: height, region: region)
+        }
+        return SpotRemoval.bestOffset(path: path, radius: radius, mode: mode, aspect: photo.width / photo.height,
                                       luminance: luminance, width: width, height: height, region: region)
+            .map { CGPoint(x: center.x + $0.dx, y: center.y + $0.dy) }
     }
 
     /// A mask of the open photo's main subject, from `SubjectDetection`, for a Subject mask. Vision
