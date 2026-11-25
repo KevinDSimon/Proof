@@ -35,15 +35,20 @@ public struct ThumbnailGrid: View {
     @FocusState private var isFocused: Bool
 
     #if os(macOS)
-    private static let cellSize: CGFloat = 160
+    private static let sizes = ThumbnailSize.mac
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
     #else
-    // Three columns on the narrowest iPhone, as in Photos.
-    private static let cellSize: CGFloat = 100
+    private static let sizes = ThumbnailSize.touch
     private static let spacing: CGFloat = 8
     private static let margin: CGFloat = 16
     #endif
+
+    /// The cell size a pinch sets, kept between launches.
+    @AppStorage("thumbnailSize") private var storedCellSize = Double(Self.sizes.standard)
+    /// The cell size when the current pinch began.
+    @State private var pinchStart: CGFloat?
+    private var cellSize: CGFloat { Self.sizes.clamped(storedCellSize) }
 
     public var body: some View {
         ScrollViewReader { scroller in
@@ -67,6 +72,18 @@ public struct ThumbnailGrid: View {
             #if os(macOS)
             .scrollEdgeEffectStyle(.hard, for: .top)
             #endif
+            // Pinching changes the thumbnail size, on a trackpad or a touch screen, also below the
+            // last row. Scrolling still works.
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { value in
+                        let start = pinchStart ?? cellSize
+                        pinchStart = start
+                        storedCellSize = Double(Self.sizes.pinched(from: start, by: value.magnification))
+                    }
+                    .onEnded { _ in pinchStart = nil }
+            )
             // The grid's width comes from the window, never from the photos inside it.
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
@@ -135,14 +152,14 @@ public struct ThumbnailGrid: View {
         // the highlight; clicking a photo or pressing Tab moves focus here.
         .onAppear { if library.browse.selectedPhoto != nil { isFocused = true } }
         // Loaded again when the LUT library changes, since edited thumbnails show looks.
-        .task(id: ThumbnailLoad(photos: allPhotos.map(\.id), lutGeneration: library.looks.generation)) {
+        .task(id: ThumbnailLoad(photos: allPhotos, lutGeneration: library.looks.generation)) {
             await loadThumbnails()
         }
     }
 
     private var columnCount: Int {
         let usable = layoutWidth - 2 * Self.margin + Self.spacing
-        return max(1, Int(usable / (Self.cellSize + Self.spacing)))
+        return max(1, Int(usable / (cellSize + Self.spacing)))
     }
 
     /// The columns share the layout width, as flexible columns would.
@@ -161,11 +178,26 @@ public struct ThumbnailGrid: View {
                         .resizable()
                         .scaledToFit()
                         .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
-                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, stack: stack,
+                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, isInCloud: photo.photo.isInCloud,
+                                  isDownloading: library.downloadingPhotos.contains(photo.id), stack: stack,
                                   isStackOpen: library.isStackOpen(photo.id),
                                   toggleStack: { library.toggleStackAnimated(of: photo.id) }, size: 10)
                         .stackLayers(library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] },
                                      inStack: stack != nil, step: 5)
+                } else if photo.photo.isInCloud {
+                    // Not downloaded and iCloud has no thumbnail for it (decision 0050).
+                    RoundedRectangle(cornerRadius: SelectionOutline.photoCornerRadius)
+                        .fill(.quaternary)
+                        .overlay {
+                            if library.downloadingPhotos.contains(photo.id) {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "icloud.and.arrow.down")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .help("In iCloud. Open it to download it.")
                 } else if finished.contains(photo.id) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
@@ -211,7 +243,7 @@ public struct ThumbnailGrid: View {
         .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata,
-                                                                 isEdited: photo.photo.isEdited, stack: stack))
+                                                                 isEdited: photo.photo.isEdited, stack: stack, isInCloud: photo.photo.isInCloud))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(named: "Edit") {
             library.browse.selectedPhoto = photo.id
@@ -244,6 +276,7 @@ public struct ThumbnailGrid: View {
     public static func loadThumbnails(of photos: [ListedPhoto], images: Binding<[PhotoReference: CGImage]>,
                                finished: Binding<Set<PhotoReference>>, library: Library) async {
         let ids = Set(photos.map(\.id))
+        let inCloud = Set(photos.filter(\.photo.isInCloud).map(\.id))
         images.wrappedValue = images.wrappedValue.filter { ids.contains($0.key) }
         finished.wrappedValue.formIntersection(ids)
         let unfinished = photos.filter { !finished.wrappedValue.contains($0.id) }
@@ -254,7 +287,9 @@ public struct ThumbnailGrid: View {
         let edited = Set(urls.filter(\.2).map(\.1))
         for await (url, image) in ThumbnailCache.shared.thumbnails(for: urls.map(\.1), edited: edited) {
             guard let id = references[url] else { continue }
-            finished.wrappedValue.insert(id)
+            // A photo in iCloud shows the system's thumbnail until it is downloaded, when the load
+            // runs again and its own thumbnail replaces it.
+            if !inCloud.contains(id) { finished.wrappedValue.insert(id) }
             if let image { images.wrappedValue[id] = image }
         }
     }
@@ -263,10 +298,13 @@ public struct ThumbnailGrid: View {
 /// What the grid and the filmstrip load thumbnails for: their photos, at a LUT library generation.
 public struct ThumbnailLoad: Hashable {
     var photos: [PhotoReference]
+    /// Photos in iCloud aren't loaded, so a download loads again.
+    var inCloud: Set<PhotoReference>
     var lutGeneration: Int
 
-    public init(photos: [PhotoReference], lutGeneration: Int) {
-        self.photos = photos
+    public init(photos: [ListedPhoto], lutGeneration: Int) {
+        self.photos = photos.map(\.id)
+        self.inCloud = Set(photos.filter(\.photo.isInCloud).map(\.id))
         self.lutGeneration = lutGeneration
     }
 }

@@ -91,6 +91,11 @@ private struct PhotoView: View {
 
     var body: some View {
         let photo = library.browse.selectedPhoto
+        // A photo in iCloud shows the system's thumbnail while it downloads, then its own
+        // (decision 0050).
+        let isInCloud = photo.flatMap { photo in
+            library.contents[photo.folder]?.photos.first { $0.name == photo.name }?.isInCloud
+        } ?? false
         ZStack {
             Color.interfaceBackground.ignoresSafeArea()
             if let image {
@@ -98,6 +103,11 @@ private struct PhotoView: View {
                     .resizable()
                     .scaledToFit()
                     .padding()
+                    .overlay {
+                        if isInCloud { downloading }
+                    }
+            } else if isInCloud {
+                downloading
             } else {
                 ProgressView()
             }
@@ -105,10 +115,24 @@ private struct PhotoView: View {
         .navigationTitle(library.windowTitle)
         .navigationSubtitle(library.windowSubtitle)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: photo) {
+        .task(id: PhotoLoad(photo: photo, isInCloud: isInCloud)) {
             image = nil
             guard let photo, let url = library.url(ofPhoto: photo.name, in: photo.folder) else { return }
             image = await ThumbnailCache.shared.thumbnail(for: url, edit: nil)
         }
     }
+}
+
+private extension PhotoView {
+    var downloading: some View {
+        ProgressView("Downloading from iCloud…")
+            .padding()
+            .background(.regularMaterial, in: .rect(cornerRadius: 12))
+    }
+}
+
+/// What the photo screen loads: the photo, again once it has downloaded from iCloud.
+private struct PhotoLoad: Hashable {
+    var photo: PhotoReference?
+    var isInCloud: Bool
 }

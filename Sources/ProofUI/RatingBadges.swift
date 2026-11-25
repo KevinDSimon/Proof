@@ -11,7 +11,9 @@ public extension View {
     /// fits even a narrow portrait thumbnail in the filmstrip. Only a flagged photo shows a flag;
     /// a rejected photo is dimmed instead, badges and all, as Lightroom does.
     /// `toggleStack` opens or collapses the stack from the first photo's count badge.
-    func ratingBadges(_ metadata: PhotoMetadata?, isEdited: Bool, stack: StackMark? = nil,
+    /// A cloud in the bottom-right corner marks a photo in iCloud that isn't on this device.
+    func ratingBadges(_ metadata: PhotoMetadata?, isEdited: Bool, isInCloud: Bool = false, isDownloading: Bool = false,
+                      stack: StackMark? = nil,
                       isStackOpen: Bool = false, toggleStack: @escaping () -> Void = {}, size: CGFloat) -> some View {
         overlay(alignment: .topLeading) {
             HStack(spacing: 0) {
@@ -54,6 +56,17 @@ public extension View {
                     Text("\(rating)").monospacedDigit()
                 }
                 .badgeStyle(size: size)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            // In iCloud and not on this device (decision 0050); a spinner while it downloads.
+            if isDownloading {
+                ProgressView()
+                    .controlSize(.small)
+                    .badgeStyle(size: size)
+            } else if isInCloud {
+                Image(systemName: "icloud")
+                    .badgeStyle(size: size)
             }
         }
         .opacity(metadata?.flag == .rejected ? 0.35 : 1)
@@ -142,7 +155,7 @@ public struct FlagIcon: View {
 public enum RatingBadges {
     /// The photo's name followed by its rating, flag and whether it is edited, for VoiceOver.
     public static func accessibilityLabel(name: String, metadata: PhotoMetadata?, isEdited: Bool,
-                                   stack: StackMark? = nil) -> String {
+                                   stack: StackMark? = nil, isInCloud: Bool = false) -> String {
         var parts = [name]
         switch stack {
         case .first(let count): parts.append("stack of \(count)")
@@ -158,6 +171,7 @@ public enum RatingBadges {
             }
         }
         if isEdited { parts.append("edited") }
+        if isInCloud { parts.append("in iCloud, not downloaded") }
         return parts.joined(separator: ", ")
     }
 

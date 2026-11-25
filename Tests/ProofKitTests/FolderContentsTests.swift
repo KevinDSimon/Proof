@@ -34,6 +34,22 @@ struct FolderContentsTests {
         #expect(contents.photos.map(\.name) == ["IMG_2.DNG", "web.jpg", "IMG_10.CR3"].sorted { $0.localizedStandardCompare($1) == .orderedAscending })
     }
 
+    @Test("Only a file in iCloud with no copy on this device counts as in the cloud")
+    func cloudStatus() {
+        #expect(FolderContents.isInCloud(isUbiquitous: true, status: .notDownloaded))
+        #expect(!FolderContents.isInCloud(isUbiquitous: true, status: .downloaded))
+        #expect(!FolderContents.isInCloud(isUbiquitous: true, status: .current))
+        #expect(!FolderContents.isInCloud(isUbiquitous: false, status: nil))
+        #expect(!FolderContents.isInCloud(isUbiquitous: nil, status: .notDownloaded))
+    }
+
+    @Test("Photos on this device are listed as downloaded")
+    func localPhotosAreDownloaded() throws {
+        try make("IMG_1.DNG")
+        #expect(try FolderContents.read(at: root).photos.map(\.isInCloud) == [false])
+        #expect(CloudDownload.isDownloaded(root.appendingPathComponent("IMG_1.DNG")))
+    }
+
     @Test("JPEG and HEIC photos are listed with RAW photos; PNG and TIFF are not")
     func listsJPEGAndHEIC() throws {
         try make("A.DNG", "B.jpg", "C.JPEG", "D.HEIC", "E.heif", "F.png", "G.tif", "H.TIFF")

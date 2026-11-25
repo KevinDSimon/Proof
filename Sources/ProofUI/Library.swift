@@ -123,6 +123,45 @@ public final class Library {
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
             closedGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
+            if isEditing, let photo = browse.selectedPhoto { downloadAround(photo) }
+        }
+    }
+
+    /// The selected photo is in iCloud and not on this device yet, so Edit waits for its download.
+    public var isSelectedPhotoInCloud: Bool {
+        guard let photo = browse.selectedPhoto else { return false }
+        return contents[photo.folder]?.photos.first { $0.name == photo.name }?.isInCloud == true
+    }
+
+    /// Photos in iCloud being downloaded because they were opened.
+    public private(set) var downloadingPhotos: Set<PhotoReference> = []
+
+    /// Downloads the opened photo if it is in iCloud and not on this device, and the photos before
+    /// and after it, so moving to them is quick. No other photo is downloaded (decision 0050).
+    private func downloadAround(_ photo: PhotoReference) {
+        downloadIfInCloud(photo, reportingFailure: true)
+        let shown = shownPhotos.map(\.id)
+        guard let index = shown.firstIndex(of: photo) else { return }
+        for neighbor in [index - 1, index + 1] where shown.indices.contains(neighbor) {
+            downloadIfInCloud(shown[neighbor], reportingFailure: false)
+        }
+    }
+
+    /// Downloads a photo that is in iCloud and not on this device, then reads its folder again so
+    /// its thumbnail and metadata show.
+    private func downloadIfInCloud(_ photo: PhotoReference, reportingFailure: Bool) {
+        guard !downloadingPhotos.contains(photo),
+              contents[photo.folder]?.photos.first(where: { $0.name == photo.name })?.isInCloud == true,
+              let url = url(ofPhoto: photo.name, in: photo.folder) else { return }
+        downloadingPhotos.insert(photo)
+        Task {
+            let downloaded = await CloudDownload.download(url)
+            downloadingPhotos.remove(photo)
+            if downloaded {
+                refresh(photo.folder)
+            } else if reportingFailure {
+                errorMessage = "“\(photo.name)” couldn't be downloaded from iCloud."
+            }
         }
     }
     /// The edits of photos opened in Edit since Proof started.
@@ -430,7 +469,9 @@ public final class Library {
     private func readEmbeddedMetadata() {
         metadataTask?.cancel()
         let shown = selection
-        let missing = Dictionary(grouping: listedPhotos.filter { $0.photo.metadata == nil }, by: \.folder)
+        // Photos in iCloud would be downloaded to be read, so they wait until they are opened.
+        let missing = Dictionary(grouping: listedPhotos.filter { $0.photo.metadata == nil && !$0.photo.isInCloud },
+                                 by: \.folder)
         let folders = listedPhotos.map(\.folder).reduce(into: [FileReference]()) { order, folder in
             if missing[folder] != nil, order.last != folder { order.append(folder) }
         }
