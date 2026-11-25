@@ -70,4 +70,39 @@ struct ListedPhotoTests {
         browse.move(.left, in: fourAndUp, columns: fourAndUp.count)
         #expect(browse.selectedPhoto == photos[0].id)
     }
+
+    @Test("A RAW and the JPEG or HEIC of the same name are a stack; the RAW shows the count")
+    func stacks() {
+        let here = folder("Trip")
+        let photos = ["IMG_1.CR3", "IMG_1.JPG", "IMG_2.DNG", "IMG_3.NEF", "img_3.heic", "IMG_3.JPG", "IMG_4.JPG"]
+            .map { ListedPhoto(folder: here, photo: FolderContents.Photo(name: $0, isEdited: false)) }
+        let marks = StackMark.marks(in: photos)
+        #expect(photos.map { marks[$0.id] } == [.first(count: 2), .member, nil, .first(count: 3), .member, .member, nil])
+    }
+
+    @Test("A JPEG is unmarked when its RAW is filtered out or in another folder")
+    func noStackWithoutRAW() {
+        let a = ListedPhoto(folder: folder("A"), photo: FolderContents.Photo(name: "IMG_1.CR3", isEdited: false))
+        let b = ListedPhoto(folder: folder("B"), photo: FolderContents.Photo(name: "IMG_1.JPG", isEdited: false))
+        let c = ListedPhoto(folder: folder("B"), photo: FolderContents.Photo(name: "IMG_1.HEIC", isEdited: false))
+        #expect(StackMark.marks(in: [a, b]).isEmpty)
+        #expect(StackMark.marks(in: [b, c]).isEmpty)
+    }
+
+    @Test("A collapsed stack shows only its first photo; an open one shows all of them")
+    func collapsedStacks() {
+        let here = folder("Trip")
+        let photos = ["IMG_1.CR3", "IMG_1.JPG", "IMG_2.NEF", "IMG_2.HEIC", "IMG_2.JPG", "IMG_3.JPG"]
+            .map { ListedPhoto(folder: here, photo: FolderContents.Photo(name: $0, isEdited: false)) }
+        let marks = StackMark.marks(in: photos)
+        let second = photos[2].id
+
+        #expect(StackMark.shown(photos, marks: marks, open: []).map(\.name) == ["IMG_1.CR3", "IMG_2.NEF", "IMG_3.JPG"])
+        #expect(StackMark.shown(photos, marks: marks, open: [second]).map(\.name)
+                == ["IMG_1.CR3", "IMG_2.NEF", "IMG_2.HEIC", "IMG_2.JPG", "IMG_3.JPG"])
+        #expect(StackMark.first(of: photos[4].id, in: photos, marks: marks) == second)
+        #expect(StackMark.first(of: second, in: photos, marks: marks) == second)
+        #expect(StackMark.first(of: photos[5].id, in: photos, marks: marks) == nil)
+    }
 }
+

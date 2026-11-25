@@ -52,7 +52,7 @@ struct ProofApp: App {
                 .keyboardShortcut("v")
                 Button("Select All") {
                     if library.canSelectPhotos && !Self.isTyping {
-                        library.browse.selectAll(library.visiblePhotos)
+                        library.browse.selectAll(library.shownPhotos)
                     } else {
                         Self.sendToTextField(#selector(NSText.selectAll(_:)))
                     }
@@ -130,7 +130,7 @@ struct ProofApp: App {
             CommandMenu("Photo") {
                 Button("Edit") { library.browse.edit() }
                     .keyboardShortcut(.return, modifiers: [])
-                    .disabled(library.isEditing || library.browse.selectedPhoto == nil)
+                    .disabled(library.isEditing || library.browse.selectedPhoto?.isEditable != true)
                 // ⌘↑, as Finder's Enclosing Folder. Esc only closes tools, such as the crop tool, so it
                 // never leaves Edit by surprise.
                 Button("Back to Folder") { library.browse.finishEditing() }
@@ -292,6 +292,8 @@ struct ContentView: View {
                                 // Only once fully open; while sliding it may be narrower.
                                 if width >= 300 { library.infoPanelWidth = width }
                             }
+                    } else if library.browse.selectedPhoto?.isEditable == false {
+                        notEditable
                     } else if library.isCropping {
                         CropInspector(library: library, renderer: renderer)
                     } else if library.isRemovingSpots {
@@ -447,7 +449,7 @@ struct ContentView: View {
             if isFilmstripEmpty {
                 filmstripEmptyState
             } else {
-                Filmstrip(library: library, photos: library.visiblePhotos)
+                Filmstrip(library: library, photos: library.shownPhotos)
             }
         }
         .background(RoundedRectangle(cornerRadius: InspectorCard<EmptyView>.cornerRadius, style: .continuous)
@@ -479,6 +481,14 @@ struct ContentView: View {
         .frame(height: Filmstrip.height)
     }
 
+    /// In place of the photo and the inspector's controls for a JPEG or HEIC, reached from the
+    /// filmstrip in Edit. Edit doesn't open them until #239.
+    private var notEditable: some View {
+        ContentUnavailableView("Can't Edit This Photo Yet", systemImage: "photo",
+                               description: Text("Proof edits RAW photos. JPEG and HEIC photos can be rated and flagged in Browse."))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     @ViewBuilder private var editor: some View {
         Group {
             if let renderer, let url = library.selectedPhotoURL {
@@ -486,9 +496,15 @@ struct ContentView: View {
                     // The same margin while cropping, so the photo doesn't shrink when the tool opens: the
                     // handles are drawn inside the crop border, and their 12 pt reach fits in the
                     // 16 pt below the photo too.
-                    EditCanvas(library: library, url: url, renderer: renderer)
-                        .padding([.top, .horizontal], 24)
-                        .padding(.bottom, 16)
+                    Group {
+                        if library.browse.selectedPhoto?.isEditable == false {
+                            notEditable
+                        } else {
+                            EditCanvas(library: library, url: url, renderer: renderer)
+                        }
+                    }
+                    .padding([.top, .horizontal], 24)
+                    .padding(.bottom, 16)
                     if library.isFilmstripShown {
                         filmstripCard
                             .padding([.horizontal, .bottom], 24)
@@ -574,7 +590,7 @@ struct ContentView: View {
             ContentUnavailableView {
                 Label("No Folders", systemImage: "folder")
             } description: {
-                Text("Add a folder of RAW photos to browse and edit them.")
+                Text("Add a folder of photos to browse and edit them.")
             } actions: {
                 Button("Add Folder…") { library.requestFolder(.add) }
             }
@@ -597,10 +613,10 @@ struct ContentView: View {
                 if library.contents[selection] != nil {
                     if library.visiblePhotos.isEmpty {
                         ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                               description: Text(library.filter.isEmpty ? "There are no RAW photos to show in this folder."
+                                               description: Text(library.filter.isEmpty ? "There are no photos to show in this folder."
                                                                                         : "No photos in this folder match the filter."))
                     } else {
-                        ThumbnailGrid(library: library, photos: library.visiblePhotos, allPhotos: library.listedPhotos)
+                        ThumbnailGrid(library: library, photos: library.shownPhotos, allPhotos: library.listedPhotos)
                     }
                 } else {
                     ProgressView()
@@ -619,12 +635,12 @@ struct ContentView: View {
             ContentUnavailableView("No Folders Available", systemImage: "externaldrive.badge.xmark",
                                    description: Text("Connect the drives or network volumes that hold your folders."))
         } else if !library.visiblePhotos.isEmpty {
-            ThumbnailGrid(library: library, photos: library.visiblePhotos, allPhotos: library.listedPhotos)
+            ThumbnailGrid(library: library, photos: library.shownPhotos, allPhotos: library.listedPhotos)
         } else if library.isReadingAllPhotos {
             ProgressView()
         } else {
             ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                   description: Text(library.activeFilter.isEmpty ? "There are no RAW photos to show in your folders."
+                                   description: Text(library.activeFilter.isEmpty ? "There are no photos to show in your folders."
                                                                                   : "No photos in your folders match."))
         }
     }

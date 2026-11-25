@@ -90,9 +90,12 @@ public struct PhotoMetadata: Equatable, Sendable {
 
     /// The sidecar names apps use for `photoName`, such as `IMG_1.xmp` (Lightroom, Photomator,
     /// Capture One) and `IMG_1.DNG.xmp` (darktable, digiKam), lowercased for matching on disks
-    /// that may or may not ignore case.
-    static func sidecarKeys(for photoName: String) -> [String] {
+    /// that may or may not ignore case. A JPEG or HEIC `besideRAW`, a RAW of the same name, reads
+    /// only `IMG_1.JPG.xmp`: `IMG_1.xmp` belongs to the RAW (decision 0049).
+    static func sidecarKeys(for photoName: String, besideRAW: Bool) -> [String] {
         let base = (photoName as NSString).deletingPathExtension
-        return [base + ".xmp", photoName + ".xmp"].map { $0.lowercased() }
+        let own = photoName + ".xmp"
+        let names = besideRAW && !FolderContents.isRAW(name: photoName) ? [own] : [base + ".xmp", own]
+        return names.map { $0.lowercased() }
     }
 }

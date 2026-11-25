@@ -53,7 +53,7 @@ Proof needs a Mac with Apple silicon (M1 or later) running macOS 27 or later.
 1. Download the `.dmg` file from the [latest release](https://github.com/KevinDSimon/Proof/releases/latest).
 2. Open it and drag Proof to the Applications folder shown beside it.
 3. Open Proof from Applications. The first time, macOS asks you to confirm that you want to open an app downloaded from the internet.
-4. Choose File › Add Folder… (⌘O) and pick a folder of RAW photos. Proof sees only the folders you choose, and remembers them the next time it opens.
+4. Choose File › Add Folder… (⌘O) and pick a folder of RAW, JPEG or HEIC photos. JPEG and HEIC photos can be rated and flagged; editing them comes in a later version. Proof sees only the folders you choose, and remembers them the next time it opens.
 
 Proof opens the RAW formats macOS supports, including DNG and the formats of most current cameras.
 

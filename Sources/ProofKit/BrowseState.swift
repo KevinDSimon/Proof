@@ -124,9 +124,10 @@ public struct BrowseState: Equatable, Sendable {
             ?? photos[..<index].last { selection.contains($0.id) }?.id
     }
 
-    /// Enters Edit for the selected photo. Without a selection it stays in Browse.
+    /// Enters Edit for the selected photo. Without a selection, or for a JPEG or HEIC photo, which
+    /// can't be edited until #239, it stays in Browse.
     public mutating func edit() {
-        if selectedPhoto != nil { mode = .editing }
+        if selectedPhoto?.isEditable == true { mode = .editing }
     }
 
     /// Returns to Browse with the same photo selected.
