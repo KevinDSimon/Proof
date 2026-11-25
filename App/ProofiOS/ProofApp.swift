@@ -120,7 +120,15 @@ struct ContentView: View {
             }
             // The filter stays at hand while selecting; photos it hides are deselected, so Rating
             // and Flag never reach photos out of sight.
-            ToolbarItem { FilterButton(library: library) }
+            ToolbarItem {
+                Menu {
+                    FilterMenu(library: library)
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease").filterBadge(library.filter)
+                }
+                .accessibilityLabel("Filter")
+                .accessibilityValue(library.filter.filtersOnDescription)
+            }
             ToolbarSpacer(.fixed)
             // The one filled use of the highlight color: the button that ends selecting, as in Notes.
             ToolbarItem {
@@ -151,22 +159,10 @@ struct ContentView: View {
                         if !library.filter.isEmpty { Text(library.filter.summary) }
                     }
                 } label: {
-                    // A yellow badge counts the filter parts that are set, since the count under
-                    // the grid may be out of sight. The system's toolbar badge is always red.
-                    Image(systemName: "ellipsis")
-                        .overlay(alignment: .topTrailing) {
-                            if !library.filter.isEmpty {
-                                Text("\(max(library.filter.activeCount, 1))")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.black)
-                                    .frame(minWidth: 16, minHeight: 16)
-                                    .background(Color.highlight, in: .circle)
-                                    .offset(x: 12, y: -12)
-                            }
-                        }
+                    Image(systemName: "ellipsis").filterBadge(library.filter)
                 }
                 .accessibilityLabel("More")
-                .accessibilityValue(library.filter.isEmpty ? "" : "\(max(library.filter.activeCount, 1)) filters on")
+                .accessibilityValue(library.filter.filtersOnDescription)
             }
         }
     }
@@ -183,6 +179,33 @@ struct ContentView: View {
         let count = library.browse.selectedPhotos.count
         // As in Notes; the count of photos is under the grid.
         return count == 0 ? "Select Photos" : "\(count) Selected"
+    }
+}
+
+private extension View {
+    /// A yellow badge counting the filter parts that are set, on the button that holds the
+    /// filter, since the count under the grid may be out of sight. The system's toolbar badge
+    /// is always red (decision 0041).
+    func filterBadge(_ filter: FilterCriteria) -> some View {
+        overlay(alignment: .topTrailing) {
+            if !filter.isEmpty {
+                Text("\(filter.setParts)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .frame(minWidth: 16, minHeight: 16)
+                    .background(Color.highlight, in: .circle)
+                    .offset(x: 12, y: -12)
+            }
+        }
+    }
+}
+
+private extension FilterCriteria {
+    /// How many parts are set; a filter that matches nothing counts as one.
+    var setParts: Int { max(activeCount, 1) }
+
+    var filtersOnDescription: String {
+        isEmpty ? "" : "\(setParts) \(setParts == 1 ? "filter" : "filters") on"
     }
 }
 
