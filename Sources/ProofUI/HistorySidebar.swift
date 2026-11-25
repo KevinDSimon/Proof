@@ -1,15 +1,18 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The photo's History panel in Edit (#56): each change since it was opened, newest first, with
 /// Original at the bottom and Opened above it when the photo already had an edit. Clicking a step
 /// shows the photo as it was then, as Undo and Redo do. The steps last until Proof quits, as undo
 /// does; they aren't saved with the edit. Original is there after a restart too.
-struct HistorySidebar: View {
+public struct HistorySidebar: View {
     let library: Library
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         let history = library.selectedEdit?.history
         let steps = Array((history?.steps ?? []).enumerated()).reversed()
         List(selection: Binding(get: { history?.currentIndex },

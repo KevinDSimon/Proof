@@ -1,5 +1,4 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// One group of the inspector as a card with its title inside, as Pixelmator Pro lays out its
@@ -8,17 +7,17 @@ import SwiftUI
 /// `foldedCards`, a titled card also has a disclosure arrow that folds it. The cards are laid out
 /// by hand rather than as a grouped `Form`, which on macOS removes the filled background from
 /// pop-up buttons inside it.
-struct InspectorCard<Content: View>: View {
+public struct InspectorCard<Content: View>: View {
     /// Space between cards.
-    static var spacing: CGFloat { 16 }
+    public static var spacing: CGFloat { 16 }
     /// Space between the controls inside a card, and around them.
-    static var controlSpacing: CGFloat { 14 }
-    static var padding: CGFloat { 16 }
+    public static var controlSpacing: CGFloat { 14 }
+    public static var padding: CGFloat { 16 }
     /// About the grouped form's cards on macOS 26, which these replace.
-    static var cornerRadius: CGFloat { 14 }
+    public static var cornerRadius: CGFloat { 14 }
     /// The names of controls inside a card: between the primary and secondary label colors, which
     /// macOS has no stop for, so the card's title reads first but the names don't look dull.
-    static var labelColor: Color { Color.primary.opacity(0.75) }
+    public static var labelColor: Color { Color.primary.opacity(0.75) }
 
     var title: String?
     var isOn: Binding<Bool>?
@@ -29,7 +28,16 @@ struct InspectorCard<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.foldedCards) private var foldedCards
 
-    var body: some View {
+    public init(title: String? = nil, isOn: Binding<Bool>? = nil, canReset: Bool = false, reset: (() -> Void)? = nil,
+                @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.isOn = isOn
+        self.canReset = canReset
+        self.reset = reset
+        self.content = content
+    }
+
+    public var body: some View {
         Group {
             if let title, let foldedCards {
                 // The same disclosure arrow as the Info card. It folds the card apart from the
@@ -111,7 +119,7 @@ struct InspectorCard<Content: View>: View {
 
     /// The card's gray, a step lighter than the canvas in the dark appearance and darker in the light.
     /// Neutral grays match in Display P3 and sRGB, like the canvas's own.
-    static func fillGray(for colorScheme: ColorScheme) -> Double {
+    public static func fillGray(for colorScheme: ColorScheme) -> Double {
         colorScheme == .dark ? 0.18 : 0.95
     }
 }
@@ -119,19 +127,19 @@ struct InspectorCard<Content: View>: View {
 /// A control with its name above it, as the sliders have theirs, so every name in a card starts
 /// at the same edge and reads down one column. `status` sits at the end of the name's line, such
 /// as a spinner or a short note, so it never adds a line and moves what follows.
-struct InspectorField<Content: View, Status: View>: View {
+public struct InspectorField<Content: View, Status: View>: View {
     let title: String
     @ViewBuilder var status: () -> Status
     @ViewBuilder var content: () -> Content
 
-    init(_ title: String, @ViewBuilder status: @escaping () -> Status = { EmptyView() },
+    public init(_ title: String, @ViewBuilder status: @escaping () -> Status = { EmptyView() },
          @ViewBuilder content: @escaping () -> Content) {
         self.title = title
         self.status = status
         self.content = content
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text(title)
@@ -147,12 +155,12 @@ struct InspectorField<Content: View, Status: View>: View {
     }
 }
 
-extension EnvironmentValues {
+public extension EnvironmentValues {
     /// Which cards are folded, for a panel whose titled cards can fold; `nil` where they can't.
     @Entry var foldedCards: Binding<FoldedCards>? = nil
 }
 
-extension Library {
+public extension Library {
     /// A card's switch for `group`.
     func isOnBinding(_ group: AdjustmentGroup) -> Binding<Bool> {
         Binding(get: { self.isOn(group) }, set: { self.setOn(group, $0) })
@@ -160,10 +168,14 @@ extension Library {
 }
 
 /// The inspector's cards in a scrolling column on the interface's dark gray, 16 pt from every edge.
-struct InspectorPanel<Content: View>: View {
+public struct InspectorPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
-    var body: some View {
+    public init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    public var body: some View {
         ScrollView {
             VStack(spacing: InspectorCard<EmptyView>.spacing) {
                 content()

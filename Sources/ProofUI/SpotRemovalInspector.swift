@@ -1,13 +1,16 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The Spot Removal tool's controls, which take the inspector's place while the tool is open.
 /// They change the selected spot, and the settings the next spot gets.
-struct SpotRemovalInspector: View {
+public struct SpotRemovalInspector: View {
     let library: Library
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         let spot = library.shownSpot
         let spots = library.selectedEdit?.recipe.spots ?? []
         InspectorPanel {

@@ -6,15 +6,19 @@ import SwiftUI
 /// overlap. On the dark card the fills add up like light, so where all three overlap they read
 /// as gray; on the light card adding would wash them out, so they are simply layered. Like the
 /// slider tracks, it shows the photo's colors, so it is an exception to the inspector's gray.
-struct HistogramView: View, Equatable {
+public struct HistogramView: View, Equatable {
     var histogram: Histogram?
     @Environment(\.colorScheme) private var colorScheme
 
-    nonisolated static func == (lhs: HistogramView, rhs: HistogramView) -> Bool {
+    public nonisolated static func == (lhs: HistogramView, rhs: HistogramView) -> Bool {
         lhs.histogram == rhs.histogram
     }
 
-    var body: some View {
+    public init(histogram: Histogram? = nil) {
+        self.histogram = histogram
+    }
+
+    public var body: some View {
         Canvas { [colorScheme] context, size in
             guard let histogram else { return }
             let peak = Self.peak(of: histogram)
@@ -36,19 +40,19 @@ struct HistogramView: View, Equatable {
         .accessibilityValue(histogram.map(Self.summary) ?? "No photo measured")
     }
 
-    static let red = Color(red: 0.95, green: 0.3, blue: 0.3)
-    static let green = Color(red: 0.3, green: 0.85, blue: 0.4)
-    static let blue = Color(red: 0.35, green: 0.55, blue: 1)
+    public static let red = Color(red: 0.95, green: 0.3, blue: 0.3)
+    public static let green = Color(red: 0.3, green: 0.85, blue: 0.4)
+    public static let blue = Color(red: 0.35, green: 0.55, blue: 1)
 
     /// The tallest bin, leaving out pure black and pure white: a photo with clipped shadows or
     /// highlights has a spike there that would otherwise flatten the rest of the graph.
-    static func peak(of histogram: Histogram) -> Float {
+    public static func peak(of histogram: Histogram) -> Float {
         let inner = 1..<(Histogram.binCount - 1)
         let peak = [histogram.red, histogram.green, histogram.blue].map { $0[inner].max() ?? 0 }.max() ?? 0
         return peak > 0 ? peak : 1
     }
 
-    static func area(of bins: [Float], peak: Float, in size: CGSize) -> Path {
+    public static func area(of bins: [Float], peak: Float, in size: CGSize) -> Path {
         Path { path in
             let step = size.width / CGFloat(bins.count - 1)
             path.move(to: CGPoint(x: 0, y: size.height))
@@ -73,10 +77,14 @@ struct HistogramView: View, Equatable {
 
 /// ISO, focal length, aperture and shutter speed under the histogram, spread across its width
 /// as in Lightroom. Each is left out when the photo doesn't record it.
-struct CaptureSettingsLine: View {
+public struct CaptureSettingsLine: View {
     var settings: CaptureSettings?
 
-    var body: some View {
+    public init(settings: CaptureSettings? = nil) {
+        self.settings = settings
+    }
+
+    public var body: some View {
         let values = [settings?.formattedISO, settings?.formattedFocalLength,
                       settings?.formattedAperture, settings?.formattedShutterSpeed].compactMap { $0 }
         HStack {

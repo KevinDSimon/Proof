@@ -17,6 +17,7 @@ struct ProofApp: App {
         // One window, like other photo editors: the sidebar selection and filter belong to it.
         Window("Proof", id: "main") {
             ContentView(library: library)
+                .environment(\.doubleClickCheck, .mac)
         }
         .commands {
             SidebarCommands()
@@ -730,7 +731,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { shown.temperature },
                                    set: { kelvin in library.changeEdit { $0.basic.setTemperature(kelvin) } }),
                     range: WhiteBalance.temperatureRange, fineStep: 1, step: 10, coarseStep: 100, fractionDigits: 0,
-                    unit: "Kelvin", track: Self.temperatureTrack,
+                    unit: "Kelvin", track: AdjustmentSlider.temperatureTrack,
                     position: WhiteBalance.sliderPosition(forTemperature:),
                     valueAtPosition: WhiteBalance.temperature(atSliderPosition:),
                     reset: { library.changeEdit { $0.basic.resetTemperature() } },
@@ -740,7 +741,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { shown.tint },
                                    set: { tint in library.changeEdit { $0.basic.setTint(tint) } }),
                     range: WhiteBalance.tintRange, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.tintTrack,
+                    showsSign: true, track: AdjustmentSlider.tintTrack,
                     reset: { library.changeEdit { $0.basic.resetTint() } },
                     isAdjusting: { library.isAdjusting = $0 })
             }
@@ -783,7 +784,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.exposure },
                                    set: { value in library.changeEdit { $0.basic.exposure = value } }),
                     range: -5...5, fineStep: 0.01, step: 0.1, coarseStep: 1, fractionDigits: 2,
-                    showsSign: true, unit: "stops", track: Self.exposureTrack,
+                    showsSign: true, unit: "stops", track: AdjustmentSlider.exposureTrack,
                     reset: { library.changeEdit { $0.basic.exposure = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
@@ -791,7 +792,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.contrast },
                                    set: { value in library.changeEdit { $0.basic.contrast = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.contrastTrack,
+                    showsSign: true, track: AdjustmentSlider.contrastTrack,
                     reset: { library.changeEdit { $0.basic.contrast = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
@@ -799,7 +800,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.highlights },
                                    set: { value in library.changeEdit { $0.basic.highlights = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.highlightsTrack,
+                    showsSign: true, track: AdjustmentSlider.highlightsTrack,
                     reset: { library.changeEdit { $0.basic.highlights = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
@@ -807,7 +808,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.shadows },
                                    set: { value in library.changeEdit { $0.basic.shadows = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.shadowsTrack,
+                    showsSign: true, track: AdjustmentSlider.shadowsTrack,
                     reset: { library.changeEdit { $0.basic.shadows = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
@@ -815,7 +816,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.whites },
                                    set: { value in library.changeEdit { $0.basic.whites = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.whitesTrack,
+                    showsSign: true, track: AdjustmentSlider.whitesTrack,
                     reset: { library.changeEdit { $0.basic.whites = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
@@ -823,7 +824,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.blacks },
                                    set: { value in library.changeEdit { $0.basic.blacks = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.blacksTrack,
+                    showsSign: true, track: AdjustmentSlider.blacksTrack,
                     reset: { library.changeEdit { $0.basic.blacks = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 sectionHeading("Presence")
@@ -833,7 +834,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.texture },
                                    set: { value in library.changeEdit { $0.basic.texture = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.textureTrack,
+                    showsSign: true, track: AdjustmentSlider.textureTrack,
                     reset: { library.changeEdit { $0.basic.texture = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
@@ -841,7 +842,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.clarity },
                                    set: { value in library.changeEdit { $0.basic.clarity = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.clarityTrack,
+                    showsSign: true, track: AdjustmentSlider.clarityTrack,
                     reset: { library.changeEdit { $0.basic.clarity = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 AdjustmentSlider(
@@ -849,7 +850,7 @@ struct AdjustmentsInspector: View {
                     value: Binding(get: { basic.dehaze },
                                    set: { value in library.changeEdit { $0.basic.dehaze = value } }),
                     range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    showsSign: true, track: Self.dehazeTrack,
+                    showsSign: true, track: AdjustmentSlider.dehazeTrack,
                     reset: { library.changeEdit { $0.basic.dehaze = 0 } },
                     isAdjusting: { library.isAdjusting = $0 })
                 // Each treatment shows only the sliders that change it; the other's keep their values.
@@ -883,7 +884,7 @@ struct AdjustmentsInspector: View {
                         value: Binding(get: { basic.vibrance },
                                        set: { value in library.changeEdit { $0.basic.vibrance = value } }),
                         range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                        showsSign: true, track: Self.vibranceTrack,
+                        showsSign: true, track: AdjustmentSlider.vibranceTrack,
                         reset: { library.changeEdit { $0.basic.vibrance = 0 } },
                         isAdjusting: { library.isAdjusting = $0 })
                     AdjustmentSlider(
@@ -891,7 +892,7 @@ struct AdjustmentsInspector: View {
                         value: Binding(get: { basic.saturation },
                                        set: { value in library.changeEdit { $0.basic.saturation = value } }),
                         range: -100...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                        showsSign: true, track: Self.saturationTrack,
+                        showsSign: true, track: AdjustmentSlider.saturationTrack,
                         reset: { library.changeEdit { $0.basic.saturation = 0 } },
                         isAdjusting: { library.isAdjusting = $0 })
                 }
@@ -1021,7 +1022,7 @@ struct AdjustmentsInspector: View {
                 .padding(.top, 6)
             let vignetting = corrections.vignetting ?? LensVignetting()
             lensSlider("Amount", spoken: "Lens Vignetting Amount", range: LensVignetting.amountRange,
-                       value: vignetting.amount, track: Self.vignetteAmountTrack,
+                       value: vignetting.amount, track: AdjustmentSlider.vignetteAmountTrack,
                        set: { value, lens in Self.setVignetting(&lens) { $0.amount = value } },
                        help: "Brightens the corners the lens darkened, or darkens them")
             // The midpoint does nothing without an amount, as in Lightroom.
@@ -1255,7 +1256,7 @@ struct AdjustmentsInspector: View {
                              reset: { library.changeEdit { $0.removeEffects() } }) {
             sectionHeading("Vignette")
             effectSlider("Amount", spoken: "Vignette Amount", \.vignette.amount, range: VignetteAdjustments.amountRange,
-                         showsSign: true, track: Self.vignetteAmountTrack,
+                         showsSign: true, track: AdjustmentSlider.vignetteAmountTrack,
                          help: "Darkens the edges of the photo, or lightens them")
             // Each effect's other sliders do nothing without an amount, as in Lightroom.
             Group {
@@ -1343,41 +1344,6 @@ struct AdjustmentsInspector: View {
         basic.whiteBalance(asShot: library.selectedEdit?.asShot ?? WhiteBalance(temperature: 5500, tint: 0))
     }
 
-    /// Blue to yellow and green to magenta, the way each slider shifts the photo. These show the
-    /// photo's colors, so they are the one place the inspector isn't gray. Each color fades out
-    /// toward the middle rather than blending into the other: opposite colors blend to gray,
-    /// which reads as a dark band. The faded middle takes the panel's color in either appearance.
-    static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
-    static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
-    /// Dark to light, the way exposure moves the photo. A soft range of grays rather than black to
-    /// white, as Lightroom draws it, so the tracks don't compete with the photo.
-    static let exposureTrack = [Color(white: 0.12), Color(white: 0.62)]
-    /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
-    static let contrastTrack = exposureTrack
-    /// Texture, Clarity and Dehaze run light to dark, the reverse of the tone sliders, as Lightroom draws them.
-    static let textureTrack = Array(exposureTrack.reversed())
-    static let clarityTrack = textureTrack
-    static let dehazeTrack = textureTrack
-    /// Dark to light, the way the edges move, as Lightroom draws Vignette's Amount.
-    static let vignetteAmountTrack = exposureTrack
-    static let highlightsTrack = exposureTrack
-    static let shadowsTrack = exposureTrack
-    static let whitesTrack = exposureTrack
-    static let blacksTrack = exposureTrack
-    /// Gray to a full spectrum, teal through blue and magenta to red, growing more colorful
-    /// toward the right. A single color would suggest the slider pushes the photo toward it.
-    static let vibranceTrack = [
-        Color(white: 0.5),
-        Color(hue: 0.47, saturation: 0.3, brightness: 0.7),
-        Color(hue: 0.6, saturation: 0.6, brightness: 0.85),
-        Color(hue: 0.83, saturation: 0.75, brightness: 0.9),
-        Color(hue: 1, saturation: 0.85, brightness: 0.95),
-    ]
-    static let saturationTrack = vibranceTrack
-
-    private static func fading(_ start: Color, into end: Color) -> [Color] {
-        [start, start.opacity(0.15), end.opacity(0.15), end]
-    }
 
     private static func message(for unsaved: PhotoEdit.Unsaved) -> String {
         switch unsaved {

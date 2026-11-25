@@ -41,3 +41,10 @@ extension LibraryPlatform {
         }
     )
 }
+
+extension DoubleClickCheck {
+    /// The click count of the press AppKit is handling.
+    static let mac = DoubleClickCheck {
+        NSApp.currentEvent.map { $0.type == .leftMouseDown && $0.clickCount == 2 } ?? false
+    }
+}

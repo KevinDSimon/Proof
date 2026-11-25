@@ -1,17 +1,21 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// A small copy of the whole photo with a box around the part in view, shown while zoomed, as
 /// in Lightroom. Clicking or dragging on it moves the view there.
-struct Navigator: View {
+public struct Navigator: View {
     let zoom: CanvasZoom
     let preview: CGImage
     /// The long edge, in points.
     private static let length: CGFloat = 160
     private static let padding: CGFloat = 5
 
-    var body: some View {
+    public init(zoom: CanvasZoom, preview: CGImage) {
+        self.zoom = zoom
+        self.preview = preview
+    }
+
+    public var body: some View {
         let size = fittedSize
         let region = zoom.visibleRegion
         Image(decorative: preview, scale: 1)

@@ -1,18 +1,21 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// Square grid lines over the photo while the Distortion slider is dragged, as in Lightroom, so
 /// lines in the photo can be lined up against straight ones. A temporary tool, so it may sit on
 /// the photo. Drawn like the crop tool's grid.
-struct DistortionGrid: View {
+public struct DistortionGrid: View {
     let zoom: CanvasZoom
 
     /// Squares along the photo's short edge: an even number, so the middle lines run through the
     /// center and the edges land on lines. A 3:2 or 4:3 photo then fits whole squares both ways.
-    static let squares = 12.0
+    public static let squares = 12.0
 
-    var body: some View {
+    public init(zoom: CanvasZoom) {
+        self.zoom = zoom
+    }
+
+    public var body: some View {
         Canvas { context, size in
             guard size.width > 0, zoom.viewSize.width > 0, zoom.photoSize.width > 0 else { return }
             // The viewport works in drawable pixels; the canvas in points.

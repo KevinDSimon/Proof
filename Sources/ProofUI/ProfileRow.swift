@@ -1,14 +1,17 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The color profile the photo is decoded with, in the Histogram card under the capture
 /// settings: a pop-up when the photo offers the camera maker's embedded profile and Apple's,
 /// otherwise the name of the one profile it has.
-struct ProfileRow: View {
+public struct ProfileRow: View {
     let library: Library
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         let edit = library.selectedEdit
         let profiles = edit?.profiles
         HStack {
