@@ -1808,6 +1808,28 @@ public final class Library {
         isChoosingFolder = true
     }
 
+    /// Whether the folder picker lets several folders be chosen at once: only when adding.
+    public var folderPickerAllowsSeveral: Bool {
+        if case .add = folderRequest { true } else { false }
+    }
+
+    /// The folders chosen in a picker that allows several. Locate and Grant Access take the first.
+    public func chose(_ urls: [URL]) {
+        guard case .add = folderRequest else {
+            if let url = urls.first { chose(url) }
+            return
+        }
+        guard let fileAccess, !urls.isEmpty else { return }
+        do {
+            let added = try fileAccess.add(urls)
+            refreshLocations()
+            selection = added.first.flatMap { fileAccess.reference(for: $0.lastKnownURL) }.map(SidebarItem.folder)
+        } catch {
+            refreshLocations()
+            errorMessage = error.localizedDescription
+        }
+    }
+
     public func chose(_ url: URL) {
         guard let fileAccess else { return }
         do {
@@ -1906,7 +1928,7 @@ public final class Library {
     }
 
     /// Follows changes Proof is told about: drives and shares connecting and disconnecting, and
-    /// Proof becoming the active app, when folders on network volumes are read again.
+    /// Proof becoming the active app, when folders that aren't watched are read again.
     private func observeSystem() {
         platform.observe { [weak self] event in
             guard let self else { return }
@@ -1926,7 +1948,8 @@ public final class Library {
 
     private func becameActive() {
         recheckLocations()
-        reload(contents.keys.filter { networkLocations.contains($0.locationID) })
+        // Folders that aren't watched: those on network volumes, and on iOS every folder.
+        reload(contents.keys.filter { !FolderWatcher.reportsChanges || networkLocations.contains($0.locationID) })
     }
 
     /// Resolves the saved locations again, so a folder whose drive connected becomes available
@@ -1935,6 +1958,8 @@ public final class Library {
         guard let fileAccess else { return }
         let before = statuses
         statuses = Dictionary(uniqueKeysWithValues: locations.map { ($0.id, fileAccess.recheck($0.id)) })
+        // A folder found again after it was moved or renamed has a new name.
+        if locations != fileAccess.locations { locations = fileAccess.locations }
         guard statuses != before else { return }
         // What was read on a drive that went away is forgotten, so it is read fresh when it returns.
         contents = contents.filter { isAvailable($0.key.locationID) }
@@ -1991,9 +2016,10 @@ public final class Library {
 
     private func refreshLocations() {
         guard let fileAccess else { return }
+        // Resolving never mounts a volume, so this doesn't wait on a disconnected NAS. It follows
+        // folders that were moved or renamed, so the locations are read after it.
+        statuses = Dictionary(uniqueKeysWithValues: fileAccess.locations.map { ($0.id, fileAccess.resolve($0.id)) })
         locations = fileAccess.locations
-        // Resolving never mounts a volume, so this doesn't wait on a disconnected NAS.
-        statuses = Dictionary(uniqueKeysWithValues: locations.map { ($0.id, fileAccess.resolve($0.id)) })
         watchLocalFolders()
     }
 }

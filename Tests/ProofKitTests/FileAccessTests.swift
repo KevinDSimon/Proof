@@ -64,6 +64,44 @@ struct FileAccessTests {
         #expect(access.locations.count == 1)
     }
 
+    @Test("Folders chosen together are each saved once, and one inside another chosen folder makes no second grant")
+    func addsSeveral() throws {
+        try makeFile("Albums/2025/a.DNG")
+        try makeFile("Scans/b.DNG")
+        let access = try makeAccess()
+        let chosen = try access.add([root.appendingPathComponent("Albums/2025"),
+                                     root.appendingPathComponent("Scans"),
+                                     root.appendingPathComponent("Albums")])
+
+        #expect(access.locations.map(\.name).sorted() == ["Albums", "Scans"])
+        // In the order chosen; the folder inside Albums belongs to Albums.
+        #expect(chosen.map(\.name) == ["Albums", "Scans", "Albums"])
+        #expect(chosen[0] == chosen[2])
+        #expect(try access.add([root.appendingPathComponent("Scans")]) == [chosen[1]])
+        #expect(access.locations.count == 2)
+    }
+
+    #if os(iOS)
+    /// On iOS the app's grants come from the Files picker as security-scoped URLs, and the default
+    /// bookmarks keep them. Inside the test's own container access is granted without asking.
+    @Test("On iOS a folder saved with the default bookmarks reopens after relaunch and follows a rename")
+    func iOSBookmarks() throws {
+        try makeFile("Albums/a.DNG")
+        let added = try makeAccess(SystemBookmarks()).add(root.appendingPathComponent("Albums"))
+        let renamed = root.appendingPathComponent("Albums 2025")
+        try FileManager.default.moveItem(at: root.appendingPathComponent("Albums"), to: renamed)
+
+        let relaunched = try makeAccess(SystemBookmarks())
+        guard case .available(let url) = relaunched.resolve(added.id) else {
+            Issue.record("The saved folder didn't resolve")
+            return
+        }
+        #expect(url.lastPathComponent == "Albums 2025")
+        #expect(relaunched.url(for: FileReference(locationID: added.id, relativePath: ["a.DNG"])) != nil)
+        #expect(relaunched.canWrite(to: url.appendingPathComponent("a.DNG")))
+    }
+    #endif
+
     @Test("When saved folders are nested, a photo belongs to the innermost one")
     func innermostWins() throws {
         let photo = try makeFile("Albums/2025/a.DNG")

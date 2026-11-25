@@ -23,7 +23,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView(preferredCompactColumn: $compactColumn) {
-            List {}
+            FolderList(library: library)
                 .navigationTitle("Library")
                 .toolbar {
                     Button("Add Folder", systemImage: "folder.badge.plus") { library.requestFolder(.add) }
@@ -35,16 +35,61 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.interfaceBackground.ignoresSafeArea())
         }
+        .fileImporter(isPresented: $library.isChoosingFolder, allowedContentTypes: [.folder],
+                      allowsMultipleSelection: library.folderPickerAllowsSeveral) { result in
+            switch result {
+            case .success(let urls): library.chose(urls)
+            case .failure(let error): library.errorMessage = error.localizedDescription
+            }
+        }
+        .fileDialogMessage(Text(library.folderPickerMessage))
+        .fileDialogConfirmationLabel(Text(library.folderPickerConfirmation))
+        .alert("Something Went Wrong", isPresented: Binding(
+            get: { library.errorMessage != nil },
+            set: { if !$0 { library.errorMessage = nil } }
+        )) {
+            Button("OK") { library.errorMessage = nil }
+        } message: {
+            Text(library.errorMessage ?? "")
+        }
+        // Folders that were added open on the library, so they can be seen; with none, the empty state.
+        .onChange(of: library.locations.isEmpty, initial: true) { _, isEmpty in
+            compactColumn = isEmpty ? .detail : .sidebar
+        }
     }
 
-    // Folder access from Files is #223; until then the library stays empty.
+    // The thumbnail grid is #224; until then a folder shows how many photos Proof found in it.
     @ViewBuilder private var browser: some View {
-        ContentUnavailableView {
-            Label("No Folders", systemImage: "folder")
-        } description: {
-            Text("Add a folder of photos to browse and edit them.")
-        } actions: {
-            Button("Add Folder…") { library.requestFolder(.add) }
+        if library.locations.isEmpty {
+            ContentUnavailableView {
+                Label("No Folders", systemImage: "folder")
+            } description: {
+                Text("Add a folder of photos to browse and edit them.")
+            } actions: {
+                Button("Add Folder…") { library.requestFolder(.add) }
+            }
+        } else if let folder = library.selection?.folder,
+                  let location = library.locations.first(where: { $0.id == folder.locationID }) {
+            switch library.status(of: location.id) {
+            case .available:
+                let count = library.contents[folder]?.photos.count ?? 0
+                ContentUnavailableView(location.name, systemImage: "photo.on.rectangle",
+                                       description: Text(count == 1 ? "1 photo" : "\(count) photos"))
+            case .offline:
+                ContentUnavailableView(location.name, systemImage: "externaldrive.badge.xmark",
+                                       description: Text("The drive or server this folder is on isn't connected."))
+            case .missing:
+                ContentUnavailableView {
+                    Label(location.name, systemImage: "questionmark.folder")
+                } description: {
+                    Text("Proof can't find this folder. It may have been moved or deleted.")
+                } actions: {
+                    Button("Locate…") { library.requestFolder(.locate(location)) }
+                }
+            }
+        } else {
+            ContentUnavailableView("No Folder Selected", systemImage: "folder",
+                                   description: Text("Choose a folder in the library."))
         }
     }
 }
