@@ -23,6 +23,7 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// In compact width, whether a row's grid is pushed onto the library.
     @State private var compactPath: [BrowseScreen] = []
+    @State private var renderer = try? RAWRenderer()
 
     var body: some View {
         Group {
@@ -103,7 +104,7 @@ struct ContentView: View {
             // Select All takes the back button's place while selecting, as in Files.
             .navigationBarBackButtonHidden(library.isSelectingPhotos)
             .navigationDestination(isPresented: isEditing) {
-                PhotoView(library: library)
+                PhotoView(library: library, renderer: renderer)
             }
     }
 
@@ -213,55 +214,109 @@ private enum BrowseScreen: Hashable {
     case grid
 }
 
-/// The photo, centered on the canvas with a margin. Its thumbnail stands in until the edit
-/// canvas, with zoom, pan and the filmstrip, comes in #226.
+/// The photo in Edit, centered on the canvas with a margin, with the filmstrip under it.
 private struct PhotoView: View {
     let library: Library
-    @State private var image: CGImage?
+    let renderer: RAWRenderer?
 
     var body: some View {
-        let photo = library.browse.selectedPhoto
-        // A photo in iCloud shows the system's thumbnail while it downloads, then its own
-        // (decision 0050).
-        let isInCloud = photo.flatMap { photo in
-            library.contents[photo.folder]?.photos.first { $0.name == photo.name }?.isInCloud
-        } ?? false
-        ZStack {
-            Color.interfaceBackground.ignoresSafeArea()
-            if let image {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .scaledToFit()
-                    .padding()
-                    .overlay {
-                        if isInCloud { downloading }
-                    }
-            } else if isInCloud {
-                downloading
-            } else {
-                ProgressView()
+        VStack(spacing: 0) {
+            photo
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(library.canvasColor.color)
+            if library.isFilmstripShown {
+                Filmstrip(library: library, photos: library.shownPhotos)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.snappy(duration: 0.25), value: library.isFilmstripShown)
+        .background(Color.interfaceBackground.ignoresSafeArea())
         .navigationTitle(library.windowTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: PhotoLoad(photo: photo, isInCloud: isInCloud)) {
-            image = nil
-            guard let photo, let url = library.url(ofPhoto: photo.name, in: photo.folder) else { return }
-            image = await ThumbnailCache.shared.thumbnail(for: url, edit: nil)
+        .toolbar {
+            ToolbarItem {
+                Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip",
+                       systemImage: "rectangle.bottomthird.inset.filled") {
+                    library.isFilmstripShown.toggle()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var photo: some View {
+        if let renderer, let url = library.selectedPhotoURL {
+            if library.browse.selectedPhoto?.isEditable == false {
+                // Reached from the filmstrip; Edit doesn't open them until #239.
+                ContentUnavailableView("Can't Edit This Photo Yet", systemImage: "photo",
+                                       description: Text("Proof edits RAW photos. JPEG and HEIC photos can be rated and flagged in Browse."))
+            } else if library.isSelectedPhotoInCloud {
+                CloudPhotoPreview(url: url, backdrop: library.canvasColor.color)
+                    .padding()
+            } else {
+                EditCanvas(library: library, url: url, renderer: renderer)
+                    .padding()
+            }
+        } else if renderer == nil {
+            ContentUnavailableView("Metal Isn't Available", systemImage: "exclamationmark.triangle",
+                                   description: Text("Proof needs a device with a Metal GPU to show photos."))
         }
     }
 }
 
-private extension PhotoView {
-    var downloading: some View {
-        ProgressView("Downloading from iCloud…")
-            .padding()
-            .background(.regularMaterial, in: .rect(cornerRadius: 12))
-    }
-}
+/// The photo being edited, rendered with its current edit. A view of its own so it reads the
+/// edit in its own body, and redraws on every change to it.
+private struct EditCanvas: View {
+    let library: Library
+    let url: URL
+    let renderer: RAWRenderer
+    /// The photo has neither its render nor a cached thumbnail to show yet.
+    @State private var isWaiting = false
 
-/// What the photo screen loads: the photo, again once it has downloaded from iCloud.
-private struct PhotoLoad: Hashable {
-    var photo: PhotoReference?
-    var isInCloud: Bool
+    var body: some View {
+        PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdrop: library.canvasColor,
+                    viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailCache.shared,
+                    actions: actions) { error in
+            library.errorMessage = "The photo couldn't be shown. (\(error))"
+        } onWaiting: { isWaiting = $0 }
+        // A temporary indicator, so it may sit where the photo will appear.
+        .overlay {
+            if isWaiting {
+                ProgressView()
+                    .accessibilityLabel("Loading photo")
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(library.windowTitle)
+        .accessibilityValue(library.browse.isShowingOriginal ? "Original" : "")
+        .accessibilityAddTraits(.isImage)
+        .accessibilityAction(named: library.browse.isShowingOriginal ? "Show Edited" : "Show Original") {
+            library.browse.toggleOriginal()
+        }
+        .accessibilityAction(named: "Next Photo") { step(.right) }
+        .accessibilityAction(named: "Previous Photo") { step(.left) }
+        // Each photo opens at Fit.
+        .onAppear { library.zoom.reset() }
+        .onChange(of: url) {
+            library.zoom.reset()
+            library.zoom.preview = nil
+        }
+    }
+
+    private var shownRecipe: EditRecipe {
+        let recipe = library.selectedEdit?.recipe ?? EditRecipe()
+        return library.browse.isShowingOriginal ? recipe.original : recipe
+    }
+
+    private var actions: PhotoCanvasActions {
+        PhotoCanvasActions(canSwipe: true) { isHeld in
+            if isHeld != library.browse.isShowingOriginal { library.browse.toggleOriginal() }
+        } swipe: { direction in
+            step(direction == .left ? .right : .left)
+        }
+    }
+
+    private func step(_ move: BrowseState.Move) {
+        let photos = library.shownPhotos
+        library.browse.move(move, in: photos, columns: photos.count)
+    }
 }
