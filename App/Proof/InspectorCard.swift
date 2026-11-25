@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// One group of the inspector as a card with its title inside, as Pixelmator Pro lays out its

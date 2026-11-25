@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import simd
 import SwiftUI
 

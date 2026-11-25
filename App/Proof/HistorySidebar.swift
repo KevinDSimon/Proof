@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The photo's History panel in Edit (#56): each change since it was opened, newest first, with

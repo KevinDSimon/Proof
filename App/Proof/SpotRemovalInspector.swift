@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The Spot Removal tool's controls, which take the inspector's place while the tool is open.

@@ -1,5 +1,6 @@
 import AppKit
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The Masks tool on the photo. Every mask shows a pin: click one to select its mask, and drag a

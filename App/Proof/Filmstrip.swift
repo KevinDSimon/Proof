@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// One row of thumbnails under the photo in Edit, showing the photos that pass the filter. The
@@ -9,7 +10,7 @@ struct Filmstrip: View {
     @Bindable var library: Library
     let photos: [ListedPhoto]
 
-    @State private var images: [PhotoReference: NSImage] = [:]
+    @State private var images: [PhotoReference: CGImage] = [:]
     @State private var finished: Set<PhotoReference> = []
     /// The LUT library's generation the thumbnails were loaded at.
     @State private var lutGeneration = 0
@@ -71,7 +72,7 @@ struct Filmstrip: View {
         let isSelected = library.browse.selectedPhotos.contains(photo.id)
         return ZStack {
             if let image = library.editedThumbnails[photo.id] ?? images[photo.id] {
-                Image(nsImage: image)
+                Image(decorative: image, scale: 1)
                     .resizable()
                     .scaledToFit()
                     .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))

@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// Square grid lines over the photo while the Distortion slider is dragged, as in Lightroom, so

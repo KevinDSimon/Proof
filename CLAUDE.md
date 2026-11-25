@@ -21,6 +21,7 @@ Proof is a Mac RAW photo editor in Swift, built on Core Image and Metal. These r
 ## Architecture rules
 
 - `ProofKit` is platform-neutral. It never imports AppKit, UIKit or SwiftUI, so the iPad and iPhone app can reuse it.
+- `ProofUI` holds the app model and views both apps share. It imports SwiftUI but never AppKit or UIKit; what it needs from the system goes through `LibraryPlatform`, which each app fills in.
 - Folder and file access goes through one `FileAccess` abstraction (added in Phase 1), never raw paths scattered through the code. Sidecars are read and written with `NSFileCoordinator`.
 - Rendering always takes a target size. Nothing renders a full 60 MP image except export.
 - No change may alter how an existing saved edit renders without bumping `EditRecipe.processVersion`. Old versions keep rendering as they did.

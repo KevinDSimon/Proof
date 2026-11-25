@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The Info panel beside the grid in Browse: the selected photo's file, camera details and

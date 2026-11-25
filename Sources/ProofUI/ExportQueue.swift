@@ -7,37 +7,40 @@ import ProofKit
 /// own, so a full-resolution render never holds up the canvas; one photo at a time keeps a single
 /// full-size render in GPU memory.
 @Observable @MainActor
-final class ExportQueue {
+public final class ExportQueue {
+    /// The destination last exported to, as a UUID string; empty for Choose Folder.
+    public static let destinationKey = "exportDestination"
+
     /// A photo as it was when Export was clicked.
-    struct Item: Sendable {
-        let url: URL
+    public struct Item: Sendable {
+        public let url: URL
         /// The edit Proof has in memory, or `nil` to read the photo's sidecar.
-        let recipe: EditRecipe?
-        let rating: Int
+        public let recipe: EditRecipe?
+        public let rating: Int
     }
 
-    struct Failure: Identifiable {
-        let id = UUID()
-        let name: String
-        let reason: String
+    public struct Failure: Identifiable {
+        public let id = UUID()
+        public let name: String
+        public let reason: String
     }
 
     private struct Job {
-        let url: URL
-        let recipe: EditRecipe
-        let rating: Int
-        let settings: ExportSettings
-        let folder: URL
+        public let url: URL
+        public let recipe: EditRecipe
+        public let rating: Int
+        public let settings: ExportSettings
+        public let folder: URL
     }
 
     /// Photos queued since the queue was last cleared, and how many of them are done or failed.
-    private(set) var total = 0
-    private(set) var finished = 0
+    public private(set) var total = 0
+    public private(set) var finished = 0
     /// The name of the photo being exported.
-    private(set) var current: String?
-    private(set) var exported: [URL] = []
-    private(set) var failures: [Failure] = []
-    private(set) var wasCancelled = false
+    public private(set) var current: String?
+    public private(set) var exported: [URL] = []
+    public private(set) var failures: [Failure] = []
+    public private(set) var wasCancelled = false
 
     private var jobs: [Job] = []
     private var task: Task<Void, Never>?
@@ -47,16 +50,16 @@ final class ExportQueue {
     private var accessedFolders: Set<URL> = []
     private let renderer = try? RAWRenderer()
 
-    var isRunning: Bool { task != nil || reading > 0 }
+    public var isRunning: Bool { task != nil || reading > 0 }
     /// The toolbar shows the queue while it runs and until its summary is dismissed.
-    var isVisible: Bool { total > 0 }
-    var fractionDone: Double { total > 0 ? Double(finished) / Double(total) : 0 }
+    public var isVisible: Bool { total > 0 }
+    public var fractionDone: Double { total > 0 ? Double(finished) / Double(total) : 0 }
     /// The number of the photo being exported, counting from 1.
-    var position: Int { min(finished + 1, total) }
+    public var position: Int { min(finished + 1, total) }
 
     /// Queues `items` for `folder`, a folder chosen in the open panel, with `settings`. The
     /// photos' sidecars are read first, so each export has the edit it had when Export was clicked.
-    func start(_ items: [Item], settings: ExportSettings, folder: URL) {
+    public func start(_ items: [Item], settings: ExportSettings, folder: URL) {
         guard !items.isEmpty else { return }
         if !isRunning { clear() }
         wasCancelled = false
@@ -90,14 +93,14 @@ final class ExportQueue {
 
     /// Stops after the photo being exported, which can't be stopped once its render starts. Files
     /// already written stay.
-    func cancel() {
+    public func cancel() {
         guard isRunning else { return }
         wasCancelled = true
         jobs = []
     }
 
     /// Dismisses the summary and ends access to the folders exported to.
-    func clear() {
+    public func clear() {
         guard !isRunning else { return }
         total = 0
         finished = 0

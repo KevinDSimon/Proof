@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// Selective Color: a graph of how much of each hue the photo holds, a row of the eight color

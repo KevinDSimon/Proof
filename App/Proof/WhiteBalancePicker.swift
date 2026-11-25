@@ -1,5 +1,6 @@
 import AppKit
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The White Balance eyedropper over the photo while it is open, as in Lightroom: a crosshair, a

@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The selected folder's photos, or All Photos, as thumbnails, each shown as soon as `ThumbnailCache` has it, so a
@@ -14,7 +15,7 @@ struct ThumbnailGrid: View {
     let allPhotos: [ListedPhoto]
 
     /// A photo that was read but couldn't be made into a thumbnail has no entry in `images`.
-    @State private var images: [PhotoReference: NSImage] = [:]
+    @State private var images: [PhotoReference: CGImage] = [:]
     @State private var finished: Set<PhotoReference> = []
     /// The LUT library's generation the thumbnails were loaded at.
     @State private var lutGeneration = 0
@@ -28,12 +29,6 @@ struct ThumbnailGrid: View {
     @State private var slideTarget: CGFloat?
     @FocusState private var isFocused: Bool
 
-    /// Its own renderer, so making thumbnails never waits behind, or evicts, the photo in Edit.
-    nonisolated private static let thumbnailRenderer = try? RAWRenderer()
-    nonisolated static let cache = ThumbnailCache(renderEdit: { url, edit in
-        let lut = await LUTLibrary.shared.lut(for: edit.look)
-        return try? await thumbnailRenderer?.thumbnail(of: url, recipe: edit, lut: lut, maxPixelSize: ThumbnailCache.maxPixelSize)
-    }, lutVersion: { LUTLibrary.shared.version(of: $0) })
     private static let cellSize: CGFloat = 160
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
@@ -139,7 +134,7 @@ struct ThumbnailGrid: View {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
                 if let image = library.editedThumbnails[photo.id] ?? images[photo.id] {
-                    Image(nsImage: image)
+                    Image(decorative: image, scale: 1)
                         .resizable()
                         .scaledToFit()
                         .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
@@ -215,7 +210,7 @@ struct ThumbnailGrid: View {
     /// and marks it in `finished`; a photo that couldn't be read is finished without an image.
     /// Photos already finished keep their thumbnail, so All Photos doesn't start over each time
     /// another folder is read. Used by the grid and the filmstrip.
-    static func loadThumbnails(of photos: [ListedPhoto], images: Binding<[PhotoReference: NSImage]>,
+    static func loadThumbnails(of photos: [ListedPhoto], images: Binding<[PhotoReference: CGImage]>,
                                finished: Binding<Set<PhotoReference>>, library: Library) async {
         let ids = Set(photos.map(\.id))
         images.wrappedValue = images.wrappedValue.filter { ids.contains($0.key) }
@@ -226,10 +221,10 @@ struct ThumbnailGrid: View {
         }
         let references = Dictionary(urls.map { ($0.1, $0.0) }, uniquingKeysWith: { first, _ in first })
         let edited = Set(urls.filter(\.2).map(\.1))
-        for await (url, image) in cache.thumbnails(for: urls.map(\.1), edited: edited) {
+        for await (url, image) in ThumbnailCache.shared.thumbnails(for: urls.map(\.1), edited: edited) {
             guard let id = references[url] else { continue }
             finished.wrappedValue.insert(id)
-            if let image { images.wrappedValue[id] = NSImage(cgImage: image, size: .zero) }
+            if let image { images.wrappedValue[id] = image }
         }
     }
 }

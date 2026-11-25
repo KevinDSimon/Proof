@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// A small copy of the whole photo with a box around the part in view, shown while zoomed, as
