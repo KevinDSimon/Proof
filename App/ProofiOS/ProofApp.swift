@@ -37,7 +37,8 @@ struct ContentView: View {
                     .background(Color.interfaceBackground.ignoresSafeArea())
                     .navigationTitle(browseTitle)
                     .navigationSubtitle(browseSubtitle)
-                    .navigationBarTitleDisplayMode(.inline)
+                    // A large title, as in Notes and Photos, that shrinks into the bar on scrolling.
+                    .navigationBarTitleDisplayMode(.large)
                     .toolbar { browseToolbar }
                     // Select All takes the back button's place while selecting, as in Files.
                     .navigationBarBackButtonHidden(library.isSelectingPhotos)
@@ -130,11 +131,8 @@ struct ContentView: View {
     private var browseTitle: String {
         guard library.isSelectingPhotos else { return library.rowTitle }
         let count = library.browse.selectedPhotos.count
-        return switch count {
-        case 0: "Select Photos"
-        case 1: "1 Photo Selected"
-        default: "\(count) Photos Selected"
-        }
+        // As in Notes; the subtitle still counts the photos.
+        return count == 0 ? "Select Photos" : "\(count) Selected"
     }
     /// The filter's name follows the count, as the filter button has no badge on iOS.
     private var browseSubtitle: String {
