@@ -181,6 +181,17 @@ public final class FileAccess {
         return location
     }
 
+    /// Saves grants for several folders chosen together, as the Files picker on iPad and iPhone
+    /// allows. Outer folders are saved first, so a chosen folder inside another one makes no
+    /// second grant. Returns the location for each URL, in the order given.
+    @discardableResult
+    public func add(_ urls: [URL]) throws -> [SavedLocation] {
+        for url in urls.sorted(by: { Self.components(of: $0).count < Self.components(of: $1).count }) {
+            try add(url)
+        }
+        return try urls.map { try add($0) }
+    }
+
     /// Forgets a location's grant. Files on disk are left as they are.
     public func remove(_ id: UUID) throws {
         endAccess(id)

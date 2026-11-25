@@ -15,6 +15,14 @@ public final class FolderWatcher {
         public var includesSubfolders: Bool
     }
 
+    /// Whether changes are reported at all. Where they aren't, folders are read again when Proof
+    /// becomes active and when the person refreshes.
+    #if os(macOS)
+    public static let reportsChanges = true
+    #else
+    public static let reportsChanges = false
+    #endif
+
     private let folders: [URL]
     private let handler: @MainActor ([Change]) -> Void
     #if os(macOS)
