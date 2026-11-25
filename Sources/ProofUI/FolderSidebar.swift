@@ -32,6 +32,11 @@ public struct FolderSidebar: View {
         // so the window reads as one surface.
         .scrollContentBackground(.hidden)
         .background(Color.interfaceBackground.ignoresSafeArea())
+        #if os(iOS)
+        // iOS has no FSEvents, so each saved folder and the folders already read in it are read
+        // again here, as on returning to Proof. A drive plugged in or unplugged since is found too.
+        .refreshable { library.refresh() }
+        #endif
         #if os(macOS)
         .onDeleteCommand {
             removing = library.locations.first {
@@ -48,6 +53,7 @@ public struct FolderSidebar: View {
         }
         .confirmationDialog("Remove “\(removing?.name ?? "")” from Proof?",
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                            titleVisibility: .visible,
                             presenting: removing) { location in
             Button("Remove", role: .destructive) { library.remove(location) }
         } message: { _ in
@@ -62,7 +68,16 @@ private struct LocationRow: View {
     let location: SavedLocation
     let remove: (SavedLocation) -> Void
 
-    public var body: some View {
+    var body: some View {
+        row
+            #if os(iOS)
+            .swipeActions {
+                Button("Remove", systemImage: "minus.circle", role: .destructive) { remove(location) }
+            }
+            #endif
+    }
+
+    @ViewBuilder private var row: some View {
         let root = FileReference(locationID: location.id, relativePath: [])
         switch library.status(of: location.id) {
         case .available:
@@ -80,6 +95,10 @@ private struct LocationRow: View {
                 Spacer()
                 Button("Locate…") { library.requestFolder(.locate(location)) }
                     .controlSize(.small)
+                    #if os(iOS)
+                    // Reads as a link and takes its own tap instead of selecting the row.
+                    .buttonStyle(.borderless)
+                    #endif
             }
             .help("Proof can't find this folder. It was last at \(location.lastKnownURL.path).")
             .tag(SidebarItem.folder(root))
@@ -97,7 +116,7 @@ private struct FolderRow: View {
     let remove: (SavedLocation) -> Void
     @State private var isExpanded = false
 
-    public var body: some View {
+    var body: some View {
         Group {
             if let contents = library.contents[folder], !contents.subfolders.isEmpty {
                 DisclosureGroup(isExpanded: $isExpanded) {
@@ -110,6 +129,10 @@ private struct FolderRow: View {
                 } label: {
                     label
                 }
+                #if os(iOS)
+                // iOS reads the selection tag from the row, not from the disclosure's label.
+                .tag(SidebarItem.folder(folder))
+                #endif
             } else {
                 label
             }
@@ -131,7 +154,7 @@ private struct FolderContextMenu: View {
     let folder: FileReference
     let remove: (SavedLocation) -> Void
 
-    public var body: some View {
+    var body: some View {
         let url = library.url(of: folder)
         #if os(macOS)
         Button("Show in Finder") { if let url { library.showInFinder([url]) } }
@@ -160,7 +183,7 @@ private struct FilterLabel: View {
     let count: Int
     @Environment(\.backgroundProminence) private var prominence
 
-    public var body: some View {
+    var body: some View {
         Label {
             if let rating = filter.rating {
                 HStack(spacing: 1) {
@@ -206,7 +229,7 @@ private struct SidebarLabel: View {
     var count = 0
     @Environment(\.backgroundProminence) private var prominence
 
-    public var body: some View {
+    var body: some View {
         Label {
             Text(name)
         } icon: {

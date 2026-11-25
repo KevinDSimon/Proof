@@ -34,9 +34,16 @@ public struct ThumbnailGrid: View {
     @State private var slideTarget: CGFloat?
     @FocusState private var isFocused: Bool
 
+    #if os(macOS)
     private static let cellSize: CGFloat = 160
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
+    #else
+    // Three columns on the narrowest iPhone, as in Photos.
+    private static let cellSize: CGFloat = 100
+    private static let spacing: CGFloat = 8
+    private static let margin: CGFloat = 16
+    #endif
 
     public var body: some View {
         ScrollViewReader { scroller in
@@ -57,7 +64,9 @@ public struct ThumbnailGrid: View {
             }
             // A filled title bar with a dividing line, as macOS shows over a view that doesn't
             // scroll, such as an empty folder, so the bar looks the same with or without photos.
+            #if os(macOS)
             .scrollEdgeEffectStyle(.hard, for: .top)
+            #endif
             // The grid's width comes from the window, never from the photos inside it.
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
@@ -90,7 +99,13 @@ public struct ThumbnailGrid: View {
                 withAnimation { scroller.scrollTo(photo) }
             }
             .onAppear {
-                if let photo = library.browse.selectedPhoto { scroller.scrollTo(photo, anchor: .center) }
+                guard let photo = library.browse.selectedPhoto else { return }
+                #if os(macOS)
+                scroller.scrollTo(photo, anchor: .center)
+                #else
+                // Centering would scroll a grid shorter than the screen past its top.
+                scroller.scrollTo(photo)
+                #endif
             }
         }
         .focusable()
@@ -176,6 +191,7 @@ public struct ThumbnailGrid: View {
         // square above a landscape photo.
         .selectionOutline(isSelected)
         .contentShape(Rectangle())
+        #if os(macOS)
         .onTapGesture {
             library.click(photo.id, in: photos)
             isFocused = true
@@ -185,6 +201,13 @@ public struct ThumbnailGrid: View {
             library.browse.selectedPhoto = photo.id
             library.browse.edit()
         })
+        #else
+        // A tap opens the photo, as in Photos. Selecting several and the touch-and-hold menu are #225.
+        .onTapGesture {
+            library.browse.selectedPhoto = photo.id
+            library.browse.edit()
+        }
+        #endif
         .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata,

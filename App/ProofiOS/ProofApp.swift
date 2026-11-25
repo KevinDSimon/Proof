@@ -15,7 +15,8 @@ struct ProofApp: App {
     }
 }
 
-/// The library beside the grid on iPad; on iPhone, a stack of library, then grid (decision 0048).
+/// The library beside the grid on iPad; on iPhone and in a narrow iPad window, a stack of
+/// library, grid and photo, with the standard back button and edge swipe (decision 0048).
 struct ContentView: View {
     @Bindable var library: Library
     /// With no folders the sidebar is empty, so iPhone opens on the empty state instead.
@@ -23,17 +24,30 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView(preferredCompactColumn: $compactColumn) {
-            FolderList(library: library)
+            FolderSidebar(library: library)
                 .navigationTitle("Library")
-                .toolbar {
-                    Button("Add Folder", systemImage: "folder.badge.plus") { library.requestFolder(.add) }
-                }
-                .scrollContentBackground(.hidden)
-                .background(Color.interfaceBackground.ignoresSafeArea())
         } detail: {
-            browser
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.interfaceBackground.ignoresSafeArea())
+            NavigationStack {
+                PhotoBrowser(library: library)
+                    // On iPhone a row's grid is built before it slides in, while the library is
+                    // still on screen, and isn't told when it appears, so its thumbnails never
+                    // load. A grid of its own for each row is told.
+                    .id(library.selection)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.interfaceBackground.ignoresSafeArea())
+                    .navigationTitle(browseTitle)
+                    .navigationSubtitle(browseSubtitle)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        // Only in Browse, and only once a row is picked, as on the Mac.
+                        if library.selection != nil, !library.isEditing {
+                            ToolbarItem { FilterButton(library: library) }
+                        }
+                    }
+                    .navigationDestination(isPresented: isEditing) {
+                        PhotoView(library: library)
+                    }
+            }
         }
         .fileImporter(isPresented: $library.isChoosingFolder, allowedContentTypes: [.folder],
                       allowsMultipleSelection: library.folderPickerAllowsSeveral) { result in
@@ -58,38 +72,43 @@ struct ContentView: View {
         }
     }
 
-    // The thumbnail grid is #224; until then a folder shows how many photos Proof found in it.
-    @ViewBuilder private var browser: some View {
-        if library.locations.isEmpty {
-            ContentUnavailableView {
-                Label("No Folders", systemImage: "folder")
-            } description: {
-                Text("Add a folder of photos to browse and edit them.")
-            } actions: {
-                Button("Add Folder…") { library.requestFolder(.add) }
+    /// Going back from the photo, by the back button or the edge swipe, returns to Browse.
+    private var isEditing: Binding<Bool> {
+        Binding(get: { library.isEditing },
+                set: { if !$0, library.isEditing { library.browse.finishEditing() } })
+    }
+
+    // The grid's title stays the row's while the photo is pushed, so the back button names it.
+    private var browseTitle: String { library.rowTitle }
+    private var browseSubtitle: String { library.isEditing ? "" : library.windowSubtitle }
+}
+
+/// The photo, centered on the canvas with a margin. Its thumbnail stands in until the edit
+/// canvas, with zoom, pan and the filmstrip, comes in #226.
+private struct PhotoView: View {
+    let library: Library
+    @State private var image: CGImage?
+
+    var body: some View {
+        let photo = library.browse.selectedPhoto
+        ZStack {
+            Color.interfaceBackground.ignoresSafeArea()
+            if let image {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .scaledToFit()
+                    .padding()
+            } else {
+                ProgressView()
             }
-        } else if let folder = library.selection?.folder,
-                  let location = library.locations.first(where: { $0.id == folder.locationID }) {
-            switch library.status(of: location.id) {
-            case .available:
-                let count = library.contents[folder]?.photos.count ?? 0
-                ContentUnavailableView(location.name, systemImage: "photo.on.rectangle",
-                                       description: Text(count == 1 ? "1 photo" : "\(count) photos"))
-            case .offline:
-                ContentUnavailableView(location.name, systemImage: "externaldrive.badge.xmark",
-                                       description: Text("The drive or server this folder is on isn't connected."))
-            case .missing:
-                ContentUnavailableView {
-                    Label(location.name, systemImage: "questionmark.folder")
-                } description: {
-                    Text("Proof can't find this folder. It may have been moved or deleted.")
-                } actions: {
-                    Button("Locate…") { library.requestFolder(.locate(location)) }
-                }
-            }
-        } else {
-            ContentUnavailableView("No Folder Selected", systemImage: "folder",
-                                   description: Text("Choose a folder in the library."))
+        }
+        .navigationTitle(library.windowTitle)
+        .navigationSubtitle(library.windowSubtitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: photo) {
+            image = nil
+            guard let photo, let url = library.url(ofPhoto: photo.name, in: photo.folder) else { return }
+            image = await ThumbnailCache.shared.thumbnail(for: url, edit: nil)
         }
     }
 }
