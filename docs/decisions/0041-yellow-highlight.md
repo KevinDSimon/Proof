@@ -25,3 +25,5 @@ Slider tracks, buttons, the canvas, the inspector cards and toolbar items don't 
 ## Amendment (#225)
 
 On iPad and iPhone, the checkmark button that ends Select in the grid is filled with the highlight color, with a dark checkmark, as Notes fills its own. It is the only filled use. It marks the one way out of a temporary mode and sits in the toolbar, away from the photos.
+
+On iPad and iPhone, the More button in the grid's bar shows a small yellow badge with a dark count while a filter is on. It is a small mark of state; the system's toolbar badge can't be recolored from SwiftUI and is always red.
