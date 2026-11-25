@@ -61,11 +61,12 @@ extension View {
 
     /// The photos a collapsed stack hides, peeking out above its first photo: one layer for each,
     /// up to two, each a little narrower and darker than the one in front, so the stack reads as
-    /// its photos piled up. A layer without its thumbnail yet is gray. The photo gives up `step`
-    /// for each layer at the top, so they stay inside the cell and its selection outline. Apply it
-    /// to the image, after its badges, so the layers are its width and the badges stay on the photo.
-    @ViewBuilder func stackLayers(_ layers: [NSImage?], step: CGFloat) -> some View {
-        if layers.isEmpty {
+    /// its photos piled up. A layer without its thumbnail yet is gray. Every photo `inStack` gives
+    /// up two `step`s at the top, open or collapsed, so the layers stay inside the cell and its
+    /// selection outline, and opening a stack never resizes its photos. Apply it to the image,
+    /// after its badges, so the layers are its width and the badges stay on the photo.
+    @ViewBuilder func stackLayers(_ layers: [NSImage?], inStack: Bool, step: CGFloat) -> some View {
+        if !inStack {
             self
         } else {
             background(alignment: .top) {
@@ -91,7 +92,7 @@ extension View {
                 }
                 .accessibilityHidden(true)
             }
-            .padding(.top, step * Double(min(layers.count, 2)))
+            .padding(.top, step * 2)
         }
     }
 
@@ -229,5 +230,13 @@ struct FlagButtons: View {
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 4)
+    }
+}
+
+extension Library {
+    /// Opens or collapses the stack `photo` is in, with the photos it shows or hides sliding in
+    /// and out, so the stack is seen to open.
+    func toggleStackAnimated(of photo: PhotoReference) {
+        withAnimation(.snappy(duration: 0.25)) { toggleStack(of: photo) }
     }
 }

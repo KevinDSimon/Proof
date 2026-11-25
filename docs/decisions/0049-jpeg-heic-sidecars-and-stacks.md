@@ -22,7 +22,7 @@ Issue #157. Many people shoot JPEG or HEIC, or RAW+JPEG, and want to cull them i
 - A RAW and its JPEG keep separate ratings, and other apps that read `<name>.<extension>.xmp` see them. Lightroom, Capture One and Photomator don't read a JPEG's rating from `IMG_0042.JPG.xmp`; Lightroom keeps a JPEG's rating inside the file, which Proof reads when there is no sidecar.
 - A JPEG rated in Capture One beside its RAW, with the rating in the shared `IMG_0042.xmp`, shows that rating on the RAW only.
 - The stack mark is a third kind of thumbnail badge, beside ratings and flags. It is white on a dark backing like them, with no color.
-- The layers are drawn above the photo, not on it; the photo gives up a few points at the top for each, so they stay inside the cell and its selection outline.
+- The layers are drawn above the photo, not on it. Every photo of a stack, open or collapsed, gives up a few points at the top for them, so they stay inside the cell and its selection outline and opening a stack never resizes its photos. A portrait photo in a stack is a little shorter than one outside a stack; a landscape photo, which has room above it in its square, is not. Opening and collapsing animate.
 - #137 adds virtual copies as stack members.
 - Joined tiles and a shared background plate behind an open stack were tried in mockups and dropped: neither left room for the selection outline without drawing on the photo.
 - A subtitle such as "4 photos" still counts every file, including those a collapsed stack hides.

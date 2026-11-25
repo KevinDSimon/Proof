@@ -43,7 +43,7 @@ struct PhotoContextMenu: View {
             Divider()
             Button(library.isStackOpen(StackMark.first(of: photo, in: library.visiblePhotos, marks: library.stackMarks) ?? photo)
                    ? "Collapse Stack" : "Open Stack") {
-                library.toggleStack(of: photo)
+                library.toggleStackAnimated(of: photo)
             }
         }
         Divider()

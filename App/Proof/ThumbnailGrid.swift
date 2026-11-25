@@ -145,9 +145,9 @@ struct ThumbnailGrid: View {
                         .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
                     .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, stack: stack,
                                   isStackOpen: library.isStackOpen(photo.id),
-                                  toggleStack: { library.toggleStack(of: photo.id) }, size: 10)
+                                  toggleStack: { library.toggleStackAnimated(of: photo.id) }, size: 10)
                         .stackLayers(library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] },
-                                     step: 5)
+                                     inStack: stack != nil, step: 5)
                 } else if finished.contains(photo.id) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
@@ -197,7 +197,7 @@ struct ThumbnailGrid: View {
         .accessibilityActions {
             if case .first = stack {
                 Button(library.isStackOpen(photo.id) ? "Collapse Stack" : "Open Stack") {
-                    library.toggleStack(of: photo.id)
+                    library.toggleStackAnimated(of: photo.id)
                 }
             }
         }
