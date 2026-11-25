@@ -3,15 +3,15 @@ import SwiftUI
 /// The selection style shared by the grid, the filmstrip, the Looks card and the navigator: a
 /// thin rounded outline a few points outside the photo, like a card, in the interface's one
 /// highlight color. It is only a line, so it doesn't compete with the photo.
-enum SelectionOutline {
+public enum SelectionOutline {
     /// Thumbnails' own corners, small enough that the photo still reads as a rectangle.
-    static let photoCornerRadius: CGFloat = 4
-    static let lineWidth: CGFloat = 1
+    public static let photoCornerRadius: CGFloat = 4
+    public static let lineWidth: CGFloat = 1
 
-    static let color = Color.highlight
+    public static let color = Color.highlight
 
     /// Keeps the outline's corners concentric with the photo's, whatever the padding.
-    static func cornerRadius(padding: CGFloat) -> CGFloat { photoCornerRadius + padding }
+    public static func cornerRadius(padding: CGFloat) -> CGFloat { photoCornerRadius + padding }
 }
 
 /// The parts of a cell its outline wraps, such as the photo and its name, when the cell is
@@ -24,7 +24,7 @@ private struct OutlinedPartsKey: PreferenceKey {
     }
 }
 
-extension View {
+public extension View {
     /// Marks this view as one the enclosing `selectionOutline` wraps. Without any marked part,
     /// the outline wraps the whole cell.
     func outlined() -> some View {

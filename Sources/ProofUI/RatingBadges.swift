@@ -1,8 +1,7 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
-extension View {
+public extension View {
     /// Marks a thumbnail with what other apps recorded in XMP: the flag in the top-right corner
     /// and the stars in the bottom-left, as Lightroom does. A pencil in the top-left shows the
     /// photo has an edit, which is the Edited filter's test. A stack mark before it shows the photo
@@ -110,12 +109,17 @@ extension View {
 
 /// Lightroom's flag icons: a filled flag for flagged, an outlined flag for unflagged, and a filled
 /// flag with an X for rejected. SF Symbols has no flag with an X, so the X is cut out of the flag.
-struct FlagIcon: View {
+public struct FlagIcon: View {
     let flag: PhotoMetadata.Flag
     /// The point size of the surrounding font, so the X scales with the flag.
     var size: CGFloat = 12
 
-    var body: some View {
+    public init(flag: PhotoMetadata.Flag, size: CGFloat = 12) {
+        self.flag = flag
+        self.size = size
+    }
+
+    public var body: some View {
         switch flag {
         case .flagged:
             Image(systemName: "flag.fill")
@@ -135,9 +139,9 @@ struct FlagIcon: View {
     }
 }
 
-enum RatingBadges {
+public enum RatingBadges {
     /// The photo's name followed by its rating, flag and whether it is edited, for VoiceOver.
-    static func accessibilityLabel(name: String, metadata: PhotoMetadata?, isEdited: Bool,
+    public static func accessibilityLabel(name: String, metadata: PhotoMetadata?, isEdited: Bool,
                                    stack: StackMark? = nil) -> String {
         var parts = [name]
         switch stack {
@@ -158,9 +162,9 @@ enum RatingBadges {
     }
 
     /// The flags in the order Lightroom shows them.
-    static let flags: [PhotoMetadata.Flag] = [.flagged, .unflagged, .rejected]
+    public static let flags: [PhotoMetadata.Flag] = [.flagged, .unflagged, .rejected]
 
-    static func title(of flag: PhotoMetadata.Flag) -> String {
+    public static func title(of flag: PhotoMetadata.Flag) -> String {
         switch flag {
         case .flagged: "Flagged"
         case .unflagged: "Unflagged"
@@ -168,7 +172,7 @@ enum RatingBadges {
         }
     }
 
-    static func title(ofRating rating: Int) -> String {
+    public static func title(ofRating rating: Int) -> String {
         switch rating {
         case 0: "No Stars"
         case 1: "1 Star"
@@ -179,11 +183,16 @@ enum RatingBadges {
 
 /// The Edit toolbar's star buttons, packed closer than separate toolbar items would be. Clicking
 /// the current rating clears it.
-struct StarButtons: View {
+public struct StarButtons: View {
     let rating: Int
     let setRating: (Int) -> Void
 
-    var body: some View {
+    public init(rating: Int, setRating: @escaping (Int) -> Void) {
+        self.rating = rating
+        self.setRating = setRating
+    }
+
+    public var body: some View {
         HStack(spacing: 0) {
             ForEach(1...5, id: \.self) { star in
                 Button {
@@ -206,11 +215,16 @@ struct StarButtons: View {
 
 /// The Edit toolbar's Flagged, Unflagged and Rejected buttons, packed closely, with the current
 /// flag on a gray backing as the system marks a selected toolbar button.
-struct FlagButtons: View {
+public struct FlagButtons: View {
     let flag: PhotoMetadata.Flag
     let setFlag: (PhotoMetadata.Flag) -> Void
 
-    var body: some View {
+    public init(flag: PhotoMetadata.Flag, setFlag: @escaping (PhotoMetadata.Flag) -> Void) {
+        self.flag = flag
+        self.setFlag = setFlag
+    }
+
+    public var body: some View {
         HStack(spacing: 2) {
             ForEach(RatingBadges.flags, id: \.self) { option in
                 Button {
@@ -234,7 +248,7 @@ struct FlagButtons: View {
     }
 }
 
-extension Library {
+public extension Library {
     /// Opens or collapses the stack `photo` is in, with the photos it shows or hides sliding in
     /// and out, so the stack is seen to open.
     func toggleStackAnimated(of photo: PhotoReference) {

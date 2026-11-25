@@ -331,21 +331,3 @@ struct ExportSheet: View {
     }
 }
 
-/// File › Export To and the right-click menu's Export To: each saved destination, exporting right
-/// away with its folder and settings (decision 0032).
-struct ExportToMenu: View {
-    let library: Library
-    /// The photos to export; `nil` for the selected photos.
-    var photos: [PhotoReference]?
-    var isDisabled = false
-
-    var body: some View {
-        let destinations = library.exportDestinations?.destinations ?? []
-        Menu("Export To") {
-            ForEach(destinations) { destination in
-                Button(destination.name) { library.export(photos, to: destination.id) }
-            }
-        }
-        .disabled(isDisabled || destinations.isEmpty)
-    }
-}
