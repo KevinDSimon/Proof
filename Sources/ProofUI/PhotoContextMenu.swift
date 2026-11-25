@@ -33,21 +33,10 @@ public struct PhotoContextMenu: View {
             #endif
             Divider()
         }
-        // A rating or flag the photos share is checked.
-        Picker("Rating", selection: Binding(get: { library.commonRating(of: photos) ?? -1 },
-                                            set: { library.setRating($0, of: photos) })) {
-            ForEach(0...5, id: \.self) { rating in
-                Text(RatingBadges.title(ofRating: rating)).tag(rating)
-            }
-        }
-        .submenuOnTouch()
-        Picker("Flag", selection: Binding(get: { library.commonFlag(of: photos) },
-                                          set: { if let flag = $0 { library.setFlag(flag, of: photos) } })) {
-            ForEach(RatingBadges.flags, id: \.self) { flag in
-                Text(RatingBadges.title(of: flag)).tag(PhotoMetadata.Flag?.some(flag))
-            }
-        }
-        .submenuOnTouch()
+        RatingPicker(library: library, photos: photos)
+            .submenuOnTouch()
+        FlagPicker(library: library, photos: photos)
+            .submenuOnTouch()
         if library.stackMarks[photo] != nil {
             Divider()
             Button(library.isStackOpen(StackMark.first(of: photo, in: library.visiblePhotos, marks: library.stackMarks) ?? photo)
@@ -81,6 +70,47 @@ public struct PhotoContextMenu: View {
         }
         .disabled(toRevert.isEmpty)
         #endif
+    }
+}
+
+/// The rating choices for `photos`, with a rating they all share checked. In the photo menus and
+/// the iOS selection toolbar.
+public struct RatingPicker: View {
+    let library: Library
+    let photos: [PhotoReference]
+
+    public init(library: Library, photos: [PhotoReference]) {
+        self.library = library
+        self.photos = photos
+    }
+
+    public var body: some View {
+        Picker("Rating", selection: Binding(get: { library.commonRating(of: photos) ?? -1 },
+                                            set: { library.setRating($0, of: photos) })) {
+            ForEach(0...5, id: \.self) { rating in
+                Text(RatingBadges.title(ofRating: rating)).tag(rating)
+            }
+        }
+    }
+}
+
+/// The flag choices for `photos`, with a flag they all share checked.
+public struct FlagPicker: View {
+    let library: Library
+    let photos: [PhotoReference]
+
+    public init(library: Library, photos: [PhotoReference]) {
+        self.library = library
+        self.photos = photos
+    }
+
+    public var body: some View {
+        Picker("Flag", selection: Binding(get: { library.commonFlag(of: photos) },
+                                          set: { if let flag = $0 { library.setFlag(flag, of: photos) } })) {
+            ForEach(RatingBadges.flags, id: \.self) { flag in
+                Text(RatingBadges.title(of: flag)).tag(PhotoMetadata.Flag?.some(flag))
+            }
+        }
     }
 }
 

@@ -38,19 +38,9 @@ struct ContentView: View {
                     .navigationTitle(browseTitle)
                     .navigationSubtitle(browseSubtitle)
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        // Only in Browse, and only once a row is picked, as on the Mac.
-                        if library.selection != nil, !library.isEditing {
-                            ToolbarItem { FilterButton(library: library) }
-                        }
-                        // Select, as in Photos: taps then add or remove photos, and a drag across
-                        // them selects a range.
-                        if library.isSelectingPhotos {
-                            ToolbarItem { Button("Cancel", role: .cancel) { library.isSelectingPhotos = false } }
-                        } else if !library.isEditing, !library.visiblePhotos.isEmpty {
-                            ToolbarItem { Button("Select") { library.isSelectingPhotos = true } }
-                        }
-                    }
+                    .toolbar { browseToolbar }
+                    // Select All takes the back button's place while selecting, as in Files.
+                    .navigationBarBackButtonHidden(library.isSelectingPhotos)
                     .navigationDestination(isPresented: isEditing) {
                         PhotoView(library: library)
                     }
@@ -82,6 +72,46 @@ struct ContentView: View {
         }
     }
 
+    /// Browse has one More menu, with Select and the filter, so the bar stays clear on iPhone.
+    /// While selecting, the bar has Select All and Done, and a bottom toolbar rates and flags the
+    /// selected photos, as in Files and Photos.
+    @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
+        if library.isSelectingPhotos {
+            let allSelected = library.browse.selectedPhotos.count == library.shownPhotos.count
+            ToolbarItem(placement: .topBarLeading) {
+                Button(allSelected ? "Deselect All" : "Select All") {
+                    if allSelected { library.deselectAll() } else { library.browse.selectAll(library.shownPhotos) }
+                }
+            }
+            ToolbarItem { Button("Done") { library.isSelectingPhotos = false } }
+            let photos = library.selectedPhotosInOrder
+            ToolbarItemGroup(placement: .bottomBar) {
+                Menu("Rating", systemImage: "star") {
+                    RatingPicker(library: library, photos: photos).pickerStyle(.inline)
+                }
+                .disabled(photos.isEmpty)
+                Spacer()
+                Menu("Flag", systemImage: "flag") {
+                    FlagPicker(library: library, photos: photos).pickerStyle(.inline)
+                }
+                .disabled(photos.isEmpty)
+            }
+        } else if library.selection != nil, !library.isEditing {
+            ToolbarItem {
+                Menu("More", systemImage: "ellipsis") {
+                    Button("Select", systemImage: "checkmark.circle") { library.isSelectingPhotos = true }
+                        .disabled(library.visiblePhotos.isEmpty)
+                    Menu {
+                        FilterMenu(library: library)
+                    } label: {
+                        Label("Filter", systemImage: "line.3.horizontal.decrease")
+                        if !library.filter.isEmpty { Text(library.filter.summary) }
+                    }
+                }
+            }
+        }
+    }
+
     /// Going back from the photo, by the back button or the edge swipe, returns to Browse.
     private var isEditing: Binding<Bool> {
         Binding(get: { library.isEditing },
@@ -98,7 +128,12 @@ struct ContentView: View {
         default: "\(count) Photos Selected"
         }
     }
-    private var browseSubtitle: String { library.isEditing ? "" : library.windowSubtitle }
+    /// The filter's name follows the count, as the filter button has no badge on iOS.
+    private var browseSubtitle: String {
+        guard !library.isEditing else { return "" }
+        let filter = library.filter.isEmpty || library.isSelectingPhotos ? nil : library.filter.summary
+        return [library.windowSubtitle, filter].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
 }
 
 /// The photo, centered on the canvas with a margin. Its thumbnail stands in until the edit
