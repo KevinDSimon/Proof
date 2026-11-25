@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000010 /* ProofKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000011 /* ProofKit */; };
+		A10000000000000000000013 /* ProofUI in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000014 /* ProofUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +43,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000010 /* ProofKit in Frameworks */,
+				A10000000000000000000013 /* ProofUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -86,6 +88,7 @@
 			name = Proof;
 			packageProductDependencies = (
 				A10000000000000000000011 /* ProofKit */,
+				A10000000000000000000014 /* ProofUI */,
 			);
 			productName = Proof;
 			productReference = A10000000000000000000020 /* Proof.app */;
@@ -272,6 +275,10 @@
 		A10000000000000000000011 /* ProofKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ProofKit;
+		};
+		A10000000000000000000014 /* ProofUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ProofUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The color profile the photo is decoded with, in the Histogram card under the capture

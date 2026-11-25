@@ -1,6 +1,7 @@
 import MetalKit
 import OSLog
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// Shows one RAW photo in a Metal-backed view, fitted to the view or zoomed as `viewport` says.

@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// Edit › Copy: which of the photo's settings to copy, as in Lightroom's Copy Settings. Items are

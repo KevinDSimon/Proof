@@ -1,6 +1,6 @@
 # Architecture
 
-Proof is split into a platform-neutral engine package, `ProofKit`, and thin app targets on top of it. The Mac app comes first; an iPad and iPhone app reuses `ProofKit` unchanged.
+Proof is split into a platform-neutral engine package, `ProofKit`, a shared app layer, `ProofUI`, and thin app targets on top of them. The Mac app comes first; an iPad and iPhone app reuses `ProofKit` unchanged and shares `ProofUI` with the Mac.
 
 ## Layers
 
@@ -8,10 +8,12 @@ Proof is split into a platform-neutral engine package, `ProofKit`, and thin app 
 | --- | --- | --- |
 | `ProofKit` | Edit recipe, render pipeline, sidecars, XMP reading, rating and description writes, `.cube` parsing, thumbnails | AppKit, UIKit, SwiftUI |
 | Mac app (`App/Proof.xcodeproj`) | Folders panel, filmstrip, inspector, canvas, export UI | — |
-| `ProofUI` (planned, #218) | The app model, `Library`, and SwiftUI views both apps share | AppKit, UIKit |
+| `ProofUI` | The app model both apps share: `Library`, `CanvasZoom`, `ExportQueue`, `LookBrowser`, and the shared thumbnail cache and LUT library. Plain SwiftUI views move here in #242 | AppKit, UIKit |
 | iOS app (planned, #218) | The same panels for touch on iPad and iPhone, Files-app folder picking | — |
 
-The Mac app runs in the App Sandbox. Its project links `ProofKit` as a local Swift package, so a change to `ProofKit` is picked up by the next app build without a version bump. Xcode and CI sign it ad hoc, to run locally; releases are signed with the owner's Developer ID and notarized by `scripts/release.sh` (decision 0038, `docs/releasing.md`). The version and build number are set in `App/Version.xcconfig`.
+`Library` reaches the system through a `LibraryPlatform` the app passes in when it makes the library: the modifier keys of a click, the alert sound, revealing files and opening a folder in the file browser, copying text, and the events it follows (a drive connecting or disconnecting, the app becoming active, the app quitting). The Mac app fills it with AppKit calls in `App/Proof/MacPlatform.swift`. Thumbnails and look previews are `CGImage`, which SwiftUI draws on both platforms.
+
+The Mac app runs in the App Sandbox. Its project links `ProofKit` and `ProofUI` as a local Swift package, so a change to either is picked up by the next app build without a version bump. Xcode and CI sign it ad hoc, to run locally; releases are signed with the owner's Developer ID and notarized by `scripts/release.sh` (decision 0038, `docs/releasing.md`). The version and build number are set in `App/Version.xcconfig`.
 
 The iPad and iPhone app is planned in [decision 0048](decisions/0048-ipad-iphone-app.md): one universal app with the Mac's adjustments, a `NavigationSplitView` that collapses to a stack in compact width, and the inspector as a sheet below the photo on iPhone.
 

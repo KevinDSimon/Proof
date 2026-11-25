@@ -80,6 +80,7 @@ swift test
 | --- | --- |
 | `App/` | The Mac app (SwiftUI) |
 | `Sources/ProofKit` | The editing engine: edit settings, rendering, sidecars, XMP and LUTs. It builds for macOS and iOS, so a later iPad and iPhone app can reuse it. |
+| `Sources/ProofUI` | The app model the Mac app shares with the coming iPad and iPhone app |
 | `Tests/ProofKitTests` | Tests for the engine |
 | `docs/` | Architecture, the edit file format, releasing, the roadmap and decision records |
 | `scripts/release.sh` | Builds a signed, notarized `.dmg` for a release |

@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 extension View {
@@ -65,7 +66,7 @@ extension View {
     /// up two `step`s at the top, open or collapsed, so the layers stay inside the cell and its
     /// selection outline, and opening a stack never resizes its photos. Apply it to the image,
     /// after its badges, so the layers are its width and the badges stay on the photo.
-    @ViewBuilder func stackLayers(_ layers: [NSImage?], inStack: Bool, step: CGFloat) -> some View {
+    @ViewBuilder func stackLayers(_ layers: [CGImage?], inStack: Bool, step: CGFloat) -> some View {
         if !inStack {
             self
         } else {
@@ -75,7 +76,7 @@ extension View {
                     ForEach(Array(layers.prefix(2).enumerated()).reversed(), id: \.offset) { depth, image in
                         Group {
                             if let image {
-                                Image(nsImage: image)
+                                Image(decorative: image, scale: 1)
                                     .resizable()
                                     .scaledToFill()
                             } else {

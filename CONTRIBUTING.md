@@ -21,10 +21,10 @@ swift build
 swift test
 ```
 
-`ProofKit` also builds for iOS, and CI runs its tests on an iPhone simulator. To do the same locally, name any iPhone simulator that Xcode has installed:
+`ProofKit` and `ProofUI` also build for iOS, and CI runs the tests on an iPhone simulator. To do the same locally, name any iPhone simulator that Xcode has installed:
 
 ```bash
-xcodebuild test -scheme Proof -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+xcodebuild test -scheme Proof-Package -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
 ```
 
 RAW files are never committed, so the tests that render a real photo run only when `PROOF_SAMPLE_DNG` names one:
@@ -62,7 +62,7 @@ PROOF_COMPARE_DIR=~/Pictures/Compare PROOF_COMPARE_OUTPUT=~/Desktop/compare swif
 
 ## Running the app
 
-Open `App/Proof.xcodeproj`, choose the **Proof** scheme and **My Mac**, and choose Product › Run (⌘R). Xcode resolves the `ProofKit` package from the repository root. The app is signed to run locally, so no Apple developer team is needed. To build it without Xcode's interface:
+Open `App/Proof.xcodeproj`, choose the **Proof** scheme and **My Mac**, and choose Product › Run (⌘R). Xcode resolves the `ProofKit` and `ProofUI` packages from the repository root. The app is signed to run locally, so no Apple developer team is needed. To build it without Xcode's interface:
 
 ```bash
 xcodebuild -project App/Proof.xcodeproj -scheme Proof build
@@ -74,10 +74,11 @@ Release builds for testers are signed and notarized by `scripts/release.sh`; see
 
 | Path | What it is |
 | --- | --- |
-| `App/Proof.xcodeproj` | The Mac app (SwiftUI, App Sandbox on). Depends on the local `ProofKit` package. |
+| `App/Proof.xcodeproj` | The Mac app (SwiftUI, App Sandbox on). Depends on the local `ProofKit` and `ProofUI` packages. |
 | `App/Proof` | The Mac app's source files and entitlements |
 | `App/Version.xcconfig` | The app's version and build number |
 | `Sources/ProofKit` | Platform-neutral engine: edit recipe, render pipeline, sidecars, XMP, LUT parsing. No AppKit, UIKit or SwiftUI. |
+| `Sources/ProofUI` | The app model the Mac and iOS apps share, such as `Library`. SwiftUI, no AppKit or UIKit. |
 | `Tests/ProofKitTests` | Tests for ProofKit (Swift Testing) |
 | `docs/` | Architecture, edit file format, release steps, roadmap and decision records |
 | `scripts/release.sh` | Builds a signed, notarized `.dmg` for a release |

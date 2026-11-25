@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ProofUI
 
 /// The export sheet once Export is clicked, and for File › Export To: which photo is being
 /// exported, a bar and Stop, then how many photos were exported, which failed and why, and Show in

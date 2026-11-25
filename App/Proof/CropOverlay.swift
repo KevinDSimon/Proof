@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The crop rectangle drawn over the photo while the crop tool is open: the area outside it

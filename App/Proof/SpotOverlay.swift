@@ -1,5 +1,6 @@
 import AppKit
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The Spot Removal tool on the photo: a click covers the spot under it, filled from a nearby

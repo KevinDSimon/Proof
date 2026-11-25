@@ -1,5 +1,6 @@
 import AppKit
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The tone curve: a channel picker, a square graph of the chosen channel's curve with the

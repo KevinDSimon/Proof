@@ -1,13 +1,11 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// File › Export…: a saved destination or a folder chosen at export, then the format, size, color
 /// space and metadata of the export. A destination brings its own folder and settings (decision
 /// 0032); without one, the last settings are remembered for the next export (decision 0031).
 struct ExportSheet: View {
-    /// The destination last exported to, as a UUID string; empty for Choose Folder.
-    static let destinationKey = "exportDestination"
-
     let library: Library
     let photos: [PhotoReference]
     @Environment(\.dismiss) private var dismiss
@@ -15,7 +13,7 @@ struct ExportSheet: View {
     @AppStorage("exportSettings") private var storedSettings = Data()
     /// The folder last exported to, where the open panel starts.
     @AppStorage("exportFolderPath") private var lastFolderPath = ""
-    @AppStorage(Self.destinationKey) private var storedDestination = ""
+    @AppStorage(ExportQueue.destinationKey) private var storedDestination = ""
     @State private var settings = ExportSettings()
     @State private var destinationID: UUID?
     /// The chosen destination's folder, resolved when it is chosen; `nil` when it can't be found.

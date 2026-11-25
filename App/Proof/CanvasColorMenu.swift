@@ -1,5 +1,6 @@
 import AppKit
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// View › Canvas Color (#42): the presets with the current one checked, then Custom…, which opens

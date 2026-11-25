@@ -1,4 +1,5 @@
 import ProofKit
+import ProofUI
 import SwiftUI
 
 /// The right-click menu of a photo in the grid or the filmstrip. Like the menu bar, it acts on

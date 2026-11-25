@@ -1,10 +1,11 @@
 import AppKit
 import SwiftUI
 import ProofKit
+import ProofUI
 
 @main
 struct ProofApp: App {
-    @State private var library = Library()
+    @State private var library = Library(platform: .mac)
 
     init() {
         // Always dark, whatever the system appearance (#42), so the photo is judged against a calm
@@ -715,7 +716,7 @@ struct EditCanvas: View {
     var body: some View {
         PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdrop: library.canvasColor,
                     angle: library.isCropping ? library.selectedCrop.angle : 0,
-                    viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailGrid.cache) { error in
+                    viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailCache.shared) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
         } onHistogram: { histogram, url in
             library.showHistogram(histogram, of: url)

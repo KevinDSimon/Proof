@@ -1,32 +1,34 @@
-import AppKit
+import CoreGraphics
+import Foundation
 import Observation
 import ProofKit
+import SwiftUI
 
 /// What the sidebar can select: All Photos, the photos across folders that pass one filter, or
 /// one folder.
-enum SidebarItem: Codable, Hashable {
+public enum SidebarItem: Codable, Hashable {
     case allPhotos
     case filtered(PhotoFilter)
     case folder(FileReference)
 
-    var folder: FileReference? {
+    public var folder: FileReference? {
         if case .folder(let folder) = self { folder } else { nil }
     }
 
     /// The filter of a filter row.
-    var filter: PhotoFilter? {
+    public var filter: PhotoFilter? {
         if case .filtered(let filter) = self { filter } else { nil }
     }
 
     /// All Photos and the filter rows show photos from every available location.
-    var isAcrossFolders: Bool { folder == nil }
+    public var isAcrossFolders: Bool { folder == nil }
 }
 
 /// One photo's edit while Proof runs. Kept for every photo opened in Edit until Proof quits, so
 /// each photo has its own undo history.
-struct PhotoEdit {
+public struct PhotoEdit {
     /// Why the current edit isn't on disk.
-    enum Unsaved {
+    public enum Unsaved {
         /// The folder, or a photo saved on its own, was saved before Proof could write and
         /// hasn't been granted again.
         case noAccess
@@ -36,51 +38,51 @@ struct PhotoEdit {
     }
 
     /// What the canvas and controls show. Ahead of `history.recipe` while a change is being made.
-    var recipe: EditRecipe
-    var history: EditHistory
+    public var recipe: EditRecipe
+    public var history: EditHistory
     /// The sidecar as last read or written; `nil` when there is none.
-    var sidecar: Sidecar?
+    public var sidecar: Sidecar?
     /// The edit the photo has with no sidecar: neutral, with the crop and perspective correction
     /// the camera saved in the file (see `CameraSettings`). Revert returns to it.
-    var cameraEdit = EditRecipe()
+    public var cameraEdit = EditRecipe()
     /// ISO, focal length, aperture and shutter speed, shown under the histogram. Read once the
     /// photo is opened.
-    var captureSettings: CaptureSettings?
-    var unsaved: Unsaved?
+    public var captureSettings: CaptureSettings?
+    public var unsaved: Unsaved?
     /// The color profiles the photo offers, with what the decoder gives under each. `nil` until
     /// they have been read from the photo.
-    var profiles: CameraProfiles?
+    public var profiles: CameraProfiles?
     /// The camera's white balance under the edit's profile, which the white balance controls show
     /// for As Shot. `nil` until it has been read from the photo.
-    var asShot: WhiteBalance? { profiles?.defaults(for: recipe.profile)?.asShot }
+    public var asShot: WhiteBalance? { profiles?.defaults(for: recipe.profile)?.asShot }
     /// The camera's sharpening and noise reduction under the edit's profile, which the Detail
     /// sliders show where the edit has none. `nil` until it has been read from the photo.
-    var cameraDetail: CameraDetail? { profiles?.defaults(for: recipe.profile)?.detail }
+    public var cameraDetail: CameraDetail? { profiles?.defaults(for: recipe.profile)?.detail }
     /// The lens and whether the file has a correction profile, which the Lens Corrections card
     /// shows. `nil` until it has been read from the photo.
-    var cameraLens: CameraLens?
+    public var cameraLens: CameraLens?
     /// The photo's size in pixels as the camera oriented it, under the edit's profile, which the
     /// crop tool lays out by. `nil` until it has been read from the photo.
-    var size: CGSize? { profiles?.defaults(for: recipe.profile)?.orientedSize }
+    public var size: CGSize? { profiles?.defaults(for: recipe.profile)?.orientedSize }
 }
 
 /// The saved folders, what has been read of them, which folder, filter and photo are chosen, and
 /// whether that photo is being edited. Shared by the sidebar, the grid, the toolbar and the menus.
 @Observable @MainActor
-final class Library {
+public final class Library {
     /// Why the folder picker is open.
-    enum FolderRequest {
+    public enum FolderRequest {
         case add
         case locate(SavedLocation)
         /// A folder saved with a read-only grant, chosen again so Proof can write sidecars in it.
         case grantWrite(SavedLocation)
     }
 
-    private(set) var locations: [SavedLocation] = []
-    private(set) var statuses: [UUID: LocationStatus] = [:]
+    public private(set) var locations: [SavedLocation] = []
+    public private(set) var statuses: [UUID: LocationStatus] = [:]
     /// Folders read so far. A folder that couldn't be read is stored empty.
-    private(set) var contents: [FileReference: FolderContents] = [:]
-    var selection: SidebarItem? {
+    public private(set) var contents: [FileReference: FolderContents] = [:]
+    public var selection: SidebarItem? {
         didSet {
             UserDefaults.standard.set(try? JSONEncoder().encode(selection), forKey: Self.selectionKey)
             if selection != oldValue {
@@ -93,18 +95,18 @@ final class Library {
     }
     /// While All Photos or a filter row is selected, whether folders under the saved locations are
     /// still being read.
-    private(set) var isReadingAllPhotos = false
+    public private(set) var isReadingAllPhotos = false
     /// The toolbar filter, which narrows the selected folder, All Photos or filter row. A filter
     /// row's own criteria apply first, and this narrows them further (#182).
     /// The filmstrip's filter menu changes it too, so the two stay the same (#160).
-    var filter = FilterCriteria.none {
+    public var filter = FilterCriteria.none {
         didSet {
             // In Edit the photo shown stays until the person moves on, even if it doesn't match.
             changedPhotos = isEditing ? Set(browse.selectedPhoto.map { [$0] } ?? []) : []
             browse.keep(only: visiblePhotos)
         }
     }
-    var browse = BrowseState() {
+    public var browse = BrowseState() {
         didSet {
             guard browse.selectedPhoto != oldValue.selectedPhoto || browse.mode != oldValue.mode else { return }
             // Moving to another photo in Edit lets the photos that stopped matching leave the filmstrip.
@@ -124,22 +126,22 @@ final class Library {
         }
     }
     /// The edits of photos opened in Edit since Proof started.
-    private(set) var edits: [PhotoReference: PhotoEdit] = [:]
+    public private(set) var edits: [PhotoReference: PhotoEdit] = [:]
     /// Thumbnails of photos edited since Proof started, showing their current edit. The grid and
     /// the filmstrip show these over the thumbnails they loaded.
-    private(set) var editedThumbnails: [PhotoReference: NSImage] = [:]
+    public private(set) var editedThumbnails: [PhotoReference: CGImage] = [:]
     /// Cards switched off while at their defaults, so their controls stay closed. Switching one
     /// off changes nothing that renders, so it isn't saved; opening a photo sets these again.
     /// Cards whose switch changes the render are switched off in the edit (decision 0046).
     private var closedGroups: Set<AdjustmentGroup> = []
 
-    func isOn(_ group: AdjustmentGroup) -> Bool {
+    public func isOn(_ group: AdjustmentGroup) -> Bool {
         !closedGroups.contains(group) && selectedEdit?.recipe.switchedOff.contains(group) != true
     }
 
     /// Switching a card off leaves its adjustments out of the edit's render, on the canvas, in
     /// thumbnails and in export, as one undo step that is saved like any other change.
-    func setOn(_ group: AdjustmentGroup, _ isOn: Bool) {
+    public func setOn(_ group: AdjustmentGroup, _ isOn: Bool) {
         showEdited()
         if isOn { closedGroups.remove(group) }
         guard let photo = browse.selectedPhoto, let recipe = edits[photo]?.recipe else { return }
@@ -154,64 +156,64 @@ final class Library {
         commitEdit(of: photo)
     }
     /// A control is being dragged. The change becomes one undo step, and is saved, when it ends.
-    var isAdjusting = false {
+    public var isAdjusting = false {
         didSet {
             commitTask?.cancel()
             if !isAdjusting, let photo = browse.selectedPhoto { commitEdit(of: photo) }
         }
     }
     /// The Distortion slider or a Transform slider is being dragged, which shows a grid over the photo.
-    var isAdjustingGeometry = false
-    var isInspectorShown = true
+    public var isAdjustingGeometry = false
+    public var isInspectorShown = true
     /// The History panel on the leading side in Edit (#56).
-    var isHistoryShown = false
+    public var isHistoryShown = false
     /// The filmstrip under the photo in Edit (#159), remembered across launches.
-    var isFilmstripShown = UserDefaults.standard.object(forKey: Library.filmstripKey) as? Bool ?? true {
+    public var isFilmstripShown = UserDefaults.standard.object(forKey: Library.filmstripKey) as? Bool ?? true {
         didSet { UserDefaults.standard.set(isFilmstripShown, forKey: Self.filmstripKey) }
     }
     private static let filmstripKey = "filmstripShown"
     /// The color around the photo in Edit (#42), remembered across photos and launches.
-    var canvasColor = CanvasColor(stored: UserDefaults.standard.data(forKey: Library.canvasColorKey)) {
+    public var canvasColor = CanvasColor(stored: UserDefaults.standard.data(forKey: Library.canvasColorKey)) {
         didSet { UserDefaults.standard.set(canvasColor.encoded, forKey: Self.canvasColorKey) }
     }
     private static let canvasColorKey = "canvasColor"
     /// The Info panel beside the grid in Browse (#151).
-    var isInfoShown = false
+    public var isInfoShown = false
     /// The Info panel's width when last open, so the grid can lay out for the width it will have
     /// once the panel has slid in or out.
-    var infoPanelWidth: CGFloat = 320
+    public var infoPanelWidth: CGFloat = 320
     /// The Info card below the histogram in Edit, collapsed until opened.
-    var isInfoCardExpanded = false
+    public var isInfoCardExpanded = false
     /// The inspector cards folded with their arrows, remembered across photos and launches.
-    var foldedCards = FoldedCards(Set(UserDefaults.standard.stringArray(forKey: Library.foldedCardsKey) ?? [])) {
+    public var foldedCards = FoldedCards(Set(UserDefaults.standard.stringArray(forKey: Library.foldedCardsKey) ?? [])) {
         didSet { UserDefaults.standard.set(foldedCards.titles.sorted(), forKey: Self.foldedCardsKey) }
     }
     private static let foldedCardsKey = "foldedInspectorCards"
     /// How far the photo in Edit is zoomed and where; back to Fit for each photo and for the crop tool.
-    let zoom = CanvasZoom()
+    public let zoom = CanvasZoom()
     /// The LUT library and its previews of the photo in Edit, for the Look section.
-    let looks = LookBrowser()
-    var isChoosingFolder = false
+    public let looks = LookBrowser()
+    public var isChoosingFolder = false
     /// Kept apart from `isChoosingFolder`, which SwiftUI clears before the picker's result arrives.
-    private(set) var folderRequest: FolderRequest = .add
-    var errorMessage: String?
+    public private(set) var folderRequest: FolderRequest = .add
+    public var errorMessage: String?
     /// The histogram of the latest render shown on the canvas, and the photo it was measured from.
     private var histogram: (url: URL, value: Histogram)?
 
     /// The histogram of the selected photo. Nil until its first render has been measured, so
     /// another photo's histogram is never shown in its place.
-    var selectedHistogram: Histogram? {
+    public var selectedHistogram: Histogram? {
         guard let histogram, histogram.url == selectedPhotoURL else { return nil }
         return histogram.value
     }
 
-    func showHistogram(_ histogram: Histogram, of url: URL) {
+    public func showHistogram(_ histogram: Histogram, of url: URL) {
         self.histogram = (url, histogram)
     }
 
     private let fileAccess: FileAccess?
     /// Saved export destinations (decision 0032). `nil` if their file couldn't be read.
-    let exportDestinations: ExportDestinations?
+    public let exportDestinations: ExportDestinations?
     private var metadataTask: Task<Void, Never>?
     private var allPhotosTask: Task<Void, Never>?
     /// Watches the available saved folders on local disks.
@@ -227,12 +229,15 @@ final class Library {
     /// Edit they stay only until another photo is shown.
     private var changedPhotos: Set<PhotoReference> = []
     /// Photos whose rating or flag couldn't be saved yet because their folder has a read-only grant.
-    private(set) var unsavedMetadata: Set<PhotoReference> = []
+    public private(set) var unsavedMetadata: Set<PhotoReference> = []
     /// The latest XMP write. Each waits for the one before, so quick changes land in order.
     private var metadataWrite: Task<Void, Never>?
     private static let selectionKey = "selectedFolder"
 
-    init() {
+    private let platform: LibraryPlatform
+
+    public init(platform: LibraryPlatform) {
+        self.platform = platform
         fileAccess = try? FileAccess(storeURL: URL.applicationSupportDirectory
             .appendingPathComponent("Proof/locations.json"))
         if fileAccess == nil { errorMessage = "Proof couldn't load its saved folders." }
@@ -241,6 +246,7 @@ final class Library {
                 .appendingPathComponent("Proof/export-destinations.json"), fileAccess: $0)
         }
         refreshLocations()
+        looks.openFolder = platform.openFolder
         observeSystem()
         looks.onChange = { [weak self] in self?.refreshEditedThumbnails() }
         // Before All Photos, the selection was saved as a folder reference.
@@ -250,13 +256,13 @@ final class Library {
         }
     }
 
-    func status(of id: UUID) -> LocationStatus {
+    public func status(of id: UUID) -> LocationStatus {
         statuses[id] ?? .missing
     }
 
     /// The selected folder's photos, or for All Photos every photo read so far under the available
     /// locations, in sidebar order.
-    var listedPhotos: [ListedPhoto] {
+    public var listedPhotos: [ListedPhoto] {
         switch selection {
         case .folder(let folder): ListedPhoto.photos(of: folder, in: contents)
         case .allPhotos, .filtered: allListedPhotos
@@ -269,30 +275,30 @@ final class Library {
     }
 
     /// The filter that applies: a filter row's narrowed by the toolbar's, or the toolbar's.
-    var activeFilter: FilterCriteria {
+    public var activeFilter: FilterCriteria {
         selection?.filter.map { $0.criteria.narrowed(by: filter) } ?? filter
     }
 
     /// The listed photos that pass the filter.
-    var visiblePhotos: [ListedPhoto] {
+    public var visiblePhotos: [ListedPhoto] {
         activeFilter.filter(listedPhotos, keeping: changedPhotos)
     }
 
     /// The stacks of `visiblePhotos`, such as a RAW and its JPEG (decision 0049).
-    var stackMarks: [PhotoReference: StackMark] { StackMark.marks(in: visiblePhotos) }
+    public var stackMarks: [PhotoReference: StackMark] { StackMark.marks(in: visiblePhotos) }
 
     /// The stacks opened since Proof started, by their first photo. Stacks start collapsed.
-    private(set) var openStacks: Set<PhotoReference> = []
+    public private(set) var openStacks: Set<PhotoReference> = []
 
     /// `visiblePhotos` without the photos hidden in collapsed stacks: what the grid and the
     /// filmstrip show, and what arrow keys and Select All move through.
-    var shownPhotos: [ListedPhoto] {
+    public var shownPhotos: [ListedPhoto] {
         StackMark.shown(visiblePhotos, marks: stackMarks, open: openStacks)
     }
 
     /// The photos after `photo` in its stack, in order, when `photo` is the first photo of a
     /// collapsed stack; otherwise none.
-    func hiddenStackPhotos(of photo: PhotoReference) -> [PhotoReference] {
+    public func hiddenStackPhotos(of photo: PhotoReference) -> [PhotoReference] {
         let marks = stackMarks
         guard case .first = marks[photo], !openStacks.contains(photo) else { return [] }
         let visible = visiblePhotos
@@ -301,11 +307,11 @@ final class Library {
     }
 
     /// Whether `photo` is the first photo of a stack, and that stack is open.
-    func isStackOpen(_ photo: PhotoReference) -> Bool { openStacks.contains(photo) }
+    public func isStackOpen(_ photo: PhotoReference) -> Bool { openStacks.contains(photo) }
 
     /// Opens or collapses the stack `photo` is in. Collapsing it selects its first photo in place
     /// of any it hides.
-    func toggleStack(of photo: PhotoReference) {
+    public func toggleStack(of photo: PhotoReference) {
         let visible = visiblePhotos, marks = stackMarks
         guard let first = StackMark.first(of: photo, in: visible, marks: marks) else { return }
         if openStacks.remove(first) == nil {
@@ -320,12 +326,12 @@ final class Library {
     }
 
     /// How many photos read so far under the available locations each filter row matches.
-    var filterCounts: [PhotoFilter: Int] {
+    public var filterCounts: [PhotoFilter: Int] {
         PhotoFilter.counts(of: allListedPhotos.lazy.map(\.photo))
     }
 
     /// Saved locations All Photos leaves out because their drive isn't connected or they can't be found.
-    var unavailableLocations: [SavedLocation] {
+    public var unavailableLocations: [SavedLocation] {
         locations.filter { !isAvailable($0) }
     }
 
@@ -343,12 +349,12 @@ final class Library {
     }
 
     /// A folder's name as the sidebar shows it: its own name, or the saved location's.
-    func name(of folder: FileReference) -> String {
+    public func name(of folder: FileReference) -> String {
         folder.relativePath.last ?? locations.first { $0.id == folder.locationID }?.name ?? ""
     }
 
     /// Where a folder sits under its saved location, as in "NAS › Albums › Coast".
-    func path(of folder: FileReference) -> String {
+    public func path(of folder: FileReference) -> String {
         let location = locations.first { $0.id == folder.locationID }?.name
         return ([location].compactMap { $0 } + folder.relativePath).joined(separator: " › ")
     }
@@ -356,7 +362,7 @@ final class Library {
     /// Reads a folder off the main thread. Already-read folders are read again only when `force` is
     /// set. Where Proof can write, sidecars left behind by a renamed photo are renamed to follow it
     /// first, and edits whose sidecar changed on disk are reloaded after (decision 0007).
-    func load(_ folder: FileReference, force: Bool = false) async {
+    public func load(_ folder: FileReference, force: Bool = false) async {
         guard force || contents[folder] == nil else { return }
         guard let fileAccess, let url = fileAccess.url(for: folder) else { return }
         // Asking for access isn't worth it for relinking, so folders that can't be written are skipped.
@@ -443,32 +449,32 @@ final class Library {
         }
     }
 
-    var isEditing: Bool { browse.mode == .editing }
+    public var isEditing: Bool { browse.mode == .editing }
 
     /// What other apps recorded in XMP for the selected photo; `nil` until it has been read.
-    var selectedPhotoMetadata: PhotoMetadata? {
+    public var selectedPhotoMetadata: PhotoMetadata? {
         guard let photo = browse.selectedPhoto else { return nil }
         return contents[photo.folder]?.photos.first { $0.name == photo.name }?.metadata
     }
 
     /// Sets the stars of `photos`, every selected photo by default, and saves them to their XMP sidecars.
-    func setRating(_ rating: Int, of photos: [PhotoReference]? = nil) {
+    public func setRating(_ rating: Int, of photos: [PhotoReference]? = nil) {
         changeMetadata(of: photos ?? Array(browse.selectedPhotos)) { $0.rating = rating }
     }
 
     /// Sets the flag of `photos`, every selected photo by default, and saves it to their XMP sidecars.
-    func setFlag(_ flag: PhotoMetadata.Flag, of photos: [PhotoReference]? = nil) {
+    public func setFlag(_ flag: PhotoMetadata.Flag, of photos: [PhotoReference]? = nil) {
         changeMetadata(of: photos ?? Array(browse.selectedPhotos)) { $0.flag = flag }
     }
 
     /// The rating all `photos` share, or `nil` when they differ.
-    func commonRating(of photos: [PhotoReference]) -> Int? {
+    public func commonRating(of photos: [PhotoReference]) -> Int? {
         let ratings = Set(photos.map { metadata(of: $0)?.rating ?? 0 })
         return ratings.count == 1 ? ratings.first : nil
     }
 
     /// The flag all `photos` share, or `nil` when they differ.
-    func commonFlag(of photos: [PhotoReference]) -> PhotoMetadata.Flag? {
+    public func commonFlag(of photos: [PhotoReference]) -> PhotoMetadata.Flag? {
         let flags = Set(photos.map { metadata(of: $0)?.flag ?? .unflagged })
         return flags.count == 1 ? flags.first : nil
     }
@@ -510,12 +516,12 @@ final class Library {
     }
 
     /// Whether the photo's info is in view: the panel in Browse, the open card in Edit.
-    var isShowingInfo: Bool {
+    public var isShowingInfo: Bool {
         isEditing ? isInspectorShown && isInfoCardExpanded : isInfoShown
     }
 
     /// Shows or hides the photo's info, for ⌘I. In Edit it opens the inspector if it is hidden.
-    func toggleInfo() {
+    public func toggleInfo() {
         if isEditing {
             let show = !isShowingInfo
             isInfoCardExpanded = show
@@ -526,13 +532,13 @@ final class Library {
     }
 
     /// The photo the Info panel describes: the only selected one. With several selected it shows none.
-    var infoPhoto: PhotoReference? {
+    public var infoPhoto: PhotoReference? {
         browse.selectedPhotos.count == 1 ? browse.selectedPhotos.first : nil
     }
 
     /// Saves a photo's title, caption, keywords, creator, copyright and location to its XMP
     /// sidecar, after any rating or flag still being written to it. Returns whether it was saved.
-    func saveDescription(_ description: PhotoDescription, of photo: PhotoReference) async -> Bool {
+    public func saveDescription(_ description: PhotoDescription, of photo: PhotoReference) async -> Bool {
         guard let url = url(ofPhoto: photo.name, in: photo.folder) else { return false }
         guard ensureCanWrite(nextTo: url) else {
             errorMessage = "The description of “\(photo.name)” couldn't be saved, because Proof can't write to its folder yet."
@@ -556,7 +562,7 @@ final class Library {
     // MARK: Edits
 
     /// The edit of the photo open in Edit.
-    var selectedEdit: PhotoEdit? {
+    public var selectedEdit: PhotoEdit? {
         browse.selectedPhoto.flatMap { edits[$0] }
     }
 
@@ -564,7 +570,7 @@ final class Library {
     /// controls are idle, so a burst of key presses is one undo step.
     /// `label` names the step in the History panel, for a change whose sliders don't say what
     /// made it, such as Auto Tone. Without it the step says what changed.
-    func changeEdit(label: String? = nil, _ change: (inout EditRecipe) -> Void) {
+    public func changeEdit(label: String? = nil, _ change: (inout EditRecipe) -> Void) {
         guard let photo = browse.selectedPhoto, edits[photo] != nil else { return }
         showEdited()
         change(&edits[photo]!.recipe)
@@ -583,13 +589,13 @@ final class Library {
     @ObservationIgnored private var pendingStepLabel: String?
 
     /// Photo › Next Look and Previous Look can step through the shown folder's looks.
-    var canStepLook: Bool {
+    public var canStepLook: Bool {
         isEditing && selectedEdit != nil && !looks.shownNames.isEmpty
     }
 
     /// Chooses the look `offset` places from the current one in the folder the Looks section
     /// shows, keeping its strength. Without a look, starts at the first or last.
-    func stepLook(by offset: Int) {
+    public func stepLook(by offset: Int) {
         guard canStepLook, let next = looks.look(steppingBy: offset, from: selectedEdit?.recipe.look?.lut) else { return }
         setOn(.look, true)
         changeEdit { recipe in
@@ -597,26 +603,26 @@ final class Library {
         }
     }
 
-    var canUndoEdit: Bool {
+    public var canUndoEdit: Bool {
         guard let edit = selectedEdit else { return false }
         return edit.history.canUndo || edit.recipe != edit.history.recipe
     }
 
-    var canRedoEdit: Bool {
+    public var canRedoEdit: Bool {
         selectedEdit?.history.canRedo == true
     }
 
-    func undoEdit() {
+    public func undoEdit() {
         stepEdit { $0.undo() }
     }
 
-    func redoEdit() {
+    public func redoEdit() {
         stepEdit { $0.redo() }
     }
 
     /// Clicking a step in the History panel: the photo as it was then. Undo and Redo move on
     /// from there, and a new change drops the steps after it.
-    func goToHistoryStep(_ index: Int) {
+    public func goToHistoryStep(_ index: Int) {
         stepEdit { $0.go(to: index) }
     }
 
@@ -633,40 +639,40 @@ final class Library {
     // MARK: Copy and paste settings
 
     /// What Edit › Copy last took, kept until Proof quits.
-    private(set) var copiedSettings: CopiedSettings?
+    public private(set) var copiedSettings: CopiedSettings?
     /// The Copy Settings sheet is open.
-    var isChoosingSettingsToCopy = false
+    public var isChoosingSettingsToCopy = false
 
     /// The selected photos in the order shown, for the menu bar's actions on the selection.
-    var selectedPhotosInOrder: [PhotoReference] {
+    public var selectedPhotosInOrder: [PhotoReference] {
         browse.selected(in: visiblePhotos)
     }
 
     /// The photos a right-click on `photo` acts on: the whole selection when the photo is in it,
     /// as in Finder, and otherwise only that photo.
-    func menuTargets(for photo: PhotoReference) -> [PhotoReference] {
+    public func menuTargets(for photo: PhotoReference) -> [PhotoReference] {
         browse.selectedPhotos.contains(photo) ? selectedPhotosInOrder : [photo]
     }
 
     // MARK: Export
 
-    let exports = ExportQueue()
+    public let exports = ExportQueue()
     /// The photos the export sheet is open for; empty while it is closed.
-    var photosToExport: [PhotoReference] = []
+    public var photosToExport: [PhotoReference] = []
 
     /// One export at a time: its progress sheet stays open until it ends.
-    var canExport: Bool { !isCropping && !exports.isVisible && browse.selectedPhotos.contains(where: \.isEditable) }
+    public var canExport: Bool { !isCropping && !exports.isVisible && browse.selectedPhotos.contains(where: \.isEditable) }
 
     /// File › Export…: opens the export sheet for `photos`, every selected photo by default.
     /// JPEG and HEIC photos are left out until #239.
-    func requestExport(of photos: [PhotoReference]? = nil) {
+    public func requestExport(of photos: [PhotoReference]? = nil) {
         guard !isCropping, !exports.isVisible else { return }
         photosToExport = (photos ?? selectedPhotosInOrder).filter(\.isEditable)
     }
 
     /// Queues `photos` with the edits Proof has for them now; photos without one in memory are
     /// exported with their sidecar's.
-    func export(_ photos: [PhotoReference], settings: ExportSettings, to folder: URL) {
+    public func export(_ photos: [PhotoReference], settings: ExportSettings, to folder: URL) {
         commitTask?.cancel()
         for photo in photos where edits[photo] != nil { commitEdit(of: photo) }
         let items = photos.compactMap { photo in
@@ -682,11 +688,11 @@ final class Library {
     /// File › Export To: exports `photos`, the selected photos by default, to a saved destination
     /// with its settings. When its folder can't be found, the export sheet opens on it instead, to
     /// show why and let the person choose the folder again.
-    func export(_ photos: [PhotoReference]? = nil, to destinationID: UUID) {
+    public func export(_ photos: [PhotoReference]? = nil, to destinationID: UUID) {
         guard !isCropping, !exports.isVisible, let destination = exportDestinations?.destination(destinationID) else { return }
         let photos = (photos ?? selectedPhotosInOrder).filter(\.isEditable)
         guard !photos.isEmpty else { return }
-        UserDefaults.standard.set(destinationID.uuidString, forKey: ExportSheet.destinationKey)
+        UserDefaults.standard.set(destinationID.uuidString, forKey: ExportQueue.destinationKey)
         guard let folder = exportDestinations?.folder(of: destinationID) else {
             photosToExport = photos
             return
@@ -695,11 +701,11 @@ final class Library {
     }
 
     /// Copies from the photo Edit shows, in Browse too, or from a right-clicked photo.
-    var canCopySettings: Bool {
+    public var canCopySettings: Bool {
         !isCropping && browse.selectedPhoto?.isEditable == true && (!isEditing || selectedEdit != nil)
     }
 
-    var canPasteSettings: Bool {
+    public var canPasteSettings: Bool {
         canCopySettings && copiedSettings != nil
     }
 
@@ -708,14 +714,14 @@ final class Library {
 
     /// Edit › Copy Settings…: opens the sheet for `photo`, the photo Edit shows by default, after
     /// reading its edit if it hasn't been opened.
-    func chooseSettingsToCopy(from photo: PhotoReference? = nil) {
+    public func chooseSettingsToCopy(from photo: PhotoReference? = nil) {
         guard !isCropping, let photo = photo ?? browse.selectedPhoto, photo.isEditable, loadEdit(of: photo) else { return }
         copySource = photo
         isChoosingSettingsToCopy = true
     }
 
     /// Copies `items` of the edit as the canvas shows it.
-    func copySettings(_ items: Set<SettingsItem>) {
+    public func copySettings(_ items: Set<SettingsItem>) {
         guard let photo = copySource ?? browse.selectedPhoto, let edit = edits[photo] else { return }
         copiedSettings = CopiedSettings(from: edit.recipe, items: items)
     }
@@ -723,7 +729,7 @@ final class Library {
     /// Edit › Paste: replaces the copied items of the edit of `photos`, every selected photo by
     /// default, as one undo step in each photo's own history, and saves them. When the photo in
     /// Edit is among them, it turns on the switches of the cards it changed.
-    func pasteSettings(to photos: [PhotoReference]? = nil) {
+    public func pasteSettings(to photos: [PhotoReference]? = nil) {
         guard !isCropping, let copied = copiedSettings else { return }
         let photos = photos ?? selectedPhotosInOrder
         commitTask?.cancel()
@@ -741,7 +747,7 @@ final class Library {
 
     /// Those of `photos`, every selected photo by default, that have an edit to revert, whatever
     /// their undo history. Photos not opened since Proof started count when they have a sidecar.
-    func photosToRevert(among photos: [PhotoReference]? = nil) -> [PhotoReference] {
+    public func photosToRevert(among photos: [PhotoReference]? = nil) -> [PhotoReference] {
         guard !isCropping else { return [] }
         return (photos ?? selectedPhotosInOrder).filter { photo in
             if let edit = edits[photo] { return !edit.recipe.isAsShot(edit.cameraEdit) || edit.sidecar != nil }
@@ -750,15 +756,15 @@ final class Library {
     }
 
     /// The photos the revert confirmation is asking about.
-    private(set) var photosPendingRevert: [PhotoReference] = []
+    public private(set) var photosPendingRevert: [PhotoReference] = []
     /// Revert to Original asks first when it would revert more than one photo.
-    var isConfirmingRevert = false {
+    public var isConfirmingRevert = false {
         didSet { if !isConfirmingRevert { photosPendingRevert = [] } }
     }
 
     /// Photo › Revert to Original, or the right-click menu's: reverts at once for one photo, and
     /// asks first for several.
-    func requestRevert(of photos: [PhotoReference]? = nil) {
+    public func requestRevert(of photos: [PhotoReference]? = nil) {
         let photos = photosToRevert(among: photos)
         if photos.count > 1 {
             photosPendingRevert = photos
@@ -769,7 +775,7 @@ final class Library {
     }
 
     /// The confirmation's Revert button.
-    func revertPendingPhotos() {
+    public func revertPendingPhotos() {
         revertEdit(of: photosPendingRevert)
     }
 
@@ -791,7 +797,7 @@ final class Library {
     /// Photo › Show Original (backslash): the photo without its edit, to compare. Any change to
     /// the edit, and the crop tool and eyedropper, show the edited photo again, so a change is
     /// never made out of sight.
-    func toggleOriginal() {
+    public func toggleOriginal() {
         guard isEditing, !isCropping, !isPickingWhiteBalance, !isRemovingSpots, !isMasking, selectedEdit != nil else { return }
         browse.toggleOriginal()
     }
@@ -819,10 +825,8 @@ final class Library {
 
     /// A click on a thumbnail in the grid or the filmstrip: ⌘ adds or removes the photo, ⇧ selects
     /// a range, and a plain click selects only that photo.
-    func click(_ photo: PhotoReference, in photos: [ListedPhoto]) {
-        // The click's own modifiers, rather than the keys held now, which can differ by the time a
-        // tap gesture ends.
-        let modifiers = NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
+    public func click(_ photo: PhotoReference, in photos: [ListedPhoto]) {
+        let modifiers = platform.clickModifiers()
         if modifiers.contains(.command) {
             browse.toggle(photo, in: photos)
         } else if modifiers.contains(.shift) {
@@ -833,12 +837,12 @@ final class Library {
     }
 
     /// ⌘A selects the photos shown in the grid or the filmstrip.
-    var canSelectPhotos: Bool {
+    public var canSelectPhotos: Bool {
         selection != nil && !isCropping && !visiblePhotos.isEmpty
     }
 
     /// Edit › Deselect All: in Browse, deselects every photo; in Edit, all but the photo shown.
-    func deselectAll() {
+    public func deselectAll() {
         if isEditing { browse.selectOnlyCurrent() } else { browse.selectedPhoto = nil }
     }
 
@@ -864,16 +868,16 @@ final class Library {
     // MARK: Spot Removal
 
     /// The Spot Removal tool is open: a click on the photo covers a spot, such as sensor dust.
-    private(set) var isRemovingSpots = false
+    public private(set) var isRemovingSpots = false
     /// The spot the tool's controls change and Delete removes, by its place in the recipe's `spots`.
-    var selectedSpot: Int?
+    public var selectedSpot: Int?
     /// The mode, size, feather and opacity the next spot gets: the last ones set, as in Lightroom.
-    private(set) var nextSpot = Spot(x: 0, y: 0, sourceX: 0, sourceY: 0)
+    public private(set) var nextSpot = Spot(x: 0, y: 0, sourceX: 0, sourceY: 0)
     /// A source is being looked for, for the spot at this place in `spots`.
-    private(set) var findingSourceFor: Int?
+    public private(set) var findingSourceFor: Int?
 
     /// Opens or closes the Spot Removal tool.
-    func toggleSpotRemoval() {
+    public func toggleSpotRemoval() {
         if isRemovingSpots {
             finishRemovingSpots()
             return
@@ -887,19 +891,19 @@ final class Library {
         isRemovingSpots = true
     }
 
-    func finishRemovingSpots() {
+    public func finishRemovingSpots() {
         isRemovingSpots = false
         selectedSpot = nil
     }
 
     /// The spot the controls show: the selected one, or the settings the next one gets.
-    var shownSpot: Spot {
+    public var shownSpot: Spot {
         selectedSpot.flatMap { index in selectedEdit?.recipe.spots.indices.contains(index) == true
             ? selectedEdit?.recipe.spots[index] : nil } ?? nextSpot
     }
 
     /// Selects the spot at `index`, or none. The next spot takes its settings, but not a stroke's path.
-    func selectSpot(_ index: Int?) {
+    public func selectSpot(_ index: Int?) {
         selectedSpot = index
         if let index, let spots = selectedEdit?.recipe.spots, spots.indices.contains(index) {
             nextSpot = spots[index]
@@ -908,7 +912,7 @@ final class Library {
     }
 
     /// Changes the selected spot's settings, and the next spot's.
-    func changeSpot(_ change: (inout Spot) -> Void) {
+    public func changeSpot(_ change: (inout Spot) -> Void) {
         change(&nextSpot)
         nextSpot.points = []
         guard let index = selectedSpot else { return }
@@ -921,7 +925,7 @@ final class Library {
     /// Covers a spot at `center`, in `Spot`'s coordinates, with the next spot's settings, and
     /// selects it. It shows at once, taking from beside it; the source Proof chooses replaces that
     /// when it has been found, in the same undo step.
-    func addSpot(at center: CGPoint, with renderer: RAWRenderer) async {
+    public func addSpot(at center: CGPoint, with renderer: RAWRenderer) async {
         guard let photo = browse.selectedPhoto, let url = selectedPhotoURL, let size = selectedEdit?.size else { return }
         var spot = nextSpot
         spot.center = center
@@ -955,7 +959,7 @@ final class Library {
 
     /// Starts painting a stroke at `point`, in `Spot`'s coordinates, with the next spot's settings,
     /// and selects it. It takes from itself, changing nothing, until it is finished.
-    func beginStroke(at point: CGPoint) {
+    public func beginStroke(at point: CGPoint) {
         guard selectedEdit != nil else { return }
         var spot = nextSpot
         spot.center = point
@@ -968,7 +972,7 @@ final class Library {
     }
 
     /// Adds `point` to the stroke being painted, the selected spot.
-    func extendStroke(to point: CGPoint) {
+    public func extendStroke(to point: CGPoint) {
         guard let index = selectedSpot else { return }
         changeEdit { recipe in
             guard recipe.spots.indices.contains(index), !recipe.spots[index].points.isEmpty else { return }
@@ -979,7 +983,7 @@ final class Library {
     /// Finishes the stroke being painted: it takes from beside it at once, then from the area
     /// Proof chooses when that has been found, in the same undo step. A stroke too short to be
     /// one becomes a circle.
-    func finishStroke(with renderer: RAWRenderer) async {
+    public func finishStroke(with renderer: RAWRenderer) async {
         defer { isAdjusting = false }
         guard let photo = browse.selectedPhoto, let url = selectedPhotoURL, let size = selectedEdit?.size,
               let index = selectedSpot, let recipe = selectedEdit?.recipe, recipe.spots.indices.contains(index)
@@ -1009,7 +1013,7 @@ final class Library {
 
     /// Off to the side of the stroke, square to the line from its first point to its last, as
     /// far as Proof's own choice at its nearest; a circle as `besideSpot` places it.
-    static func besideStroke(_ spot: Spot, photoSize: CGSize) -> CGPoint {
+    public static func besideStroke(_ spot: Spot, photoSize: CGSize) -> CGPoint {
         let path = spot.path
         guard spot.isStroke, let first = path.first, let last = path.last else {
             return besideSpot(center: spot.center, radius: spot.radius, photoSize: photoSize)
@@ -1030,14 +1034,14 @@ final class Library {
 
     /// The same distance away as Proof's own choice at its nearest, to the right or, near the
     /// photo's right edge, to the left.
-    static func besideSpot(center: CGPoint, radius: Double, photoSize: CGSize) -> CGPoint {
+    public static func besideSpot(center: CGPoint, radius: Double, photoSize: CGSize) -> CGPoint {
         let across = radius * 2.4 * max(photoSize.width, photoSize.height) / max(photoSize.width, 1)
         let x = center.x + across + radius <= 1 ? center.x + across : center.x - across
         return CGPoint(x: x, y: center.y)
     }
 
     /// Moves the spot at `index`, keeping its source where it was, or its source alone.
-    func moveSpot(at index: Int, to center: CGPoint? = nil, source: CGPoint? = nil) {
+    public func moveSpot(at index: Int, to center: CGPoint? = nil, source: CGPoint? = nil) {
         changeEdit { recipe in
             guard recipe.spots.indices.contains(index) else { return }
             if let center { recipe.spots[index].center = center }
@@ -1045,7 +1049,7 @@ final class Library {
         }
     }
 
-    func removeSpot(at index: Int) {
+    public func removeSpot(at index: Int) {
         selectedSpot = nil
         changeEdit { recipe in
             guard recipe.spots.indices.contains(index) else { return }
@@ -1053,7 +1057,7 @@ final class Library {
         }
     }
 
-    func clearSpots() {
+    public func clearSpots() {
         selectedSpot = nil
         changeEdit { $0.spots = [] }
     }
@@ -1062,34 +1066,34 @@ final class Library {
 
     /// The Masks tool is open: the inspector lists the photo's masks and the photo shows the
     /// selected one's handles.
-    private(set) var isMasking = false
+    public private(set) var isMasking = false
     /// The mask the tool's controls change and Delete removes, by its place in the recipe's `layers`.
-    var selectedLayer: Int?
+    public var selectedLayer: Int?
     /// Tints the selected mask red on the photo (O).
-    var showsMaskOverlay = false
+    public var showsMaskOverlay = false
     /// The size, feather and flow of the next brush stroke, as last set.
-    var nextStroke = BrushStroke()
+    public var nextStroke = BrushStroke()
     /// The brush takes away from the mask rather than adding to it. Option inverts it while held.
-    var isErasing = false
+    public var isErasing = false
     /// Vision is looking for the subject, for a new Subject mask.
-    private(set) var isFindingSubject = false
+    public private(set) var isFindingSubject = false
 
-    var layers: [Layer] { selectedEdit?.recipe.layers ?? [] }
+    public var layers: [Layer] { selectedEdit?.recipe.layers ?? [] }
 
-    var shownLayer: Layer? {
+    public var shownLayer: Layer? {
         selectedLayer.flatMap { layers.indices.contains($0) ? layers[$0] : nil }
     }
 
     /// The layer the canvas tints red: the selected one while Show Overlay is on, and while its
     /// adjustments are all at 0, so a new mask can be seen as it is drawn. Moving one of its
     /// sliders turns Show Overlay off, so the change can be seen.
-    var overlaidLayer: Int? {
+    public var overlaidLayer: Int? {
         guard isMasking, let index = selectedLayer, let layer = shownLayer else { return nil }
         return showsMaskOverlay || layer.adjustments.isNeutral ? index : nil
     }
 
     /// Opens or closes the Masks tool.
-    func toggleMasks() {
+    public func toggleMasks() {
         if isMasking {
             finishMasking()
             return
@@ -1103,7 +1107,7 @@ final class Library {
         isMasking = true
     }
 
-    func finishMasking() {
+    public func finishMasking() {
         isMasking = false
         selectedLayer = nil
     }
@@ -1112,7 +1116,7 @@ final class Library {
     /// to move and shape on the photo: a linear one fading down from the top, over the sky, and
     /// a radial one in the middle. A brush mask is empty, to paint on. A subject mask is added
     /// once Vision has found the subject.
-    func addMask(_ kind: Mask.Kind, with renderer: RAWRenderer?) async {
+    public func addMask(_ kind: Mask.Kind, with renderer: RAWRenderer?) async {
         switch kind {
         case .linear:
             selectLayer(appendLayer(Mask(.linear(LinearMask(start: CGPoint(x: 0.5, y: 0), end: CGPoint(x: 0.5, y: 0.4))))))
@@ -1130,7 +1134,7 @@ final class Library {
 
     /// Adds `mask` as a new layer, named for its place, and returns its index.
     @discardableResult
-    func appendLayer(_ mask: Mask) -> Int? {
+    public func appendLayer(_ mask: Mask) -> Int? {
         let names = Set(layers.map(\.name))
         let number = ((layers.count + 1)...).first { !names.contains("Mask \($0)") }!
         changeEdit { $0.layers.append(Layer(name: "Mask \(number)", mask: mask)) }
@@ -1156,11 +1160,11 @@ final class Library {
         }
     }
 
-    func selectLayer(_ index: Int?) {
+    public func selectLayer(_ index: Int?) {
         selectedLayer = index
     }
 
-    func changeLayer(at index: Int, _ change: (inout Layer) -> Void) {
+    public func changeLayer(at index: Int, _ change: (inout Layer) -> Void) {
         changeEdit { recipe in
             guard recipe.layers.indices.contains(index) else { return }
             change(&recipe.layers[index])
@@ -1168,13 +1172,13 @@ final class Library {
     }
 
     /// Changes the selected layer's adjustments.
-    func changeAdjustments(_ change: (inout LocalAdjustments) -> Void) {
+    public func changeAdjustments(_ change: (inout LocalAdjustments) -> Void) {
         guard let index = selectedLayer else { return }
         showsMaskOverlay = false
         changeLayer(at: index) { change(&$0.adjustments) }
     }
 
-    func removeLayer(at index: Int) {
+    public func removeLayer(at index: Int) {
         changeEdit { recipe in
             guard recipe.layers.indices.contains(index) else { return }
             recipe.layers.remove(at: index)
@@ -1182,7 +1186,7 @@ final class Library {
         selectedLayer = layers.isEmpty ? nil : min(index, layers.count - 1)
     }
 
-    func duplicateLayer(at index: Int) {
+    public func duplicateLayer(at index: Int) {
         guard layers.indices.contains(index) else { return }
         var copy = layers[index]
         copy.name += " Copy"
@@ -1190,13 +1194,13 @@ final class Library {
         selectedLayer = index + 1
     }
 
-    func clearMasks() {
+    public func clearMasks() {
         selectedLayer = nil
         changeEdit { $0.layers = [] }
     }
 
     /// Starts a brush stroke at `point` on the selected brush mask, with the next stroke's settings.
-    func startStroke(at point: CGPoint, erasing: Bool) {
+    public func startStroke(at point: CGPoint, erasing: Bool) {
         guard let index = selectedLayer, case .brush = shownLayer?.mask.shape else { return }
         var stroke = nextStroke
         stroke.points = []
@@ -1210,7 +1214,7 @@ final class Library {
     }
 
     /// Carries the stroke being painted on to `point`.
-    func continueStroke(to point: CGPoint) {
+    public func continueStroke(to point: CGPoint) {
         guard let index = selectedLayer else { return }
         changeLayer(at: index) { layer in
             guard case var .brush(brush) = layer.mask.shape, !brush.strokes.isEmpty else { return }
@@ -1222,9 +1226,9 @@ final class Library {
     // MARK: Crop
 
     /// The crop tool is open on the selected photo.
-    private(set) var isCropping = false
+    public private(set) var isCropping = false
     /// The straighten slider is being dragged, which shows a finer grid over the photo.
-    var isStraightening = false
+    public var isStraightening = false
     /// The edit when the crop tool opened, which Cancel returns to.
     private var recipeBeforeCrop: EditRecipe?
     /// The rectangle as it was before straightening shrank it, so it grows back as the angle
@@ -1232,37 +1236,37 @@ final class Library {
     private var unstraightenedFrame: CropFrame?
     /// Drags on the photo draw a line to level the photo along, instead of moving the rectangle.
     /// The line stays, with its ends draggable, until the ruler is turned off.
-    var isDrawingLevelLine = false {
+    public var isDrawingLevelLine = false {
         didSet { if !isDrawingLevelLine { keptLevelLine = nil } }
     }
     /// The last line drawn with the ruler, and the turn and flips it was drawn on.
     private var keptLevelLine: (line: LevelLine, turn: Crop)?
     /// Auto is looking for the horizon.
-    private(set) var isFindingHorizon = false
+    public private(set) var isFindingHorizon = false
     /// Auto found no horizon, which the crop tool shows for a moment.
-    private(set) var foundNoHorizon = false
+    public private(set) var foundNoHorizon = false
     /// Auto white balance or Auto Tone is measuring the photo.
-    private(set) var isAutoAdjusting = false
+    public private(set) var isAutoAdjusting = false
     /// The White Balance eyedropper is waiting for a click on something neutral in the photo.
-    var isPickingWhiteBalance = false
+    public var isPickingWhiteBalance = false
 
     /// The selected photo's crop. A photo without one starts locked to its own shape (Original).
-    var selectedCrop: Crop {
+    public var selectedCrop: Crop {
         selectedEdit?.recipe.crop ?? Crop.uncropped(photoSize: selectedEdit?.size)
     }
 
     /// The selected photo turned and flipped, in pixels: the space the crop rectangle is in.
     /// `nil` until the photo's size has been read.
-    var turnedPhotoSize: CGSize? {
+    public var turnedPhotoSize: CGSize? {
         selectedEdit?.size.map { selectedCrop.turnedSize(of: $0) }
     }
 
     /// The crop rectangle of the selected photo, in the units of `turnedPhotoSize`.
-    var selectedCropFrame: CropFrame? {
+    public var selectedCropFrame: CropFrame? {
         turnedPhotoSize.map { CropFrame(selectedCrop, imageSize: $0) }
     }
 
-    func startCropping() {
+    public func startCropping() {
         guard isEditing, !isCropping, let photo = browse.selectedPhoto, let edit = edits[photo] else { return }
         commitTask?.cancel()
         commitEdit(of: photo)
@@ -1277,14 +1281,14 @@ final class Library {
     }
 
     /// Done: keeps the crop and closes the tool.
-    func finishCropping() {
+    public func finishCropping() {
         guard isCropping, let photo = browse.selectedPhoto else { return }
         endCropping(of: photo)
         commitEdit(of: photo)
     }
 
     /// Cancel: returns to the edit from when the tool opened, as one undo step.
-    func cancelCropping() {
+    public func cancelCropping() {
         guard isCropping, let photo = browse.selectedPhoto else { return }
         commitTask?.cancel()
         if let recipeBeforeCrop { edits[photo]?.recipe = recipeBeforeCrop }
@@ -1304,13 +1308,13 @@ final class Library {
     }
 
     /// Sets the rectangle from a drag on the photo. It becomes the size straightening starts from.
-    func setCropFrame(_ frame: CropFrame) {
+    public func setCropFrame(_ frame: CropFrame) {
         unstraightenedFrame = frame
         changeCrop { frame.applied(to: $0) }
     }
 
     /// Sets the straighten angle, shrinking the rectangle as needed to keep it on the photo.
-    func setStraighten(_ angle: Double) {
+    public func setStraighten(_ angle: Double) {
         guard let current = selectedCropFrame else { return }
         // The kept rectangle applies only while nothing else, such as undo, has changed the crop.
         var base = current
@@ -1323,7 +1327,7 @@ final class Library {
     }
 
     /// The line drawn with the ruler, while the photo is still turned and flipped as it was drawn.
-    var levelLine: LevelLine? {
+    public var levelLine: LevelLine? {
         guard let kept = keptLevelLine else { return nil }
         let crop = selectedCrop
         guard kept.turn.rotation == crop.rotation, kept.turn.flipHorizontal == crop.flipHorizontal,
@@ -1332,19 +1336,19 @@ final class Library {
     }
 
     /// Removes the drawn line, keeping the angle it set.
-    func clearLevelLine() {
+    public func clearLevelLine() {
         keptLevelLine = nil
     }
 
     /// Keeps `line` on the photo and straightens so it becomes level or upright.
-    func level(along line: LevelLine) {
+    public func level(along line: LevelLine) {
         keptLevelLine = (line, selectedCrop)
         guard let angle = line.straightenAngle else { return }
         setStraighten(angle)
     }
 
     /// Sets the selected photo's white balance to the one Auto estimates, labelled Auto.
-    func autoWhiteBalance(with renderer: RAWRenderer) async {
+    public func autoWhiteBalance(with renderer: RAWRenderer) async {
         await autoAdjust(with: renderer, what: "white balance") { renderer, recipe in
             let found = try await renderer.autoWhiteBalance(recipe: recipe)
             return { $0.basic.setAuto(found) }
@@ -1352,7 +1356,7 @@ final class Library {
     }
 
     /// Opens or closes the White Balance eyedropper.
-    func toggleWhiteBalancePicker() {
+    public func toggleWhiteBalancePicker() {
         guard isEditing, !isCropping, selectedEdit?.asShot != nil else { return }
         showEdited()
         finishRemovingSpots()
@@ -1363,7 +1367,7 @@ final class Library {
     /// Sets the white balance that makes `patch` of the selected photo neutral gray, as Custom,
     /// and closes the eyedropper, as Lightroom's closes after one click. A patch too dark to tell
     /// its color beeps and leaves the eyedropper open for another try.
-    func pickWhiteBalance(in patch: CGRect, with renderer: RAWRenderer) async {
+    public func pickWhiteBalance(in patch: CGRect, with renderer: RAWRenderer) async {
         let photo = browse.selectedPhoto
         var isTooDark = false
         await autoAdjust(with: renderer, what: "white balance") { renderer, recipe in
@@ -1377,7 +1381,7 @@ final class Library {
         }
         guard browse.selectedPhoto == photo else { return }
         if isTooDark {
-            NSSound.beep()
+            platform.beep()
         } else {
             setOn(.whiteBalance, true)
             isPickingWhiteBalance = false
@@ -1385,7 +1389,7 @@ final class Library {
     }
 
     /// Sets the selected photo's six Tone sliders to the values Auto estimates.
-    func autoTone(with renderer: RAWRenderer) async {
+    public func autoTone(with renderer: RAWRenderer) async {
         await autoAdjust(with: renderer, what: "tone", label: "Auto Tone") { renderer, recipe in
             let light = try await renderer.autoTone(recipe: recipe)
             return { light.apply(to: &$0.basic) }
@@ -1394,10 +1398,10 @@ final class Library {
 
     /// Remove Chromatic Aberration is measuring the selected photo. Its switch shows on meanwhile,
     /// with a spinner, so turning it on answers at once.
-    private(set) var isMeasuringChromaticAberration = false
+    public private(set) var isMeasuringChromaticAberration = false
 
     /// Turns Remove Chromatic Aberration on, measuring the selected photo's fringes, or off.
-    func setRemovesChromaticAberration(_ isOn: Bool, with renderer: RAWRenderer) async {
+    public func setRemovesChromaticAberration(_ isOn: Bool, with renderer: RAWRenderer) async {
         guard isOn else {
             changeEdit { $0.lens.chromaticAberration = nil }
             return
@@ -1414,25 +1418,25 @@ final class Library {
     // MARK: Transform
 
     /// Upright is looking for lines in the selected photo.
-    private(set) var isFindingLines = false
+    public private(set) var isFindingLines = false
     /// The mode Upright is looking for lines for, which the menu shows meanwhile.
-    private(set) var findingMode: UprightMode?
+    public private(set) var findingMode: UprightMode?
     /// Upright found no lines to go by, which the Transform card shows for a moment.
-    private(set) var foundNoLines = false
+    public private(set) var foundNoLines = false
     /// Guided is open: a drag on the photo draws a line to make upright or level.
-    var isDrawingGuides = false
+    public var isDrawingGuides = false
     /// The lines found in a photo, kept while its lens corrections stay the same, so trying
     /// each Upright mode in turn doesn't look again.
     private var foundLines: (photo: PhotoReference, lens: LensCorrections, segments: [LineSegment], size: CGSize)?
 
     /// The most guides Guided keeps, as in Lightroom: two each way pin every slider it sets.
-    static let maximumGuides = 4
+    public static let maximumGuides = 4
 
     /// Sets the Transform sliders as Upright `mode` chooses them, or returns them to none for
     /// `nil` (Off). Aspect, Scale and the offsets are kept. Guided opens the guide tool instead,
     /// keeping guides drawn before. Upright straightens the photo itself, so the crop's
     /// straighten angle goes back to zero, as Lightroom resets it.
-    func setUpright(_ mode: UprightMode?, with renderer: RAWRenderer) async {
+    public func setUpright(_ mode: UprightMode?, with renderer: RAWRenderer) async {
         guard let photo = browse.selectedPhoto, let recipe = selectedEdit?.recipe else { return }
         setOn(.transform, true)
         switch mode {
@@ -1493,7 +1497,7 @@ final class Library {
 
     /// Adds a guide, from 0 to 1 on each axis of the uncorrected photo, replacing the oldest once
     /// there are `maximumGuides`, and straightens to the guides.
-    func addGuide(_ guide: GuideLine) {
+    public func addGuide(_ guide: GuideLine) {
         let size = selectedEdit?.size
         changeEdit { recipe in
             recipe.transform.guides = Array((recipe.transform.guides + [guide]).suffix(Self.maximumGuides))
@@ -1505,7 +1509,7 @@ final class Library {
 
     /// Replaces the guide at `index`, moved by an end or as a whole, and straightens to the
     /// guides again.
-    func setGuide(at index: Int, to guide: GuideLine) {
+    public func setGuide(at index: Int, to guide: GuideLine) {
         let size = selectedEdit?.size
         changeEdit { recipe in
             guard recipe.transform.guides.indices.contains(index) else { return }
@@ -1515,7 +1519,7 @@ final class Library {
     }
 
     /// Removes the guide at `index` and straightens to the ones left.
-    func removeGuide(at index: Int) {
+    public func removeGuide(at index: Int) {
         let size = selectedEdit?.size
         changeEdit { recipe in
             guard recipe.transform.guides.indices.contains(index) else { return }
@@ -1525,7 +1529,7 @@ final class Library {
     }
 
     /// Removes the guides and the correction they made.
-    func clearGuides() {
+    public func clearGuides() {
         changeEdit { recipe in
             recipe.transform.guides = []
             recipe.transform = recipe.transform.with(vertical: 0, horizontal: 0, rotate: 0)
@@ -1563,7 +1567,7 @@ final class Library {
 
     /// Straightens to the horizon Vision finds in the selected photo. When there is none, the
     /// angle stays as it was and `foundNoHorizon` is set for two seconds.
-    func autoStraighten(with renderer: RAWRenderer) async {
+    public func autoStraighten(with renderer: RAWRenderer) async {
         guard isCropping, !isFindingHorizon, let photo = browse.selectedPhoto, let url = selectedPhotoURL,
               let recipe = selectedEdit?.recipe else { return }
         isFindingHorizon = true
@@ -1594,7 +1598,7 @@ final class Library {
 
     /// Locks the rectangle to `aspect`, or unlocks it for `nil`, taking the largest rectangle of
     /// that shape around the current center.
-    func setCropAspect(_ aspect: AspectRatio?) {
+    public func setCropAspect(_ aspect: AspectRatio?) {
         guard let current = selectedCropFrame else { return }
         unstraightenedFrame = nil
         changeCrop { crop in
@@ -1605,7 +1609,7 @@ final class Library {
     }
 
     /// Switches the rectangle between landscape and portrait. Freeform stays freeform.
-    func swapCropOrientation() {
+    public func swapCropOrientation() {
         guard let current = selectedCropFrame else { return }
         let shape = selectedCrop.aspect ?? AspectRatio(current.size.width, current.size.height)
         unstraightenedFrame = nil
@@ -1617,30 +1621,30 @@ final class Library {
     }
 
     /// The selected photo's own shape, as the crop is turned: what Original locks to.
-    var originalAspect: AspectRatio? {
+    public var originalAspect: AspectRatio? {
         turnedPhotoSize.map { AspectRatio($0.width, $0.height) }
     }
 
-    func rotate(clockwise: Bool) {
+    public func rotate(clockwise: Bool) {
         keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { var crop = $0; crop.rotate(clockwise: clockwise); return crop }
     }
 
-    func flipHorizontally() {
+    public func flipHorizontally() {
         keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { var crop = $0; crop.flipHorizontally(); return crop }
     }
 
-    func flipVertically() {
+    public func flipVertically() {
         keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { var crop = $0; crop.flipVertically(); return crop }
     }
 
     /// Removes the rectangle and straighten and locks the ratio to Original, keeping the turn and flips.
-    func resetCropRectangle() {
+    public func resetCropRectangle() {
         unstraightenedFrame = nil
         let original = originalAspect
         changeCrop { Crop(rotation: $0.rotation, flipHorizontal: $0.flipHorizontal, flipVertical: $0.flipVertical,
@@ -1648,14 +1652,14 @@ final class Library {
     }
 
     /// Whether the crop differs from where the crop tool starts: the whole photo, locked to Original.
-    var canResetCropRectangle: Bool {
+    public var canResetCropRectangle: Bool {
         let crop = selectedCrop
         guard let original = originalAspect, let aspect = crop.aspect else { return crop.hasRectangle || crop.aspect == nil }
         return crop.hasRectangle || !aspect.matches(original)
     }
 
     /// Undoes the turn and flips, keeping the rectangle on the same part of the photo.
-    func resetCropTurn() {
+    public func resetCropTurn() {
         keptLevelLine = nil
         unstraightenedFrame = nil
         changeCrop { crop in
@@ -1738,20 +1742,20 @@ final class Library {
     private func refreshThumbnail(of photo: PhotoReference, at url: URL) {
         guard let recipe = edits[photo]?.history.recipe else { return }
         Task {
-            let image = await Task.detached { await ThumbnailGrid.cache.thumbnail(for: url, edit: recipe) }.value
+            let image = await Task.detached { await ThumbnailCache.shared.thumbnail(for: url, edit: recipe) }.value
             guard let image, edits[photo]?.history.recipe == recipe else { return }
-            editedThumbnails[photo] = NSImage(cgImage: image, size: .zero)
+            editedThumbnails[photo] = image
         }
     }
 
     /// The file of the selected photo.
-    var selectedPhotoURL: URL? {
+    public var selectedPhotoURL: URL? {
         guard let photo = browse.selectedPhoto else { return nil }
         return url(ofPhoto: photo.name, in: photo.folder)
     }
 
     /// The file for a photo listed in `folder`. A saved location that is a single photo is its own folder.
-    func url(ofPhoto name: String, in folder: FileReference) -> URL? {
+    public func url(ofPhoto name: String, in folder: FileReference) -> URL? {
         guard let fileAccess, let folderURL = fileAccess.url(for: folder) else { return nil }
         let isDirectory = (try? folderURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
         guard isDirectory else { return folderURL }
@@ -1762,7 +1766,7 @@ final class Library {
     /// Whether Proof may write a sidecar next to `photo`. When it can't, the person is asked
     /// to grant the photo's saved folder again, once (decision 0007), and this returns `false`;
     /// the caller keeps its change in memory until a later call returns `true`.
-    func ensureCanWrite(nextTo photo: URL) -> Bool {
+    public func ensureCanWrite(nextTo photo: URL) -> Bool {
         guard let fileAccess else { return false }
         if fileAccess.canWrite(to: photo) { return true }
         // The picker opens by itself once per folder; after that the inspector offers it. A
@@ -1775,18 +1779,18 @@ final class Library {
     }
 
     /// Opens the folder picker to grant the selected photo's folder again, for the inspector's button.
-    func grantWriteAccessForSelectedPhoto() {
+    public func grantWriteAccessForSelectedPhoto() {
         guard let photo = browse.selectedPhoto,
               let location = locations.first(where: { $0.id == photo.folder.locationID }) else { return }
         requestFolder(.grantWrite(location))
     }
 
     /// Where the folder picker opens: the folder being granted again, otherwise the system default.
-    var folderPickerDirectory: URL? {
+    public var folderPickerDirectory: URL? {
         if case .grantWrite(let location) = folderRequest { FileAccess.writeGrantFolder(for: location.lastKnownURL) } else { nil }
     }
 
-    var folderPickerMessage: String {
+    public var folderPickerMessage: String {
         switch folderRequest {
         case .add: ""
         case .locate(let location): "Choose where “\(location.name)” is now."
@@ -1795,16 +1799,16 @@ final class Library {
         }
     }
 
-    var folderPickerConfirmation: String {
+    public var folderPickerConfirmation: String {
         if case .grantWrite = folderRequest { "Grant Access" } else { "Open" }
     }
 
-    func requestFolder(_ request: FolderRequest) {
+    public func requestFolder(_ request: FolderRequest) {
         folderRequest = request
         isChoosingFolder = true
     }
 
-    func chose(_ url: URL) {
+    public func chose(_ url: URL) {
         guard let fileAccess else { return }
         do {
             switch folderRequest {
@@ -1839,7 +1843,7 @@ final class Library {
     }
 
     /// Forgets a saved folder. Photos and edits on disk are not touched.
-    func remove(_ location: SavedLocation) {
+    public func remove(_ location: SavedLocation) {
         do {
             try fileAccess?.remove(location.id)
         } catch {
@@ -1853,13 +1857,13 @@ final class Library {
 
     /// Reads every folder already read again, on local disks and network volumes, after checking
     /// which saved folders are available. For View › Reload Folders.
-    func refresh() {
+    public func refresh() {
         recheckLocations()
         reload(contents.keys.filter { isAvailable($0.locationID) })
     }
 
     /// Reads `folder` and the subfolders of it already read again, for the sidebar's Refresh.
-    func refresh(_ folder: FileReference) {
+    public func refresh(_ folder: FileReference) {
         recheckLocations()
         guard isAvailable(folder.locationID) else { return }
         reload(contents.keys.filter { folder.contains($0) } + [folder])
@@ -1867,7 +1871,7 @@ final class Library {
 
     /// The files of the selected photos, or of the selected folder when no photo is selected, for the menu
     /// bar's Show in Finder and Copy Path. Photos or folders that can't be reached are left out.
-    var selectedFileURLs: [URL] {
+    public var selectedFileURLs: [URL] {
         let photos = selectedPhotosInOrder
         if !photos.isEmpty { return urls(of: photos) }
         if case .folder(let folder) = selection, let url = fileAccess?.url(for: folder) { return [url] }
@@ -1875,51 +1879,47 @@ final class Library {
     }
 
     /// Whether a photo or a folder is selected, without looking up their files, for the menu bar.
-    var hasSelectedFiles: Bool {
+    public var hasSelectedFiles: Bool {
         if !browse.selectedPhotos.isEmpty { return true }
         if case .folder = selection { return true }
         return false
     }
 
-    func urls(of photos: [PhotoReference]) -> [URL] {
+    public func urls(of photos: [PhotoReference]) -> [URL] {
         photos.compactMap { url(ofPhoto: $0.name, in: $0.folder) }
     }
 
-    func url(of folder: FileReference) -> URL? {
+    public func url(of folder: FileReference) -> URL? {
         fileAccess?.url(for: folder)
     }
 
     /// Opens a Finder window with the files selected, so their location is visible.
-    func showInFinder(_ urls: [URL]) {
+    public func showInFinder(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
-        NSWorkspace.shared.activateFileViewerSelecting(urls)
+        platform.revealFiles(urls)
     }
 
     /// Puts the paths on the pasteboard, one per line, as Finder's Copy as Pathname does.
-    func copyPaths(_ urls: [URL]) {
+    public func copyPaths(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
+        platform.copyString(urls.map(\.path).joined(separator: "\n"))
     }
 
     /// Follows changes Proof is told about: drives and shares connecting and disconnecting, and
     /// Proof becoming the active app, when folders on network volumes are read again.
     private func observeSystem() {
-        let workspace = NSWorkspace.shared.notificationCenter
-        for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
-            workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.recheckLocations() }
-            }
-        }
-        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
-                                               object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.becameActive() }
-        }
-        // A change made just before quitting hasn't been committed yet.
-        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
-                                               object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                if let photo = self?.browse.selectedPhoto { self?.commitEdit(of: photo) }
+        platform.observe { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .volumesChanged:
+                recheckLocations()
+            case .becameActive:
+                // Coming back from the Finder, where LUTs may have been added, moved or removed.
+                looks.reload()
+                becameActive()
+            case .willTerminate:
+                // A change made just before quitting hasn't been committed yet.
+                if let photo = browse.selectedPhoto { commitEdit(of: photo) }
             }
         }
     }
