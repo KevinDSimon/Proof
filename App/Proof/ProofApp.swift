@@ -276,7 +276,7 @@ struct ContentView: View {
                 if library.isEditing {
                     editor
                 } else {
-                    browser
+                    PhotoBrowser(library: library)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         // Declared on the grid's column, as Edit's are on the photo's, so the
                         // toolbar keeps its groups apart.
@@ -312,8 +312,8 @@ struct ContentView: View {
         // Both modes follow the system appearance. The toolbar keeps the system's default
         // background and scroll edge effect, which keep the title readable over scrolled content.
         .frame(minWidth: 800, minHeight: 500)
-        .navigationTitle(title)
-        .navigationSubtitle(subtitle)
+        .navigationTitle(library.windowTitle)
+        .navigationSubtitle(library.windowSubtitle)
         .toolbar {
             if library.isEditing {
                 editToolbar
@@ -382,7 +382,7 @@ struct ContentView: View {
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
         // On a filter row it narrows the row's photos further.
         if library.selection != nil {
-            ToolbarItem { filterButton }
+            ToolbarItem { FilterButton(library: library) }
         }
         // Only while the Info panel is open; View › Show Info, ⌘I and a photo's right-click menu
         // open it. The same symbol as the inspector button in Edit, which also hides a side panel.
@@ -405,7 +405,7 @@ struct ContentView: View {
         // here, and a Divider draws as a short horizontal dash.
         ToolbarItemGroup(placement: .navigation) {
             if library.selection != nil {
-                filterButton
+                FilterButton(library: library)
             }
             Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip",
                    systemImage: "rectangle.bottomthird.inset.filled") {
@@ -421,27 +421,6 @@ struct ContentView: View {
         }
     }
 
-    /// The filter's toolbar button, in Browse and in Edit. Both change the same filter, so
-    /// filtering in either mode narrows the grid and the filmstrip (#160).
-    private var filterButton: some View {
-        Menu {
-            FilterMenu(library: library)
-        } label: {
-            // While a filter is on, the button shows how many parts are set, so it reads as
-            // on without an accent color. The tooltip names them. The symbol has no circle
-            // around it, so it is as large as the other toolbar symbols.
-            if library.filter.isEmpty {
-                Label("Filter", systemImage: "line.3.horizontal.decrease")
-            } else {
-                Label("\(library.filter.activeCount)", systemImage: "line.3.horizontal.decrease")
-                    .labelStyle(.titleAndIcon)
-                    .monospacedDigit()
-            }
-        }
-        .menuIndicator(.hidden)
-        .help(library.filter.isEmpty ? "Show only some of the photos" : "Filtered by \(library.filter.summary)")
-        .accessibilityLabel(library.filter.isEmpty ? "Filter" : "Filter: \(library.filter.summary)")
-    }
 
     /// The filmstrip in its card, with the inspector cards' gray. The filter and the button that
     /// hides it are in the toolbar, so the card holds only thumbnails.
@@ -584,123 +563,6 @@ struct ContentView: View {
                     .help(library.isInspectorShown ? "Hide the inspector" : "Show the inspector")
             }
         }
-    }
-
-    @ViewBuilder private var browser: some View {
-        if library.locations.isEmpty {
-            ContentUnavailableView {
-                Label("No Folders", systemImage: "folder")
-            } description: {
-                Text("Add a folder of photos to browse and edit them.")
-            } actions: {
-                Button("Add Folder…") { library.requestFolder(.add) }
-            }
-        } else if library.selection?.isAcrossFolders == true {
-            allPhotos
-        } else if let selection = library.selection?.folder, let location = selectedLocation {
-            switch library.status(of: selection.locationID) {
-            case .missing:
-                ContentUnavailableView {
-                    Label("Folder Not Found", systemImage: "questionmark.folder")
-                } description: {
-                    Text("“\(location.name)” was moved or deleted. Locate it to see its photos again.")
-                } actions: {
-                    Button("Locate…") { library.requestFolder(.locate(location)) }
-                }
-            case .offline:
-                ContentUnavailableView("Drive Not Connected", systemImage: "externaldrive.badge.xmark",
-                                       description: Text("Connect the drive or network volume that holds “\(location.name)”."))
-            case .available:
-                if library.contents[selection] != nil {
-                    if library.visiblePhotos.isEmpty {
-                        ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                               description: Text(library.filter.isEmpty ? "There are no photos to show in this folder."
-                                                                                        : "No photos in this folder match the filter."))
-                    } else {
-                        ThumbnailGrid(library: library, photos: library.shownPhotos, allPhotos: library.listedPhotos)
-                    }
-                } else {
-                    ProgressView()
-                }
-            }
-        } else {
-            ContentUnavailableView("No Folder Selected", systemImage: "sidebar.left",
-                                   description: Text("Select a folder in the sidebar to see its photos."))
-        }
-    }
-
-    /// Photos from every available location. Locations that can't be reached are left out, and
-    /// the subtitle names them.
-    @ViewBuilder private var allPhotos: some View {
-        if library.unavailableLocations.count == library.locations.count {
-            ContentUnavailableView("No Folders Available", systemImage: "externaldrive.badge.xmark",
-                                   description: Text("Connect the drives or network volumes that hold your folders."))
-        } else if !library.visiblePhotos.isEmpty {
-            ThumbnailGrid(library: library, photos: library.shownPhotos, allPhotos: library.listedPhotos)
-        } else if library.isReadingAllPhotos {
-            ProgressView()
-        } else {
-            ContentUnavailableView(emptyTitle, systemImage: "photo",
-                                   description: Text(library.activeFilter.isEmpty ? "There are no photos to show in your folders."
-                                                                                  : "No photos in your folders match."))
-        }
-    }
-
-    private var selectedLocation: SavedLocation? {
-        library.locations.first { $0.id == library.selection?.folder?.locationID }
-    }
-
-    /// "3 selected", while more than one photo is.
-    private var selectedCount: String? {
-        library.browse.hasMultipleSelection ? "\(library.browse.selectedPhotos.count) selected" : nil
-    }
-
-    private var title: String {
-        if library.isEditing { return library.browse.selectedPhoto?.name ?? "" }
-        switch library.selection {
-        case .allPhotos: return "All Photos"
-        case .filtered(let filter): return filter.title
-        case .folder(let folder): return library.name(of: folder)
-        case nil: return ""
-        }
-    }
-
-    /// In Browse, how many photos are shown, and for All Photos which locations are left out; in
-    /// Edit, the photo's folder and its position, after "Original" while backslash shows it.
-    private var subtitle: String {
-        let visible = library.visiblePhotos
-        if library.isEditing {
-            let position = library.browse.position(in: visible).map { "\($0) of \(visible.count)" }
-            // A saved location that is a single photo has no folder name to show.
-            let folder = library.browse.selectedPhoto.map { library.name(of: $0.folder) }
-            let shownFolder = folder == library.browse.selectedPhoto?.name ? nil : folder
-            let original = library.browse.isShowingOriginal ? "Original" : nil
-            return [original, shownFolder, position, selectedCount].compactMap { $0 }.joined(separator: " · ")
-        }
-        if let folder = library.selection?.folder, library.contents[folder] == nil { return "" }
-        if library.selection == nil { return "" }
-        let total = library.listedPhotos.count
-        let noun = total == 1 ? "photo" : "photos"
-        let shown = if library.selection?.filter != nil {
-            "\(visible.count) \(visible.count == 1 ? "photo" : "photos")"
-        } else if !library.filter.isEmpty {
-            "\(visible.count) of \(total) \(noun)"
-        } else {
-            "\(total) \(noun)"
-        }
-        let count = [shown, selectedCount].compactMap { $0 }.joined(separator: " · ")
-        let unavailable = library.unavailableLocations
-        guard library.selection?.isAcrossFolders == true, !unavailable.isEmpty else { return count }
-        let missing = unavailable.count == 1 ? "“\(unavailable[0].name)” isn't available"
-                                             : "\(unavailable.count) folders aren't available"
-        return "\(count) · \(missing)"
-    }
-
-    private var emptyTitle: String {
-        if let row = library.selection?.filter, library.filter.isEmpty {
-            return "No \(row.rating.map { "\($0)-Star" } ?? row.title) Photos"
-        }
-        return library.filter.isEmpty ? "No Photos" : "No Matching Photos"
     }
 }
 
