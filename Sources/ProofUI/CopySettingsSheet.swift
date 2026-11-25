@@ -1,11 +1,10 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// Edit › Copy: which of the photo's settings to copy, as in Lightroom's Copy Settings. Items are
 /// grouped by inspector card, each card with a checkbox that ticks or clears all of it. The ticks
 /// are remembered for the next copy.
-struct CopySettingsSheet: View {
+public struct CopySettingsSheet: View {
     let library: Library
     @Environment(\.dismiss) private var dismiss
     /// The ticked items' raw values, joined by commas. Empty until the first copy.
@@ -20,7 +19,11 @@ struct CopySettingsSheet: View {
         [.transform, nil, .effects],
     ]
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Copy Settings")
@@ -75,19 +78,19 @@ struct CopySettingsSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(groupItems, id: \.self) { item in
                     Toggle(Self.title(of: item), isOn: binding(for: item))
-                        .toggleStyle(.checkbox)
+                        .checkboxOnMac()
                 }
             }
         } else if groupItems.count == 1 {
             Toggle(Self.title(of: groupItems[0]), isOn: binding(for: groupItems[0]))
-                .toggleStyle(.checkbox)
+                .checkboxOnMac()
         } else {
             VStack(alignment: .leading, spacing: 4) {
                 Toggle(group.map(Self.title(of:)) ?? "", sources: groupItems.map(binding(for:)), isOn: \.self)
-                    .toggleStyle(.checkbox)
+                    .checkboxOnMac()
                 ForEach(groupItems, id: \.self) { item in
                     Toggle(Self.title(of: item), isOn: binding(for: item))
-                        .toggleStyle(.checkbox)
+                        .checkboxOnMac()
                         .padding(.leading, 20)
                 }
             }
@@ -102,12 +105,12 @@ struct CopySettingsSheet: View {
     }
 
     /// The inspector's card titles.
-    static func title(of group: AdjustmentGroup) -> String {
+    public static func title(of group: AdjustmentGroup) -> String {
         group.title
     }
 
     /// Named after the inspector's sliders and sections, so each item can be found there.
-    static func title(of item: SettingsItem) -> String {
+    public static func title(of item: SettingsItem) -> String {
         switch item {
         case .profile: "Profile"
         case .whiteBalance: "White Balance"
@@ -142,5 +145,16 @@ struct CopySettingsSheet: View {
         case .bloom: "Bloom"
         case .look: "Look"
         }
+    }
+}
+
+private extension View {
+    /// iOS has no checkbox; its layout of this sheet comes with the iPad and iPhone inspector.
+    @ViewBuilder func checkboxOnMac() -> some View {
+        #if os(macOS)
+        toggleStyle(.checkbox)
+        #else
+        self
+        #endif
     }
 }

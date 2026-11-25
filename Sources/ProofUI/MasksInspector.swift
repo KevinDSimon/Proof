@@ -1,17 +1,21 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The Masks tool's controls, which take the inspector's place while the tool is open: the
 /// photo's masks, the selected mask's shape, and its own adjustments.
-struct MasksInspector: View {
+public struct MasksInspector: View {
     let library: Library
     let renderer: RAWRenderer?
 
     @State private var renaming: Int?
     @State private var newName = ""
 
-    var body: some View {
+    public init(library: Library, renderer: RAWRenderer?) {
+        self.library = library
+        self.renderer = renderer
+    }
+
+    public var body: some View {
         let layers = library.layers
         InspectorPanel {
             // Adding is a section of its own, apart from the masks already made, so it reads as
@@ -121,7 +125,7 @@ struct MasksInspector: View {
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    static func symbol(of kind: Mask.Kind?) -> String {
+    public static func symbol(of kind: Mask.Kind?) -> String {
         switch kind {
         case .linear: "rectangle.tophalf.inset.filled"
         case .radial: "circle.dashed"
@@ -234,27 +238,27 @@ struct MasksInspector: View {
         InspectorCard(title: "Adjustments", canReset: !adjustments.isNeutral,
                       reset: { library.changeAdjustments { $0 = LocalAdjustments() } }) {
             heading("Color")
-            slider("Temperature", \.temperature, adjustments, track: AdjustmentsInspector.temperatureTrack)
-            slider("Tint", \.tint, adjustments, track: AdjustmentsInspector.tintTrack)
+            slider("Temperature", \.temperature, adjustments, track: AdjustmentSlider.temperatureTrack)
+            slider("Tint", \.tint, adjustments, track: AdjustmentSlider.tintTrack)
             heading("Tone")
             AdjustmentSlider(
                 title: "Exposure",
                 value: Binding(get: { adjustments.exposure },
                                set: { value in library.changeAdjustments { $0.exposure = value } }),
                 range: LocalAdjustments.exposureRange, fineStep: 0.01, step: 0.1, coarseStep: 1, fractionDigits: 2,
-                showsSign: true, unit: "stops", track: AdjustmentsInspector.exposureTrack,
+                showsSign: true, unit: "stops", track: AdjustmentSlider.exposureTrack,
                 reset: { library.changeAdjustments { $0.exposure = 0 } },
                 isAdjusting: { library.isAdjusting = $0 })
-            slider("Contrast", \.contrast, adjustments, track: AdjustmentsInspector.contrastTrack)
-            slider("Highlights", \.highlights, adjustments, track: AdjustmentsInspector.highlightsTrack)
-            slider("Shadows", \.shadows, adjustments, track: AdjustmentsInspector.shadowsTrack)
-            slider("Whites", \.whites, adjustments, track: AdjustmentsInspector.whitesTrack)
-            slider("Blacks", \.blacks, adjustments, track: AdjustmentsInspector.blacksTrack)
+            slider("Contrast", \.contrast, adjustments, track: AdjustmentSlider.contrastTrack)
+            slider("Highlights", \.highlights, adjustments, track: AdjustmentSlider.highlightsTrack)
+            slider("Shadows", \.shadows, adjustments, track: AdjustmentSlider.shadowsTrack)
+            slider("Whites", \.whites, adjustments, track: AdjustmentSlider.whitesTrack)
+            slider("Blacks", \.blacks, adjustments, track: AdjustmentSlider.blacksTrack)
             heading("Presence")
-            slider("Texture", \.texture, adjustments, track: AdjustmentsInspector.textureTrack)
-            slider("Clarity", \.clarity, adjustments, track: AdjustmentsInspector.clarityTrack)
-            slider("Dehaze", \.dehaze, adjustments, track: AdjustmentsInspector.dehazeTrack)
-            slider("Saturation", \.saturation, adjustments, track: AdjustmentsInspector.saturationTrack)
+            slider("Texture", \.texture, adjustments, track: AdjustmentSlider.textureTrack)
+            slider("Clarity", \.clarity, adjustments, track: AdjustmentSlider.clarityTrack)
+            slider("Dehaze", \.dehaze, adjustments, track: AdjustmentSlider.dehazeTrack)
+            slider("Saturation", \.saturation, adjustments, track: AdjustmentSlider.saturationTrack)
         }
     }
 

@@ -1,13 +1,16 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The Info panel beside the grid in Browse: the selected photo's file, camera details and
 /// description. It follows the selection; with several photos selected it shows none (#151).
-struct InfoInspector: View {
+public struct InfoInspector: View {
     let library: Library
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         if let photo = library.infoPhoto, let url = library.url(ofPhoto: photo.name, in: photo.folder) {
             InspectorPanel {
                 PhotoInfoView(library: library, photo: photo, url: url, style: .cards)
@@ -30,10 +33,14 @@ struct InfoInspector: View {
 }
 
 /// The Info card below the histogram in Edit: the same details, collapsed until opened.
-struct InfoCard: View {
+public struct InfoCard: View {
     let library: Library
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         if let photo = library.browse.selectedPhoto, let url = library.selectedPhotoURL {
             InspectorCard {
                 DisclosureGroup(isExpanded: Binding(get: { library.isInfoCardExpanded },

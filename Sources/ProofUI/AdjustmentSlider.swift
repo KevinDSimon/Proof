@@ -1,10 +1,9 @@
-import AppKit
 import SwiftUI
 
 /// One adjustment in the inspector: its name and value on one line, the slider below.
 /// The value can be typed. Up and Down arrows in it step by `step`, by `coarseStep` with Shift
 /// and by `fineStep` with Option. Double-clicking the name or the slider resets the adjustment.
-struct AdjustmentSlider: View {
+public struct AdjustmentSlider: View {
     let title: String
     /// Read by VoiceOver in place of `title` when the title leans on a heading above it, such as
     /// "Amount" under Sharpening.
@@ -29,11 +28,34 @@ struct AdjustmentSlider: View {
     /// Called with `true` when a drag starts and `false` when it ends.
     var isAdjusting: (Bool) -> Void = { _ in }
 
+    public init(title: String, spokenTitle: String? = nil, value: Binding<Double>, range: ClosedRange<Double>,
+                fineStep: Double, step: Double, coarseStep: Double, fractionDigits: Int, showsSign: Bool = false,
+                unit: String = "", track: [Color] = [], position: ((Double) -> Double)? = nil,
+                valueAtPosition: ((Double) -> Double)? = nil, reset: @escaping () -> Void,
+                isAdjusting: @escaping (Bool) -> Void = { _ in }) {
+        self.title = title
+        self.spokenTitle = spokenTitle
+        self._value = value
+        self.range = range
+        self.fineStep = fineStep
+        self.step = step
+        self.coarseStep = coarseStep
+        self.fractionDigits = fractionDigits
+        self.showsSign = showsSign
+        self.unit = unit
+        self.track = track
+        self.position = position
+        self.valueAtPosition = valueAtPosition
+        self.reset = reset
+        self.isAdjusting = isAdjusting
+    }
+
+    @Environment(\.doubleClickCheck) private var doubleClickCheck
     @State private var text = ""
     @FocusState private var isEditingText: Bool
     @State private var resetsOnRelease = false
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(title)
@@ -70,7 +92,7 @@ struct AdjustmentSlider: View {
                 // The reset waits until after the release, because the slider sends its own
                 // position once more as the mouse comes up and would undo it.
                 if editing {
-                    resetsOnRelease = NSApp.currentEvent.map { $0.type == .leftMouseDown && $0.clickCount == 2 } ?? false
+                    resetsOnRelease = doubleClickCheck.isDoubleClick()
                 } else if resetsOnRelease {
                     resetsOnRelease = false
                     Task { @MainActor in reset() }
@@ -130,5 +152,57 @@ struct AdjustmentSlider: View {
         let rounded = (number * scale).rounded() / scale + 0
         let string = String(format: "%.\(fractionDigits)f", rounded)
         return showsSign && rounded > 0 ? "+" + string : string
+    }
+}
+
+/// Tells whether the press being handled is a double-click. Only the system's event knows, so the
+/// Mac app sets one from AppKit; elsewhere a press is never a double-click.
+public struct DoubleClickCheck: Sendable {
+    public var isDoubleClick: @MainActor @Sendable () -> Bool
+
+    public init(isDoubleClick: @escaping @MainActor @Sendable () -> Bool) {
+        self.isDoubleClick = isDoubleClick
+    }
+}
+
+public extension EnvironmentValues {
+    @Entry var doubleClickCheck = DoubleClickCheck { false }
+}
+
+public extension AdjustmentSlider {
+    /// Blue to yellow and green to magenta, the way each slider shifts the photo. These show the
+    /// photo's colors, so they are the one place the inspector isn't gray. Each color fades out
+    /// toward the middle rather than blending into the other: opposite colors blend to gray,
+    /// which reads as a dark band. The faded middle takes the panel's color in either appearance.
+    static let temperatureTrack = fading(Color(red: 0.25, green: 0.45, blue: 0.95), into: Color(red: 0.95, green: 0.8, blue: 0.2))
+    static let tintTrack = fading(Color(red: 0.25, green: 0.7, blue: 0.3), into: Color(red: 0.85, green: 0.3, blue: 0.8))
+    /// Dark to light, the way exposure moves the photo. A soft range of grays rather than black to
+    /// white, as Lightroom draws it, so the tracks don't compete with the photo.
+    static let exposureTrack = [Color(white: 0.12), Color(white: 0.62)]
+    /// The other tone sliders run dark to light end to end too, as Lightroom draws them.
+    static let contrastTrack = exposureTrack
+    /// Texture, Clarity and Dehaze run light to dark, the reverse of the tone sliders, as Lightroom draws them.
+    static let textureTrack = Array(exposureTrack.reversed())
+    static let clarityTrack = textureTrack
+    static let dehazeTrack = textureTrack
+    /// Dark to light, the way the edges move, as Lightroom draws Vignette's Amount.
+    static let vignetteAmountTrack = exposureTrack
+    static let highlightsTrack = exposureTrack
+    static let shadowsTrack = exposureTrack
+    static let whitesTrack = exposureTrack
+    static let blacksTrack = exposureTrack
+    /// Gray to a full spectrum, teal through blue and magenta to red, growing more colorful
+    /// toward the right. A single color would suggest the slider pushes the photo toward it.
+    static let vibranceTrack = [
+        Color(white: 0.5),
+        Color(hue: 0.47, saturation: 0.3, brightness: 0.7),
+        Color(hue: 0.6, saturation: 0.6, brightness: 0.85),
+        Color(hue: 0.83, saturation: 0.75, brightness: 0.9),
+        Color(hue: 1, saturation: 0.85, brightness: 0.95),
+    ]
+    static let saturationTrack = vibranceTrack
+
+    private static func fading(_ start: Color, into end: Color) -> [Color] {
+        [start, start.opacity(0.15), end.opacity(0.15), end]
     }
 }

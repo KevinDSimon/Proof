@@ -1,5 +1,4 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// Selective Color: a graph of how much of each hue the photo holds, a row of the eight color
@@ -10,11 +9,15 @@ import SwiftUI
 /// The graph is spaced like the swatches rather than by degrees, so each swatch sits under the
 /// hues it adjusts. The ranges' colors are the one exception to the inspector's gray, as the
 /// slider tracks and the histogram are: they show the photo's colors.
-struct SelectiveColorCard: View {
+public struct SelectiveColorCard: View {
     let library: Library
     @State private var selected: ColorRange = .red
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         let selective = library.selectedEdit?.recipe.selectiveColor ?? SelectiveColor()
         let isBlackAndWhite = library.selectedEdit?.recipe.blackAndWhite.isOn ?? false
         InspectorCard(title: "Selective Color", isOn: library.isOnBinding(.selectiveColor),
@@ -51,28 +54,28 @@ struct SelectiveColorCard: View {
     }
 
     /// A hue in degrees as the swatches and graph draw it.
-    static func color(hue: Double, saturation: Double = 0.75, brightness: Double = 0.95) -> Color {
+    public static func color(hue: Double, saturation: Double = 0.75, brightness: Double = 0.95) -> Color {
         let turns = (hue / 360).truncatingRemainder(dividingBy: 1)
         return Color(hue: turns < 0 ? turns + 1 : turns, saturation: saturation, brightness: brightness)
     }
 
     /// The hues the slider reaches, from the previous range's center at −100 to the next's at 100.
-    static func hueTrack(_ range: ColorRange) -> [Color] {
+    public static func hueTrack(_ range: ColorRange) -> [Color] {
         let back = (range.hue - range.previous.hue + 360).truncatingRemainder(dividingBy: 360)
         let ahead = (range.next.hue - range.hue + 360).truncatingRemainder(dividingBy: 360)
         return [-back, -back / 2, 0, ahead / 2, ahead].map { color(hue: range.hue + $0) }
     }
 
     /// Gray to the range's color.
-    static func saturationTrack(_ range: ColorRange) -> [Color] {
+    public static func saturationTrack(_ range: ColorRange) -> [Color] {
         [Color(white: 0.45), color(hue: range.hue, saturation: 0.4, brightness: 0.7), color(hue: range.hue)]
     }
 
     /// The range's color, dark to light.
-    static func brightnessTrack(_ range: ColorRange) -> [Color] { brightnessTrack(hue: range.hue) }
+    public static func brightnessTrack(_ range: ColorRange) -> [Color] { brightnessTrack(hue: range.hue) }
 
     /// A hue from dark to light, for a slider that darkens or lightens it.
-    static func brightnessTrack(hue: Double) -> [Color] {
+    public static func brightnessTrack(hue: Double) -> [Color] {
         [color(hue: hue, saturation: 0.6, brightness: 0.3), color(hue: hue, saturation: 0.6, brightness: 0.75),
          color(hue: hue, saturation: 0.3, brightness: 1)]
     }
