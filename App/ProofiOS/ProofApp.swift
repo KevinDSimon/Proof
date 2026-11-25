@@ -86,7 +86,12 @@ struct ContentView: View {
             // The filter stays at hand while selecting; photos it hides are deselected, so Rating
             // and Flag never reach photos out of sight.
             ToolbarItem { FilterButton(library: library) }
-            ToolbarItem { Button("Done", systemImage: "checkmark") { library.isSelectingPhotos = false } }
+            ToolbarSpacer(.fixed)
+            // The one filled use of the highlight color: the button that ends selecting, as in Notes.
+            ToolbarItem {
+                Button("Done", systemImage: "checkmark", role: .confirm) { library.isSelectingPhotos = false }
+                    .tint(.highlight)
+            }
             let photos = library.selectedPhotosInOrder
             ToolbarItemGroup(placement: .bottomBar) {
                 Menu("Rating", systemImage: "star") {
