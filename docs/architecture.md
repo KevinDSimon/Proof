@@ -8,9 +8,12 @@ Proof is split into a platform-neutral engine package, `ProofKit`, and thin app 
 | --- | --- | --- |
 | `ProofKit` | Edit recipe, render pipeline, sidecars, XMP reading, rating and description writes, `.cube` parsing, thumbnails | AppKit, UIKit, SwiftUI |
 | Mac app (`App/Proof.xcodeproj`) | Folders panel, filmstrip, inspector, canvas, export UI | — |
-| iOS app (later) | The same panels for touch, Files-app folder picking | — |
+| `ProofUI` (planned, #218) | The app model, `Library`, and SwiftUI views both apps share | AppKit, UIKit |
+| iOS app (planned, #218) | The same panels for touch on iPad and iPhone, Files-app folder picking | — |
 
 The Mac app runs in the App Sandbox. Its project links `ProofKit` as a local Swift package, so a change to `ProofKit` is picked up by the next app build without a version bump. Xcode and CI sign it ad hoc, to run locally; releases are signed with the owner's Developer ID and notarized by `scripts/release.sh` (decision 0038, `docs/releasing.md`). The version and build number are set in `App/Version.xcconfig`.
+
+The iPad and iPhone app is planned in [decision 0048](decisions/0048-ipad-iphone-app.md): one universal app with the Mac's adjustments, a `NavigationSplitView` that collapses to a stack in compact width, and the inspector as a sheet below the photo on iPhone.
 
 ## Render pipeline
 
