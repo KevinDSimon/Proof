@@ -568,30 +568,6 @@ struct ContentView: View {
     }
 }
 
-/// A photo in iCloud while it downloads: the system's thumbnail on the canvas, with a spinner.
-/// Edit's canvas replaces it once the photo is on this Mac (decision 0050).
-private struct CloudPhotoPreview: View {
-    let url: URL
-    let backdrop: Color
-    @State private var image: CGImage?
-
-    var body: some View {
-        ZStack {
-            backdrop
-            if let image {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .scaledToFit()
-            }
-            // A temporary indicator, so it may sit on the photo.
-            ProgressView("Downloading from iCloud…")
-                .padding()
-                .background(.regularMaterial, in: .rect(cornerRadius: 12))
-        }
-        .task(id: url) { image = await ThumbnailCache.shared.thumbnail(for: url, edit: nil) }
-    }
-}
-
 /// The photo being edited, rendered with its current edit. A view of its own so it reads the
 /// edit in its own body, and redraws on every change to it, including during a drag.
 struct EditCanvas: View {

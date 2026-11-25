@@ -71,6 +71,12 @@ public final class CanvasZoom {
         zoom(to: effectiveScale * factor, keeping: point)
     }
 
+    /// Settles a finished pinch at Fit when it ended near or below it (`Viewport.settled`).
+    public func settle() {
+        guard hasSizes else { return }
+        viewport = viewport.settled(photo: photoSize, view: viewSize)
+    }
+
     /// Double-click: from Fit to 100% at the clicked point, and from any other scale back to Fit.
     public func toggle(at point: CGPoint) {
         guard hasSizes else { return }

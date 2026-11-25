@@ -32,6 +32,14 @@ public struct Viewport: Equatable, Sendable {
         scale ?? Self.fitScale(photo: photo, view: view)
     }
 
+    /// Where a pinch on a touch screen comes to rest: Fit when it ends within 5% of Fit or below
+    /// it, as in Photos, so a swipe can then move to another photo; otherwise unchanged.
+    public func settled(photo: CGSize, view: CGSize) -> Viewport {
+        guard !isFit, effectiveScale(photo: photo, view: view) <= Self.fitScale(photo: photo, view: view) * 1.05
+        else { return self }
+        return Viewport()
+    }
+
     // MARK: Steps
 
     /// Fit and the fixed steps in order of scale. Fit falls wherever it does for this photo and view,

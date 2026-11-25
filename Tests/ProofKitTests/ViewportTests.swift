@@ -20,6 +20,16 @@ struct ViewportTests {
         #expect(scales == [0.25, 0.5, 1, 2, 4])
     }
 
+    @Test("A pinch that ends near or below Fit settles at Fit; one well above it stays")
+    func pinchSettlesAtFit() {
+        let fit = Viewport.fitScale(photo: photo, view: view)
+        #expect(Viewport(scale: fit * 1.04).settled(photo: photo, view: view).isFit)
+        #expect(Viewport(scale: fit * 0.8).settled(photo: photo, view: view).isFit)
+        let zoomed = Viewport(scale: fit * 1.5, center: CGPoint(x: 0.3, y: 0.4))
+        #expect(zoomed.settled(photo: photo, view: view) == zoomed)
+        #expect(Viewport().settled(photo: photo, view: view).isFit)
+    }
+
     @Test("Zoom Out ends at Fit when Fit is the smallest stop")
     func zoomOutEndsAtFit() {
         var viewport = Viewport(scale: 1)

@@ -1,5 +1,4 @@
 import MetalKit
-import OSLog
 import ProofKit
 import ProofUI
 import SwiftUI
@@ -41,7 +40,8 @@ struct PhotoCanvas: NSViewRepresentable {
         // Draw only when there is something new, not every frame.
         view.isPaused = true
         view.enableSetNeedsDisplay = true
-        view.delegate = context.coordinator
+        view.coordinator = context.coordinator
+        view.delegate = view
         context.coordinator.view = view
         return view
     }
@@ -53,16 +53,31 @@ struct PhotoCanvas: NSViewRepresentable {
         context.coordinator.setBackdrop(backdrop)
         context.coordinator.setAngle(angle)
         context.coordinator.setViewport(viewport)
-        context.coordinator.setHidesPanPointer(zoom.hidesPanPointer)
+        view.hidesPanPointer = zoom.hidesPanPointer
         context.coordinator.show(url, recipe: recipe)
     }
 }
 
 /// Turns pinches, scrolls, drags and double-clicks on the photo into zoom changes. Points are
 /// passed on in drawable pixels from the top left, as `Viewport` measures them.
-final class CanvasView: MTKView {
+final class CanvasView: MTKView, MTKViewDelegate, CanvasSurface {
     weak var zoom: CanvasZoom?
+    weak var coordinator: PhotoCanvasCoordinator?
     private var isDragging = false
+
+    var hidesPanPointer = false {
+        didSet { if hidesPanPointer != oldValue { zoomDidChange() } }
+    }
+
+    func setNeedsRedraw() { needsDisplay = true }
+
+    func zoomDidChange() { window?.invalidateCursorRects(for: self) }
+
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        coordinator?.drawableSizeWillChange(size)
+    }
+
+    func draw(in view: MTKView) { coordinator?.draw(currentDrawable) }
 
     private var pixelsPerPoint: CGFloat {
         bounds.width > 0 ? drawableSize.width / bounds.width : 1
@@ -118,292 +133,7 @@ final class CanvasView: MTKView {
 
     /// An open hand while there is somewhere to pan to.
     override func resetCursorRects() {
-        if zoom?.canPan == true, zoom?.hidesPanPointer != true { addCursorRect(bounds, cursor: .openHand) }
+        if zoom?.canPan == true, !hidesPanPointer { addCursorRect(bounds, cursor: .openHand) }
     }
 }
 
-/// Keeps the main thread to drawing only: decoding and rendering happen in `RAWRenderer`, and
-/// until a render finishes the previous one is scaled to the window.
-@MainActor
-final class PhotoCanvasCoordinator: NSObject, MTKViewDelegate {
-    weak var view: MTKView?
-    var onError: (Error) -> Void = { _ in }
-    var onHistogram: (Histogram, URL) -> Void = { _, _ in }
-    var onWaiting: (Bool) -> Void = { _ in }
-
-    private struct RenderRequest: Equatable {
-        var url: URL
-        var size: CGSize
-        var recipe: EditRecipe
-    }
-
-    /// The part of the photo a zoomed view shows, at the view's scale up to full resolution.
-    private struct DetailRequest: Equatable {
-        var url: URL
-        var recipe: EditRecipe
-        var scale: Double
-        var region: CGRect
-    }
-
-    private let renderer: RAWRenderer
-    private let zoom: CanvasZoom
-    private let previews: ThumbnailCache
-    private let commandQueue: MTLCommandQueue?
-    private var url: URL?
-    private var size: CGSize = .zero
-    private var recipe = EditRecipe()
-    private var photo: RenderedPhoto?
-    /// What `photo` was rendered from, or the request that failed, so it isn't retried.
-    private var rendered: RenderRequest?
-    private var isRendering = false
-    private var viewport = Viewport()
-    /// The sharp part of a zoomed photo, drawn over `photo`, and what it was rendered from.
-    private var detail: RenderedPhoto?
-    private var renderedDetail: DetailRequest?
-    /// The photo's thumbnail, shown fitted to the view until its first render is ready.
-    private var preview: RenderedPhoto?
-    private var previewTask: Task<Void, Never>?
-    /// The shown photo still to be measured for the histogram, and whether a measurement is running.
-    private var unmeasured: (photo: RenderedPhoto, url: URL)?
-    private var isMeasuring = false
-    private var resizeTask: Task<Void, Never>?
-
-    private var background = CIColor(red: 0, green: 0, blue: 0, colorSpace: RAWRenderer.colorSpace)!
-    private var backdrop: CanvasColor?
-    private var angle = 0.0
-    private static let log = Logger(subsystem: "Proof", category: "render")
-
-    init(renderer: RAWRenderer, zoom: CanvasZoom, previews: ThumbnailCache) {
-        self.renderer = renderer
-        self.zoom = zoom
-        self.previews = previews
-        commandQueue = renderer.device.makeCommandQueue()
-    }
-
-    func setBackdrop(_ backdrop: CanvasColor) {
-        guard backdrop != self.backdrop else { return }
-        self.backdrop = backdrop
-        let color = backdrop.components
-        background = CIColor(red: color.red, green: color.green, blue: color.blue, colorSpace: RAWRenderer.colorSpace)!
-        view?.needsDisplay = true
-    }
-
-    func setAngle(_ angle: Double) {
-        guard angle != self.angle else { return }
-        self.angle = angle
-        view?.needsDisplay = true
-    }
-
-    private var hidesPanPointer = false
-
-    func setHidesPanPointer(_ hides: Bool) {
-        guard hides != hidesPanPointer else { return }
-        hidesPanPointer = hides
-        if let view { view.window?.invalidateCursorRects(for: view) }
-    }
-
-    func setViewport(_ viewport: Viewport) {
-        guard viewport != self.viewport else { return }
-        self.viewport = viewport
-        view?.needsDisplay = true
-        if let view { view.window?.invalidateCursorRects(for: view) }
-        renderLatest()
-    }
-
-    func show(_ url: URL, recipe: EditRecipe) {
-        if url != self.url {
-            self.url = url
-            photo = nil
-            detail = nil
-            renderedDetail = nil
-            preview = nil
-            view?.needsDisplay = true
-            loadPreview(of: url, recipe: recipe)
-        }
-        if size == .zero { size = view?.drawableSize ?? .zero }
-        self.recipe = recipe
-        renderLatest()
-    }
-
-    /// Shows the photo's cached thumbnail with `recipe`, the one the grid and filmstrip show,
-    /// until the render is ready: a thumbnail of the edit has its crop and colors, so the render
-    /// that replaces it only sharpens it. It is fitted to the cropped photo's size, read from the
-    /// file, which is the frame the render fills. Without a cached thumbnail, the canvas waits.
-    private func loadPreview(of url: URL, recipe: EditRecipe) {
-        previewTask?.cancel()
-        previewTask = Task { [renderer, previews] in
-            onWaiting(false)
-            let preview = await Task.detached(priority: .userInitiated) { () -> RenderedPhoto? in
-                guard let image = previews.cachedThumbnail(for: url, edit: recipe),
-                      !Task.isCancelled,
-                      let size = RAWRenderer.photoSize(of: url, crop: recipe.crop, profile: recipe.profile) else { return nil }
-                return try? renderer.placeholder(image, photoSize: size)
-            }.value
-            guard !Task.isCancelled, url == self.url, photo == nil else { return }
-            if let preview {
-                self.preview = preview
-                view?.needsDisplay = true
-            } else {
-                onWaiting(true)
-            }
-        }
-    }
-
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        // Live resizing sends many sizes; render once it settles.
-        resizeTask?.cancel()
-        resizeTask = Task {
-            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-            self.size = size
-            zoom.viewSize = size
-            zoom.reclamp()
-            renderLatest()
-        }
-    }
-
-    func draw(in view: MTKView) {
-        guard let drawable = view.currentDrawable,
-              let commandBuffer = commandQueue?.makeCommandBuffer() else { return }
-        do {
-            let bounds = CGSize(width: drawable.texture.width, height: drawable.texture.height)
-            let frame = viewport.isFit || photo == nil ? nil : viewport.frame(photo: photo!.photoSize, view: bounds)
-            // A detail rendered before the crop changed would land in the wrong place.
-            let detail = renderedDetail?.recipe.crop == rendered?.recipe.crop ? detail : nil
-            zoom.shown = photo.map { ($0, frame == nil ? nil : detail) }
-            try renderer.draw(photo ?? preview, detail: frame == nil ? nil : detail, frame: frame, into: drawable.texture,
-                              commandBuffer: commandBuffer, background: background, angle: angle)
-            commandBuffer.present(drawable)
-            commandBuffer.commit()
-        } catch {
-            onError(error)
-        }
-    }
-
-    private var latest: RenderRequest? {
-        guard let url, size.width > 0, size.height > 0 else { return nil }
-        return RenderRequest(url: url, size: size, recipe: recipe)
-    }
-
-    /// The region to render sharp while zoomed past the screen-size photo's own resolution, or
-    /// the region already rendered while it still covers the view. The region reaches an eighth
-    /// of the view past each edge, so a short pan doesn't need a new one.
-    private var latestDetail: DetailRequest? {
-        guard let url, let photo, let rendered, rendered.url == url, rendered.recipe.crop == recipe.crop,
-              size.width > 0, photo.photoSize.width > 0 else { return nil }
-        let scale = min(viewport.effectiveScale(photo: photo.photoSize, view: size), 1)
-        let screenScale = Double(photo.texture.width) / photo.photoSize.width
-        guard !viewport.isFit, scale > screenScale * 1.02 else { return nil }
-        let visible = viewport.visibleRegion(photo: photo.photoSize, view: size)
-        guard !visible.isNull else { return nil }
-        if let renderedDetail, renderedDetail.url == url, renderedDetail.recipe == recipe,
-           renderedDetail.scale == scale, renderedDetail.region.contains(visible) {
-            return renderedDetail
-        }
-        let region = visible.insetBy(dx: -visible.width / 8, dy: -visible.height / 8)
-            .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
-        return DetailRequest(url: url, recipe: recipe, scale: scale, region: region)
-    }
-
-    /// Runs one render at a time. A render in flight is never discarded: while a slider is
-    /// dragged faster than renders finish, each finished render is shown and the next one
-    /// starts from the slider's latest value, skipping the values in between. While zoomed, the
-    /// visible region renders before the screen-size photo, which then catches up for the
-    /// histogram and for the edges a pan uncovers.
-    private func renderLatest() {
-        guard !isRendering else { return }
-        if let request = latestDetail, request != renderedDetail {
-            renderDetail(request)
-            return
-        }
-        guard let request = latest, request != rendered else { return }
-        isRendering = true
-        Task { [renderer] in
-            let start = ContinuousClock.now
-            do {
-                // A render can't be stopped once it starts, so one for a photo stepped past is
-                // dropped before it opens the file and again before it renders.
-                guard request.url == url else { throw CancellationError() }
-                try await renderer.open(request.url)
-                let lut = await LUTLibrary.shared.lut(for: request.recipe.look)
-                guard request.url == url else { throw CancellationError() }
-                let result = try await renderer.render(fitting: request.size, recipe: request.recipe, lut: lut)
-                let ms = (ContinuousClock.now - start) / .milliseconds(1)
-                Self.log.debug("Rendered \(result.texture.width)×\(result.texture.height) in \(ms, format: .fixed(precision: 1)) ms")
-                if request.url == url {
-                    photo = result
-                    preview = nil
-                    previewTask?.cancel()
-                    onWaiting(false)
-                    zoom.photoSize = result.photoSize
-                    zoom.reclamp()
-                    view?.needsDisplay = true
-                    unmeasured = (result, request.url)
-                    measureLatest()
-                }
-            } catch is CancellationError {
-            } catch {
-                if request.url == url {
-                    onWaiting(false)
-                    onError(error)
-                }
-            }
-            rendered = request
-            isRendering = false
-            renderLatest()
-        }
-    }
-
-    private func renderDetail(_ request: DetailRequest) {
-        isRendering = true
-        Task { [renderer] in
-            let start = ContinuousClock.now
-            do {
-                guard request.url == url else { throw CancellationError() }
-                try await renderer.open(request.url)
-                let lut = await LUTLibrary.shared.lut(for: request.recipe.look)
-                guard request.url == url else { throw CancellationError() }
-                let result = try await renderer.render(region: request.region, scale: request.scale,
-                                                       recipe: request.recipe, lut: lut)
-                let ms = (ContinuousClock.now - start) / .milliseconds(1)
-                Self.log.debug("Rendered region \(result.texture.width)×\(result.texture.height) in \(ms, format: .fixed(precision: 1)) ms")
-                if request.url == url {
-                    detail = result
-                    view?.needsDisplay = true
-                }
-            } catch is CancellationError {
-            } catch {
-                if request.url == url { onError(error) }
-            }
-            renderedDetail = request
-            isRendering = false
-            renderLatest()
-        }
-    }
-
-    /// Measures the histogram beside the render loop rather than in it, so a slider drag never
-    /// waits for it. Like renders, one runs at a time and the next takes the latest photo shown.
-    private func measureLatest() {
-        guard !isMeasuring, let (photo, url) = unmeasured else { return }
-        unmeasured = nil
-        isMeasuring = true
-        Task.detached { [renderer] in
-            let histogram = try? renderer.histogram(of: photo)
-            let preview = try? renderer.preview(of: photo, maxPixelSize: 480)
-            await MainActor.run {
-                if let histogram, url == self.url { self.onHistogram(histogram, url) }
-                if let preview, url == self.url { self.zoom.preview = preview }
-                self.isMeasuring = false
-                self.measureLatest()
-            }
-        }
-    }
-}
-
-extension CanvasColor {
-    /// In Display P3, as the Metal canvas draws it, so the SwiftUI backdrop around it meets it
-    /// without a seam.
-    var color: Color {
-        let color = components
-        return Color(.displayP3, red: color.red, green: color.green, blue: color.blue)
-    }
-}

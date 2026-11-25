@@ -1,14 +1,18 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// One row of thumbnails under the photo in Edit, showing the photos that pass the filter. The
-/// current photo is marked with an outline. Click or the left and right arrow keys
-/// switch to another photo without leaving Edit. ⌘-click and ⇧-click select several photos
-/// to paste settings to or rate together, keeping the photo shown.
-struct Filmstrip: View {
+/// current photo is marked with an outline. A click or tap, or on the Mac the left and right
+/// arrow keys, switch to another photo without leaving Edit. On the Mac, ⌘-click and ⇧-click
+/// select several photos to paste settings to or rate together, keeping the photo shown.
+public struct Filmstrip: View {
     @Bindable var library: Library
     let photos: [ListedPhoto]
+
+    public init(library: Library, photos: [ListedPhoto]) {
+        self.library = library
+        self.photos = photos
+    }
 
     @State private var images: [PhotoReference: CGImage] = [:]
     @State private var finished: Set<PhotoReference> = []
@@ -16,10 +20,10 @@ struct Filmstrip: View {
     @State private var lutGeneration = 0
     @FocusState private var isFocused: Bool
 
-    static let height: CGFloat = 84
+    public static let height: CGFloat = 84
     private static let spacing: CGFloat = 4
 
-    var body: some View {
+    public var body: some View {
         ScrollViewReader { scroller in
             ScrollView(.horizontal) {
                 LazyHStack(spacing: Self.spacing) {
@@ -41,6 +45,7 @@ struct Filmstrip: View {
             }
         }
         .frame(height: Self.height)
+        #if os(macOS)
         .focusable()
         .focusEffectDisabled()
         .focused($isFocused)
@@ -54,6 +59,7 @@ struct Filmstrip: View {
             if let move { library.browse.move(move, in: photos, columns: photos.count) }
         }
         .onAppear { isFocused = true }
+        #endif
         // Loaded again when the LUT library changes, since edited thumbnails show looks.
         // The photos collapsed stacks hide too, which peek out above them.
         .task(id: ThumbnailLoad(photos: library.visiblePhotos, lutGeneration: library.looks.generation)) {
