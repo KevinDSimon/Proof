@@ -35,10 +35,15 @@ public struct ThumbnailGrid: View {
     @FocusState private var isFocused: Bool
 
     #if os(macOS)
+    /// The selected photos are outlined, since the keyboard and menus act on them.
+    private static let marksSelection = true
     private static let sizes = ThumbnailSize.mac
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
     #else
+    /// A tap opens the photo, so there's no current photo to mark. Selecting several, with its own
+    /// marks, is #225.
+    private static let marksSelection = false
     private static let sizes = ThumbnailSize.touch
     private static let spacing: CGFloat = 8
     private static let margin: CGFloat = 16
@@ -169,7 +174,7 @@ public struct ThumbnailGrid: View {
     }
 
     private func cell(for photo: ListedPhoto, stack: StackMark?) -> some View {
-        let isSelected = library.browse.selectedPhotos.contains(photo.id)
+        let isSelected = Self.marksSelection && library.browse.selectedPhotos.contains(photo.id)
         return VStack(spacing: 6) {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
