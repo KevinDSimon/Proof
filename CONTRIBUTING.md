@@ -21,6 +21,12 @@ swift build
 swift test
 ```
 
+`ProofKit` also builds for iOS, and CI runs its tests on an iPhone simulator. To do the same locally, name any iPhone simulator that Xcode has installed:
+
+```bash
+xcodebuild test -scheme Proof -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+```
+
 RAW files are never committed, so the tests that render a real photo run only when `PROOF_SAMPLE_DNG` names one:
 
 ```bash

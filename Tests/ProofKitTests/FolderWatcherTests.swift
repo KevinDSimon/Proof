@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 import Testing
 @testable import ProofKit
@@ -30,6 +29,25 @@ struct FolderWatcherTests {
         url.resolvingSymlinksInPath().standardizedFileURL.path
     }
 
+    @Test("Refreshing reports every watched folder with its subfolders")
+    func refreshReportsEveryFolder() {
+        let other = root.appendingPathComponent("2025")
+        var reported: [[FolderWatcher.Change]] = []
+        let watcher = FolderWatcher(folders: [root, other]) { reported.append($0) }
+        watcher.refresh()
+        #expect(reported == [[FolderWatcher.Change(folder: root, includesSubfolders: true),
+                              FolderWatcher.Change(folder: other, includesSubfolders: true)]])
+    }
+
+    @Test("Refreshing with no folders reports nothing")
+    func refreshWithoutFolders() {
+        var called = false
+        let watcher = FolderWatcher(folders: []) { _ in called = true }
+        watcher.refresh()
+        #expect(!called)
+    }
+
+    #if os(macOS)
     @Test("A photo added to a subfolder is reported as a change to that subfolder")
     func reportsNewFile() async throws {
         let subfolder = root.appendingPathComponent("2025")
@@ -47,5 +65,5 @@ struct FolderWatcherTests {
         }
         #expect(changes.map { path($0.folder) }.contains(path(root)))
     }
+    #endif
 }
-#endif
