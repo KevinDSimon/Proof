@@ -37,3 +37,5 @@ jobs:
         run: |
           udid=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone' | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}')
           xcodebuild test -scheme Proof-Package -destination "id=$udid"
+      - name: Build iOS app for the simulator
+        run: xcodebuild -project App/Proof.xcodeproj -scheme ProofiOS -configuration Debug -destination 'generic/platform=iOS Simulator' build
