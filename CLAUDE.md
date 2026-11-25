@@ -28,6 +28,16 @@ Proof is a Mac RAW photo editor in Swift, built on Core Image and Metal. These r
 - Every new adjustment or tool that changes the recipe is added to Copy Settings (`SettingsItem`) in the same PR. Settings that fit only the photo they were made on, such as Transform, Crop and Spot Removal, start unticked.
 - Original photos are never written to. Ratings and flags are written only to XMP sidecars (#52), keeping every other tag in them.
 
+## Mac, iPad and iPhone
+
+Proof is one app on Mac, iPad and iPhone (see `docs/decisions/0048-ipad-iphone-app.md`). New features land on every platform.
+
+- Write a feature once. Engine work goes in `ProofKit`; the app model and views both apps can share go in `ProofUI`. Only what really differs by platform lives in an app target: pointer versus touch and Pencil input, menus versus touch-and-hold, the Mac inspector versus the iPhone sheet.
+- When the whole feature fits one small PR, it ships on all platforms in that PR.
+- When it doesn't, split it by layer: one issue for the engine and shared parts plus the first platform, and a paired issue for the other platform's input and layout. File both when the work is planned, in the same milestone, linked to each other. The milestone isn't done until both are closed. Never park the other half in `Later`.
+- Until the iOS app has the area a feature belongs to (for example, its inspector), add the feature to the `Done when` list of the iOS issue for that area instead of filing a new one.
+- A feature meant for one platform only, such as Show in Finder or Pencil hover, says so in its issue.
+
 ## Interface
 
 - Follow Apple's Human Interface Guidelines for the current macOS. Use standard SwiftUI views and modifiers (`NavigationSplitView`, `List` sidebars, `.inspector`, toolbars, `ContentUnavailableView`, `confirmationDialog`, menu commands) before building custom ones. Build a custom view only when SwiftUI has no equivalent, such as the filmstrip.

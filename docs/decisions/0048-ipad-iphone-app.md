@@ -21,6 +21,7 @@ What isn't ready: `FolderWatcher` uses FSEvents, which iOS doesn't have, so `Pro
 - **Accessibility.** Every control and badge has a VoiceOver label, lists and the inspector follow Dynamic Type, Reduce Motion is respected, and touch targets are at least 44 points.
 - **Code.** `ProofKit` stays as it is, apart from a folder-change source for iOS in place of FSEvents. A new package target, `ProofUI`, holds the SwiftUI code both apps share: `Library`, with its AppKit calls moved behind small platform hooks and its images as `CGImage`, and the views that are already plain SwiftUI. Moving `Library` doesn't change how the Mac app behaves. A Proof iOS target in `App/Proof.xcodeproj` adds the touch views: the Metal canvas in a `UIViewRepresentable`, and touch versions of the crop, mask, spot and curve tools. CI builds `ProofKit` for iOS, runs its tests on an iPhone simulator, and builds the iOS app.
 - The work is the iPad and iPhone milestone, one issue per step.
+- From here on, new features land on every platform. A feature fitting one small PR ships on all of them in it. A larger one is split by layer: the engine, shared parts and the first platform in one issue, the other platform's input and layout in a paired issue filed at the same time in the same milestone. While the iOS app doesn't yet have the area a feature belongs to, the feature is added to the iOS issue for that area. CLAUDE.md states the rule.
 
 ## Consequences
 - The iPad layout matches the Mac's, and the iPhone reuses the same inspector, so a new adjustment is added once for every device.
