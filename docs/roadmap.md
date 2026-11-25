@@ -17,6 +17,7 @@ Each phase is a GitHub milestone, and each item an issue. Estimates assume part-
 | v1 | Inspector order, the camera's own crop and perspective, relinking renamed photos, history panel, an always-dark interface with a choice of canvas color, a signed and notarized build others can install | — |
 | v1.1 | Spot healing for dust, masks as layers (gradients, brush and subject in #27; brightness and color ranges in #190), lens profiles made in Proof, better auto-straighten | — |
 | v1.2 | Presets, virtual copies with side-by-side compare | — |
-| Later | Matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF, Lightroom and Capture One preset import, iPad and iPhone app | — |
+| iPad and iPhone | One universal app: folders from Files, every Mac adjustment, layouts for each device (decision 0048) | — |
+| Later | Matching exposure and white balance across photos, editing JPEG, HEIC, PNG and TIFF, Lightroom and Capture One preset import | — |
 
 Not planned: a catalog, cloud sync.
