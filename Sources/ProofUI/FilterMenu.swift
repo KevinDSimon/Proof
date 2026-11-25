@@ -16,7 +16,12 @@ public struct FilterMenu: View {
         #if os(iOS)
         // On iOS the filter sits in the grid's More menu, where its 16 choices in a row would
         // scroll; each part is a submenu that names its choice instead.
-        flagPicker.pickerStyle(.menu)
+        Menu {
+            flagPicker.pickerStyle(.inline)
+        } label: {
+            Text("Flag")
+            Text(flagTitle)
+        }
         Menu {
             ratingPicker.pickerStyle(.inline)
             higherRatings
@@ -24,7 +29,12 @@ public struct FilterMenu: View {
             Text("Rating")
             Text(library.filter.rating.map { $0 == 1 ? "1 Star" : "\($0) Stars" } ?? "Any Rating")
         }
-        editsPicker.pickerStyle(.menu)
+        Menu {
+            editsPicker.pickerStyle(.inline)
+        } label: {
+            Text("Edits")
+            Text(editsTitle)
+        }
         #else
         flagPicker.pickerStyle(.inline)
         ratingPicker.pickerStyle(.inline)
@@ -32,6 +42,23 @@ public struct FilterMenu: View {
         Divider()
         editsPicker.pickerStyle(.inline)
         #endif
+    }
+
+    private var flagTitle: String {
+        switch library.filter.flag {
+        case .flagged: "Flagged"
+        case .unflagged: "Unflagged"
+        case .rejected: "Rejected"
+        case nil: "Any Flag"
+        }
+    }
+
+    private var editsTitle: String {
+        switch library.filter.edits {
+        case .edited: "Edited"
+        case .unedited: "Unedited"
+        case nil: "Edited or Not"
+        }
     }
 
     private var flagPicker: some View {

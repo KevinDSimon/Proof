@@ -73,8 +73,8 @@ struct ContentView: View {
     }
 
     /// Browse has one More menu, with Select and the filter, so the bar stays clear on iPhone.
-    /// While selecting, the bar has Select All and Done, and a bottom toolbar rates and flags the
-    /// selected photos, as in Files and Photos.
+    /// While selecting, the bar has Select All, the filter and Done, and a bottom toolbar rates and
+    /// flags the selected photos, as in Notes.
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
         if library.isSelectingPhotos {
             let allSelected = library.browse.selectedPhotos.count == library.shownPhotos.count
@@ -83,7 +83,10 @@ struct ContentView: View {
                     if allSelected { library.deselectAll() } else { library.browse.selectAll(library.shownPhotos) }
                 }
             }
-            ToolbarItem { Button("Done") { library.isSelectingPhotos = false } }
+            // The filter stays at hand while selecting; photos it hides are deselected, so Rating
+            // and Flag never reach photos out of sight.
+            ToolbarItem { FilterButton(library: library) }
+            ToolbarItem { Button("Done", systemImage: "checkmark") { library.isSelectingPhotos = false } }
             let photos = library.selectedPhotosInOrder
             ToolbarItemGroup(placement: .bottomBar) {
                 Menu("Rating", systemImage: "star") {
