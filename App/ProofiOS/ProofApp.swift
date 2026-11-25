@@ -177,15 +177,14 @@ struct ContentView: View {
     private var browseTitle: String {
         guard library.isSelectingPhotos else { return library.rowTitle }
         let count = library.browse.selectedPhotos.count
-        // As in Notes; the count of photos is under the grid.
+        // As in Notes.
         return count == 0 ? "Select Photos" : "\(count) Selected"
     }
 }
 
 private extension View {
     /// A yellow badge counting the filter parts that are set, on the button that holds the
-    /// filter, since the count under the grid may be out of sight. The system's toolbar badge
-    /// is always red (decision 0041).
+    /// filter. The system's toolbar badge is always red (decision 0041).
     func filterBadge(_ filter: FilterCriteria) -> some View {
         overlay(alignment: .topTrailing) {
             if !filter.isEmpty {

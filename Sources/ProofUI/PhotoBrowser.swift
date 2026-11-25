@@ -164,13 +164,6 @@ public extension Library {
         return "\(count) · \(missing)"
     }
 
-    /// iOS: the count under the grid's last row, and how many filter parts are set.
-    var gridFooter: String {
-        let parts = max(filter.activeCount, 1)
-        let filters = filter.isEmpty ? nil : "\(parts) \(parts == 1 ? "filter" : "filters")"
-        return [windowSubtitle, filters].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-
     /// "3 selected", while more than one photo is. While Select is on, the iOS title counts them.
     private var selectedCount: String? {
         browse.hasMultipleSelection && !isSelectingPhotos ? "\(browse.selectedPhotos.count) selected" : nil

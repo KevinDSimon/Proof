@@ -77,15 +77,6 @@ public struct ThumbnailGrid: View {
                 // Pinned to the leading edge, so the panel slides over or away from the photos' right side.
                 // A minimum of zero, so the photos' layout never holds the grid wider than the window.
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                #if os(iOS)
-                // The count under the last row, as in Photos. A subtitle would keep the large
-                // title from showing when the grid is pushed.
-                Text(library.gridFooter)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, Self.margin)
-                #endif
             }
             // A filled title bar with a dividing line, as macOS shows over a view that doesn't
             // scroll, such as an empty folder, so the bar looks the same with or without photos.
