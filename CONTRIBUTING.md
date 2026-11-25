@@ -68,14 +68,21 @@ Open `App/Proof.xcodeproj`, choose the **Proof** scheme and **My Mac**, and choo
 xcodebuild -project App/Proof.xcodeproj -scheme Proof build
 ```
 
+The iPad and iPhone app is the **ProofiOS** scheme. Choose an iPad or iPhone simulator and choose Product › Run. It runs in the simulator only for now; running it on a device needs signing with a developer team (#238). To build it without Xcode's interface:
+
+```bash
+xcodebuild -project App/Proof.xcodeproj -scheme ProofiOS -destination 'generic/platform=iOS Simulator' build
+```
+
 Release builds for testers are signed and notarized by `scripts/release.sh`; see [docs/releasing.md](docs/releasing.md).
 
 ## Repository layout
 
 | Path | What it is |
 | --- | --- |
-| `App/Proof.xcodeproj` | The Mac app (SwiftUI, App Sandbox on). Depends on the local `ProofKit` and `ProofUI` packages. |
-| `App/Proof` | The Mac app's source files and entitlements |
+| `App/Proof.xcodeproj` | The Mac app (SwiftUI, App Sandbox on) and the iPad and iPhone app. Both depend on the local `ProofKit` and `ProofUI` packages. |
+| `App/Proof` | The Mac app's source files and entitlements, and the app icon and asset catalog both apps use |
+| `App/ProofiOS` | The iPad and iPhone app's source files |
 | `App/Version.xcconfig` | The app's version and build number |
 | `Sources/ProofKit` | Platform-neutral engine: edit recipe, render pipeline, sidecars, XMP, LUT parsing. No AppKit, UIKit or SwiftUI. |
 | `Sources/ProofUI` | The app model the Mac and iOS apps share, such as `Library`. SwiftUI, no AppKit or UIKit. |
