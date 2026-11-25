@@ -1,15 +1,19 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The right-click menu of a photo in the grid or the filmstrip. Like the menu bar, it acts on
 /// every selected photo when the photo clicked is one of them, as in Finder, and otherwise on that
 /// photo alone. Actions for many photos belong here and in the menu bar, not in the toolbar.
-struct PhotoContextMenu: View {
+public struct PhotoContextMenu: View {
     @Bindable var library: Library
     let photo: PhotoReference
 
-    var body: some View {
+    public init(library: Library, photo: PhotoReference) {
+        self.library = library
+        self.photo = photo
+    }
+
+    public var body: some View {
         let photos = library.menuTargets(for: photo)
         let many = photos.count > 1 ? " \(photos.count) Photos" : ""
         if !library.isEditing {
@@ -48,7 +52,9 @@ struct PhotoContextMenu: View {
             }
         }
         Divider()
+        #if os(macOS)
         Button("Show in Finder") { library.showInFinder(library.urls(of: photos)) }
+        #endif
         Button("Copy Path" + (photos.count > 1 ? "s" : "")) { library.copyPaths(library.urls(of: photos)) }
         // JPEG and HEIC photos aren't exported or edited until #239.
         let noneEditable = !photos.contains(where: \.isEditable)

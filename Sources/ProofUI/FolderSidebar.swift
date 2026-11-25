@@ -1,13 +1,16 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// All Photos and the filter rows, then the saved folders and their subfolders, exactly as they are on disk.
-struct FolderSidebar: View {
+public struct FolderSidebar: View {
     @Bindable var library: Library
     @State private var removing: SavedLocation?
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         List(selection: $library.selection) {
             if !library.locations.isEmpty {
                 SidebarLabel(name: "All Photos", systemImage: "photo.on.rectangle")
@@ -29,11 +32,13 @@ struct FolderSidebar: View {
         // so the window reads as one surface.
         .scrollContentBackground(.hidden)
         .background(Color.interfaceBackground.ignoresSafeArea())
+        #if os(macOS)
         .onDeleteCommand {
             removing = library.locations.first {
                 library.selection == .folder(FileReference(locationID: $0.id, relativePath: []))
             }
         }
+        #endif
         .toolbar {
             // The sidebar is hidden while editing, and so is its button.
             if !library.isEditing {
@@ -57,7 +62,7 @@ private struct LocationRow: View {
     let location: SavedLocation
     let remove: (SavedLocation) -> Void
 
-    var body: some View {
+    public var body: some View {
         let root = FileReference(locationID: location.id, relativePath: [])
         switch library.status(of: location.id) {
         case .available:
@@ -92,7 +97,7 @@ private struct FolderRow: View {
     let remove: (SavedLocation) -> Void
     @State private var isExpanded = false
 
-    var body: some View {
+    public var body: some View {
         Group {
             if let contents = library.contents[folder], !contents.subfolders.isEmpty {
                 DisclosureGroup(isExpanded: $isExpanded) {
@@ -126,10 +131,12 @@ private struct FolderContextMenu: View {
     let folder: FileReference
     let remove: (SavedLocation) -> Void
 
-    var body: some View {
+    public var body: some View {
         let url = library.url(of: folder)
+        #if os(macOS)
         Button("Show in Finder") { if let url { library.showInFinder([url]) } }
             .disabled(url == nil)
+        #endif
         Button("Copy Path") { if let url { library.copyPaths([url]) } }
             .disabled(url == nil)
         Button("Refresh") { library.refresh(folder) }
@@ -153,7 +160,7 @@ private struct FilterLabel: View {
     let count: Int
     @Environment(\.backgroundProminence) private var prominence
 
-    var body: some View {
+    public var body: some View {
         Label {
             if let rating = filter.rating {
                 HStack(spacing: 1) {
@@ -199,7 +206,7 @@ private struct SidebarLabel: View {
     var count = 0
     @Environment(\.backgroundProminence) private var prominence
 
-    var body: some View {
+    public var body: some View {
         Label {
             Text(name)
         } icon: {

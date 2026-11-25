@@ -1,18 +1,23 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The selected folder's photos, or All Photos, as thumbnails, each shown as soon as `ThumbnailCache` has it, so a
 /// folder on a NAS fills in while it is read. Click selects a photo, ⌘-click and ⇧-click select
 /// several, the arrow keys move the selection, Esc deselects every photo, and double-click opens
 /// the photo in Edit. Return is handled by the Photo menu.
-struct ThumbnailGrid: View {
+public struct ThumbnailGrid: View {
     @Bindable var library: Library
     /// The photos that pass the filter.
     let photos: [ListedPhoto]
     /// Every listed photo. Thumbnails are loaded for all of them so changing the filter
     /// doesn't read the folder again.
     let allPhotos: [ListedPhoto]
+
+    public init(library: Library, photos: [ListedPhoto], allPhotos: [ListedPhoto]) {
+        self.library = library
+        self.photos = photos
+        self.allPhotos = allPhotos
+    }
 
     /// A photo that was read but couldn't be made into a thumbnail has no entry in `images`.
     @State private var images: [PhotoReference: CGImage] = [:]
@@ -33,7 +38,7 @@ struct ThumbnailGrid: View {
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
 
-    var body: some View {
+    public var body: some View {
         ScrollViewReader { scroller in
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellWidth), spacing: Self.spacing), count: columnCount),
@@ -91,6 +96,8 @@ struct ThumbnailGrid: View {
         .focusable()
         .focusEffectDisabled()
         .focused($isFocused)
+        // Arrow keys move the selection on the Mac; touch has no equivalent.
+        #if os(macOS)
         .onMoveCommand { direction in
             let move: BrowseState.Move? = switch direction {
             case .left: .left
@@ -101,6 +108,7 @@ struct ThumbnailGrid: View {
             }
             if let move { library.browse.move(move, in: photos, columns: columnCount) }
         }
+        #endif
         // With nothing selected, Esc passes on to whatever else handles it.
         .onKeyPress(.escape) {
             guard library.browse.selectedPhoto != nil else { return .ignored }
@@ -210,7 +218,7 @@ struct ThumbnailGrid: View {
     /// and marks it in `finished`; a photo that couldn't be read is finished without an image.
     /// Photos already finished keep their thumbnail, so All Photos doesn't start over each time
     /// another folder is read. Used by the grid and the filmstrip.
-    static func loadThumbnails(of photos: [ListedPhoto], images: Binding<[PhotoReference: CGImage]>,
+    public static func loadThumbnails(of photos: [ListedPhoto], images: Binding<[PhotoReference: CGImage]>,
                                finished: Binding<Set<PhotoReference>>, library: Library) async {
         let ids = Set(photos.map(\.id))
         images.wrappedValue = images.wrappedValue.filter { ids.contains($0.key) }
@@ -230,7 +238,12 @@ struct ThumbnailGrid: View {
 }
 
 /// What the grid and the filmstrip load thumbnails for: their photos, at a LUT library generation.
-struct ThumbnailLoad: Hashable {
+public struct ThumbnailLoad: Hashable {
     var photos: [PhotoReference]
     var lutGeneration: Int
+
+    public init(photos: [PhotoReference], lutGeneration: Int) {
+        self.photos = photos
+        self.lutGeneration = lutGeneration
+    }
 }

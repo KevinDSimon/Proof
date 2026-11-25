@@ -93,9 +93,3 @@ struct ContentView: View {
         }
     }
 }
-
-extension Color {
-    /// The Mac app's interface gray, the default canvas color. Moves into ProofUI with the shared
-    /// views (#242).
-    static let interfaceBackground = Color(white: CanvasColor.darkGray.components.red)
-}
