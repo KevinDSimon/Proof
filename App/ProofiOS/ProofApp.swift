@@ -134,10 +134,12 @@ struct ContentView: View {
         // As in Notes; the subtitle still counts the photos.
         return count == 0 ? "Select Photos" : "\(count) Selected"
     }
-    /// The filter's name follows the count, as the filter button has no badge on iOS.
+    /// How many filter parts are on follows the count, as the More menu has no badge.
     private var browseSubtitle: String {
         guard !library.isEditing else { return "" }
-        let filter = library.filter.isEmpty || library.isSelectingPhotos ? nil : library.filter.summary
+        let parts = max(library.filter.activeCount, 1)
+        let filter = library.filter.isEmpty || library.isSelectingPhotos ? nil
+                                                                         : "\(parts) \(parts == 1 ? "filter" : "filters")"
         return [library.windowSubtitle, filter].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
