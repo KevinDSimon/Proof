@@ -15,37 +15,18 @@ struct ProofApp: App {
     }
 }
 
-/// The library beside the grid on iPad; on iPhone and in a narrow iPad window, a stack of
-/// library, grid and photo, with the standard back button and edge swipe (decision 0048).
+/// The library beside the grid on iPad; on iPhone and in a narrow iPad window, one stack of
+/// library, grid and photo, as in Notes, with the standard back button and edge swipe
+/// (decision 0048).
 struct ContentView: View {
     @Bindable var library: Library
-    /// With no folders the sidebar is empty, so iPhone opens on the empty state instead.
-    @State private var compactColumn = NavigationSplitViewColumn.detail
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// In compact width, whether a row's grid is pushed onto the library.
+    @State private var compactPath: [BrowseScreen] = []
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $compactColumn) {
-            FolderSidebar(library: library)
-                .navigationTitle("Library")
-        } detail: {
-            NavigationStack {
-                PhotoBrowser(library: library)
-                    // On iPhone a row's grid is built before it slides in, while the library is
-                    // still on screen, and isn't told when it appears, so its thumbnails never
-                    // load. A grid of its own for each row is told.
-                    .id(library.selection)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.interfaceBackground.ignoresSafeArea())
-                    .navigationTitle(browseTitle)
-                    .navigationSubtitle(browseSubtitle)
-                    // A large title, as in Notes and Photos, that shrinks into the bar on scrolling.
-                    .navigationBarTitleDisplayMode(.large)
-                    .toolbar { browseToolbar }
-                    // Select All takes the back button's place while selecting, as in Files.
-                    .navigationBarBackButtonHidden(library.isSelectingPhotos)
-                    .navigationDestination(isPresented: isEditing) {
-                        PhotoView(library: library)
-                    }
-            }
+        Group {
+            if sizeClass == .compact { compactStack } else { splitView }
         }
         .fileImporter(isPresented: $library.isChoosingFolder, allowedContentTypes: [.folder],
                       allowsMultipleSelection: library.folderPickerAllowsSeveral) { result in
@@ -67,10 +48,63 @@ struct ContentView: View {
         // Select ends on another row, and on opening a photo from the menu.
         .onChange(of: library.selection) { library.isSelectingPhotos = false }
         .onChange(of: library.isEditing) { if library.isEditing { library.isSelectingPhotos = false } }
-        // Folders that were added open on the library, so they can be seen; with none, the empty state.
-        .onChange(of: library.locations.isEmpty, initial: true) { _, isEmpty in
-            compactColumn = isEmpty ? .detail : .sidebar
+    }
+
+    private var splitView: some View {
+        NavigationSplitView {
+            FolderSidebar(library: library)
+                .navigationTitle("Library")
+        } detail: {
+            NavigationStack {
+                grid
+                    // A grid of its own for each row, so a row picked while another's grid is
+                    // showing loads its thumbnails.
+                    .id(library.selection)
+            }
         }
+    }
+
+    /// A split view collapsed to a stack would keep the grid in a stack of its own inside it,
+    /// where its large title doesn't follow its scrolling and its thumbnails don't load; one
+    /// stack has neither problem. Picking a row pushes its grid, and going back clears the row,
+    /// so picking it again opens it again.
+    private var compactStack: some View {
+        NavigationStack(path: $compactPath) {
+            Group {
+                // With no folders there is nothing to list, so the empty state shows instead.
+                if library.locations.isEmpty {
+                    PhotoBrowser(library: library)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.interfaceBackground.ignoresSafeArea())
+                } else {
+                    FolderSidebar(library: library)
+                }
+            }
+            .navigationTitle("Library")
+            .navigationDestination(for: BrowseScreen.self) { _ in grid }
+        }
+        .onChange(of: library.selection, initial: true) { _, selection in
+            if selection != nil, compactPath.isEmpty { compactPath = [.grid] }
+        }
+        .onChange(of: compactPath) { _, path in
+            if path.isEmpty { library.selection = nil }
+        }
+    }
+
+    /// The selected row's photos, with Browse's toolbar, pushing the photo in Edit.
+    private var grid: some View {
+        PhotoBrowser(library: library)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.interfaceBackground.ignoresSafeArea())
+            .navigationTitle(browseTitle)
+            // A large title, as in Notes and Photos, that shrinks into the bar on scrolling.
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar { browseToolbar }
+            // Select All takes the back button's place while selecting, as in Files.
+            .navigationBarBackButtonHidden(library.isSelectingPhotos)
+            .navigationDestination(isPresented: isEditing) {
+                PhotoView(library: library)
+            }
     }
 
     /// Browse has one More menu, with Select and the filter, so the bar stays clear on iPhone.
@@ -107,7 +141,7 @@ struct ContentView: View {
             }
         } else if library.selection != nil, !library.isEditing {
             ToolbarItem {
-                Menu("More", systemImage: "ellipsis") {
+                Menu {
                     Button("Select", systemImage: "checkmark.circle") { library.isSelectingPhotos = true }
                         .disabled(library.visiblePhotos.isEmpty)
                     Menu {
@@ -116,7 +150,23 @@ struct ContentView: View {
                         Label("Filter", systemImage: "line.3.horizontal.decrease")
                         if !library.filter.isEmpty { Text(library.filter.summary) }
                     }
+                } label: {
+                    // A yellow badge counts the filter parts that are set, since the count under
+                    // the grid may be out of sight. The system's toolbar badge is always red.
+                    Image(systemName: "ellipsis")
+                        .overlay(alignment: .topTrailing) {
+                            if !library.filter.isEmpty {
+                                Text("\(max(library.filter.activeCount, 1))")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.black)
+                                    .frame(minWidth: 16, minHeight: 16)
+                                    .background(Color.highlight, in: .circle)
+                                    .offset(x: 12, y: -12)
+                            }
+                        }
                 }
+                .accessibilityLabel("More")
+                .accessibilityValue(library.filter.isEmpty ? "" : "\(max(library.filter.activeCount, 1)) filters on")
             }
         }
     }
@@ -131,17 +181,14 @@ struct ContentView: View {
     private var browseTitle: String {
         guard library.isSelectingPhotos else { return library.rowTitle }
         let count = library.browse.selectedPhotos.count
-        // As in Notes; the subtitle still counts the photos.
+        // As in Notes; the count of photos is under the grid.
         return count == 0 ? "Select Photos" : "\(count) Selected"
     }
-    /// How many filter parts are on follows the count, as the More menu has no badge.
-    private var browseSubtitle: String {
-        guard !library.isEditing else { return "" }
-        let parts = max(library.filter.activeCount, 1)
-        let filter = library.filter.isEmpty || library.isSelectingPhotos ? nil
-                                                                         : "\(parts) \(parts == 1 ? "filter" : "filters")"
-        return [library.windowSubtitle, filter].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-    }
+}
+
+/// What compact width pushes onto the library.
+private enum BrowseScreen: Hashable {
+    case grid
 }
 
 /// The photo, centered on the canvas with a margin. Its thumbnail stands in until the edit
