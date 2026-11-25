@@ -56,7 +56,7 @@ struct Filmstrip: View {
         .onAppear { isFocused = true }
         // Loaded again when the LUT library changes, since edited thumbnails show looks.
         // The photos collapsed stacks hide too, which peek out above them.
-        .task(id: ThumbnailLoad(photos: library.visiblePhotos.map(\.id), lutGeneration: library.looks.generation)) {
+        .task(id: ThumbnailLoad(photos: library.visiblePhotos, lutGeneration: library.looks.generation)) {
             if lutGeneration != library.looks.generation {
                 lutGeneration = library.looks.generation
                 finished = []

@@ -16,11 +16,15 @@ public struct FolderContents: Equatable, Sendable {
         /// Rating, flag and label from XMP. `nil` until read: `read(at:)` reads sidecars, and
         /// `embeddedMetadata(of:)` reads photos that have none.
         public var metadata: PhotoMetadata?
+        /// The photo is in iCloud and not downloaded to this device. Reading it would download it,
+        /// so its thumbnail and metadata wait until it is opened.
+        public var isInCloud: Bool
 
-        public init(name: String, isEdited: Bool, metadata: PhotoMetadata? = nil) {
+        public init(name: String, isEdited: Bool, metadata: PhotoMetadata? = nil, isInCloud: Bool = false) {
             self.name = name
             self.isEdited = isEdited
             self.metadata = metadata
+            self.isInCloud = isInCloud
         }
     }
 
@@ -34,13 +38,15 @@ public struct FolderContents: Equatable, Sendable {
     /// Photos with an XMP sidecar get their metadata from it; the others are left `nil`.
     /// Blocks on file I/O, so call it off the main thread.
     public static func read(at url: URL) throws -> FolderContents {
-        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey, .contentTypeKey, .contentModificationDateKey]
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey, .contentTypeKey, .contentModificationDateKey,
+                                         .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
         let values = try url.resourceValues(forKeys: keys)
         guard values.isDirectory == true, values.isPackage != true else {
             guard isPhoto(values) else { return FolderContents(subfolders: [], photos: []) }
             let isEdited = FileManager.default.fileExists(atPath: EditRecipe.sidecarURL(for: url).path)
             let photo = Photo(name: url.lastPathComponent, isEdited: isEdited,
-                              metadata: XMPSidecar.existing(for: url).flatMap(readSidecar))
+                              metadata: XMPSidecar.existing(for: url).flatMap(readSidecar),
+                              isInCloud: isInCloud(values))
             return FolderContents(subfolders: [], photos: [photo])
         }
 
@@ -63,7 +69,8 @@ public struct FolderContents: Equatable, Sendable {
                 let keys = PhotoMetadata.sidecarKeys(for: name, besideRAW: hasRAW(named: name, among: rawNames))
                 let candidates = keys.flatMap { sidecars[$0] ?? [] }
                 photos.append(Photo(name: name, isEdited: names.contains(name + ".proof"),
-                                    metadata: newestSidecar(of: candidates).flatMap(readSidecar)))
+                                    metadata: newestSidecar(of: candidates).flatMap(readSidecar),
+                                    isInCloud: isInCloud(values)))
             }
         }
         let finderOrder = { (a: String, b: String) in a.localizedStandardCompare(b) == .orderedAscending }
@@ -110,6 +117,16 @@ public struct FolderContents: Equatable, Sendable {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    static func isInCloud(_ values: URLResourceValues) -> Bool {
+        isInCloud(isUbiquitous: values.isUbiquitousItem, status: values.ubiquitousItemDownloadingStatus)
+    }
+
+    /// A file in iCloud is on this device when its downloaded copy is current. One with an older
+    /// copy still opens, so only a file with no copy at all counts as in the cloud.
+    static func isInCloud(isUbiquitous: Bool?, status: URLUbiquitousItemDownloadingStatus?) -> Bool {
+        isUbiquitous == true && status == .notDownloaded
     }
 
     /// When two apps have each left a sidecar, such as `IMG_1.xmp` and `IMG_1.DNG.xmp`, the one

@@ -142,7 +142,7 @@ public struct FlagIcon: View {
 public enum RatingBadges {
     /// The photo's name followed by its rating, flag and whether it is edited, for VoiceOver.
     public static func accessibilityLabel(name: String, metadata: PhotoMetadata?, isEdited: Bool,
-                                   stack: StackMark? = nil) -> String {
+                                   stack: StackMark? = nil, isInCloud: Bool = false) -> String {
         var parts = [name]
         switch stack {
         case .first(let count): parts.append("stack of \(count)")
@@ -158,6 +158,7 @@ public enum RatingBadges {
             }
         }
         if isEdited { parts.append("edited") }
+        if isInCloud { parts.append("in iCloud, not downloaded") }
         return parts.joined(separator: ", ")
     }
 

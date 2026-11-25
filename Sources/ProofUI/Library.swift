@@ -123,6 +123,28 @@ public final class Library {
             if let previous = oldValue.selectedPhoto { commitEdit(of: previous) }
             openSelectedEdit()
             closedGroups = AdjustmentGroup.initiallyOff(for: selectedEdit?.recipe)
+            if isEditing, let photo = browse.selectedPhoto { downloadIfInCloud(photo) }
+        }
+    }
+
+    /// Photos in iCloud being downloaded because they were opened.
+    public private(set) var downloadingPhotos: Set<PhotoReference> = []
+
+    /// Downloads an opened photo that is in iCloud and not on this device, then reads its folder
+    /// again so its thumbnail and metadata show.
+    private func downloadIfInCloud(_ photo: PhotoReference) {
+        guard !downloadingPhotos.contains(photo),
+              contents[photo.folder]?.photos.first(where: { $0.name == photo.name })?.isInCloud == true,
+              let url = url(ofPhoto: photo.name, in: photo.folder) else { return }
+        downloadingPhotos.insert(photo)
+        Task {
+            let downloaded = await CloudDownload.download(url)
+            downloadingPhotos.remove(photo)
+            if downloaded {
+                refresh(photo.folder)
+            } else {
+                errorMessage = "“\(photo.name)” couldn't be downloaded from iCloud."
+            }
         }
     }
     /// The edits of photos opened in Edit since Proof started.
@@ -430,7 +452,9 @@ public final class Library {
     private func readEmbeddedMetadata() {
         metadataTask?.cancel()
         let shown = selection
-        let missing = Dictionary(grouping: listedPhotos.filter { $0.photo.metadata == nil }, by: \.folder)
+        // Photos in iCloud would be downloaded to be read, so they wait until they are opened.
+        let missing = Dictionary(grouping: listedPhotos.filter { $0.photo.metadata == nil && !$0.photo.isInCloud },
+                                 by: \.folder)
         let folders = listedPhotos.map(\.folder).reduce(into: [FileReference]()) { order, folder in
             if missing[folder] != nil, order.last != folder { order.append(folder) }
         }
