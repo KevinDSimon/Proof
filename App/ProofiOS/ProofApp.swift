@@ -43,6 +43,13 @@ struct ContentView: View {
                         if library.selection != nil, !library.isEditing {
                             ToolbarItem { FilterButton(library: library) }
                         }
+                        // Select, as in Photos: taps then add or remove photos, and a drag across
+                        // them selects a range.
+                        if library.isSelectingPhotos {
+                            ToolbarItem { Button("Cancel", role: .cancel) { library.isSelectingPhotos = false } }
+                        } else if !library.isEditing, !library.visiblePhotos.isEmpty {
+                            ToolbarItem { Button("Select") { library.isSelectingPhotos = true } }
+                        }
                     }
                     .navigationDestination(isPresented: isEditing) {
                         PhotoView(library: library)
@@ -66,6 +73,9 @@ struct ContentView: View {
         } message: {
             Text(library.errorMessage ?? "")
         }
+        // Select ends on another row, and on opening a photo from the menu.
+        .onChange(of: library.selection) { library.isSelectingPhotos = false }
+        .onChange(of: library.isEditing) { if library.isEditing { library.isSelectingPhotos = false } }
         // Folders that were added open on the library, so they can be seen; with none, the empty state.
         .onChange(of: library.locations.isEmpty, initial: true) { _, isEmpty in
             compactColumn = isEmpty ? .detail : .sidebar
@@ -79,7 +89,15 @@ struct ContentView: View {
     }
 
     // The grid's title stays the row's while the photo is pushed, so the back button names it.
-    private var browseTitle: String { library.rowTitle }
+    private var browseTitle: String {
+        guard library.isSelectingPhotos else { return library.rowTitle }
+        let count = library.browse.selectedPhotos.count
+        return switch count {
+        case 0: "Select Photos"
+        case 1: "1 Photo Selected"
+        default: "\(count) Photos Selected"
+        }
+    }
     private var browseSubtitle: String { library.isEditing ? "" : library.windowSubtitle }
 }
 

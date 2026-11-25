@@ -26,18 +26,41 @@ public struct LibraryPlatform: Sendable {
     public var copyString: @MainActor (String) -> Void
     /// Starts calling the handler with each `Event`, on the main thread.
     public var observe: @MainActor (_ handler: @escaping @MainActor (Event) -> Void) -> Void
+    /// Touch: adds to the view a drag that starts only when the finger moves sideways, leaving
+    /// drags up and down to the scroll view around it. SwiftUI's own drag gestures stop a scroll
+    /// view from scrolling, and telling the two apart needs UIKit. `nil` where there's no touch.
+    public var sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)?
 
     public init(clickModifiers: @escaping @MainActor () -> EventModifiers,
                 beep: @escaping @MainActor () -> Void,
                 revealFiles: @escaping @MainActor ([URL]) -> Void,
                 openFolder: @escaping @MainActor (URL) -> Void,
                 copyString: @escaping @MainActor (String) -> Void,
-                observe: @escaping @MainActor (_ handler: @escaping @MainActor (Event) -> Void) -> Void) {
+                observe: @escaping @MainActor (_ handler: @escaping @MainActor (Event) -> Void) -> Void,
+                sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? = nil) {
         self.clickModifiers = clickModifiers
         self.beep = beep
         self.revealFiles = revealFiles
         self.openFolder = openFolder
         self.copyString = copyString
         self.observe = observe
+        self.sidewaysDrag = sidewaysDrag
+    }
+}
+
+/// What a sideways drag reports, with points in `coordinateSpace`.
+public struct SidewaysDragActions {
+    /// While off, the drag never starts.
+    public var isEnabled: Bool
+    public var coordinateSpace: NamedCoordinateSpace
+    public var began: @MainActor (_ start: CGPoint) -> Void
+    public var changed: @MainActor (CGPoint) -> Void
+
+    public init(isEnabled: Bool, coordinateSpace: NamedCoordinateSpace, began: @escaping @MainActor (CGPoint) -> Void,
+                changed: @escaping @MainActor (CGPoint) -> Void) {
+        self.isEnabled = isEnabled
+        self.coordinateSpace = coordinateSpace
+        self.began = began
+        self.changed = changed
     }
 }
