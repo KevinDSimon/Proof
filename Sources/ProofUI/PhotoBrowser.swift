@@ -164,9 +164,9 @@ public extension Library {
         return "\(count) · \(missing)"
     }
 
-    /// "3 selected", while more than one photo is.
+    /// "3 selected", while more than one photo is. While Select is on, the iOS title counts them.
     private var selectedCount: String? {
-        browse.hasMultipleSelection ? "\(browse.selectedPhotos.count) selected" : nil
+        browse.hasMultipleSelection && !isSelectingPhotos ? "\(browse.selectedPhotos.count) selected" : nil
     }
 
 }

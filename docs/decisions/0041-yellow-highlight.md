@@ -21,3 +21,7 @@ Slider tracks, buttons, the canvas, the inspector cards and toolbar items don't 
 - On and off, and what is selected, show in one consistent color.
 - The switch's white knob has less contrast on yellow than on green; the switch still reads by the knob's position.
 - New places for the highlight should be small marks of state. A filled area in the highlight needs black, not white, text on it.
+
+## Amendment (#225)
+
+On iPad and iPhone, the checkmark button that ends Select in the grid is filled with the highlight color, with a dark checkmark, as Notes fills its own. It is the only filled use. It marks the one way out of a temporary mode and sits in the toolbar, away from the photos.

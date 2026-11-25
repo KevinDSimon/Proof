@@ -36,17 +36,19 @@ public struct ThumbnailGrid: View {
 
     #if os(macOS)
     /// The selected photos are outlined, since the keyboard and menus act on them.
-    private static let marksSelection = true
+    private var marksSelection: Bool { true }
     private static let sizes = ThumbnailSize.mac
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
     #else
-    /// A tap opens the photo, so there's no current photo to mark. Selecting several, with its own
-    /// marks, is #225.
-    private static let marksSelection = false
+    /// A tap opens the photo, so there's no current photo to mark, except while Select is on.
+    private var marksSelection: Bool { library.isSelectingPhotos }
     private static let sizes = ThumbnailSize.touch
     private static let spacing: CGFloat = 8
     private static let margin: CGFloat = 16
+    /// Where each thumbnail is in the grid, to find the one under a finger dragging across them.
+    @State private var cellFrames: [PhotoReference: CGRect] = [:]
+    private static let gridSpace = "ThumbnailGrid"
     #endif
 
     /// The cell size a pinch sets, kept between launches.
@@ -67,6 +69,10 @@ public struct ThumbnailGrid: View {
                     }
                 }
                 .padding(Self.margin)
+                #if os(iOS)
+                .coordinateSpace(.named(Self.gridSpace))
+                .dragSelection(library.sidewaysDrag, dragActions)
+                #endif
                 .frame(width: max(layoutWidth, 1), alignment: .leading)
                 // Pinned to the leading edge, so the panel slides over or away from the photos' right side.
                 // A minimum of zero, so the photos' layout never holds the grid wider than the window.
@@ -173,8 +179,26 @@ public struct ThumbnailGrid: View {
         return max(1, (layoutWidth - 2 * Self.margin - (count - 1) * Self.spacing) / count)
     }
 
+    #if os(iOS)
+    /// While Select is on, a drag that starts sideways across the thumbnails selects the photos it
+    /// crosses, or deselects them when it starts on a selected one, as in Photos. One that starts
+    /// up or down scrolls.
+    private var dragActions: SidewaysDragActions {
+        SidewaysDragActions(isEnabled: library.isSelectingPhotos, coordinateSpace: .named(Self.gridSpace), began: { start in
+            if let photo = photo(at: start) { library.browse.beginDragSelection(at: photo) }
+        }, changed: { point in
+            if let photo = photo(at: point) { library.browse.dragSelection(to: photo, in: photos) }
+        })
+    }
+
+    /// The thumbnail under `point`; `nil` in the spacing between them.
+    private func photo(at point: CGPoint) -> PhotoReference? {
+        cellFrames.first { $0.value.contains(point) }?.key
+    }
+    #endif
+
     private func cell(for photo: ListedPhoto, stack: StackMark?) -> some View {
-        let isSelected = Self.marksSelection && library.browse.selectedPhotos.contains(photo.id)
+        let isSelected = marksSelection && library.browse.selectedPhotos.contains(photo.id)
         return VStack(spacing: 6) {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
@@ -239,11 +263,20 @@ public struct ThumbnailGrid: View {
             library.browse.edit()
         })
         #else
-        // A tap opens the photo, as in Photos. Selecting several and the touch-and-hold menu are #225.
+        // A tap opens the photo, as in Photos, or while Select is on adds or removes it.
         .onTapGesture {
-            library.browse.selectedPhoto = photo.id
-            library.browse.edit()
+            if library.isSelectingPhotos {
+                library.browse.toggle(photo.id, in: photos)
+            } else {
+                library.browse.selectedPhoto = photo.id
+                library.browse.edit()
+            }
         }
+        .contextMenu { PhotoContextMenu(library: library, photo: photo.id) }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { frame in
+            cellFrames[photo.id] = frame
+        }
+        .onDisappear { cellFrames[photo.id] = nil }
         #endif
         .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
@@ -313,3 +346,14 @@ public struct ThumbnailLoad: Hashable {
         self.lutGeneration = lutGeneration
     }
 }
+
+#if os(iOS)
+private extension View {
+    /// Adds the app's sideways drag. It stays attached while Select is off, so turning Select on
+    /// doesn't build the grid again.
+    @ViewBuilder func dragSelection(_ drag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)?,
+                                    _ actions: SidewaysDragActions) -> some View {
+        if let drag { drag(AnyView(self), actions) } else { self }
+    }
+}
+#endif

@@ -26,6 +26,7 @@ extension LibraryPlatform {
                                                    object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated { handler(.willTerminate) }
             }
-        }
+        },
+        sidewaysDrag: { view, actions in AnyView(view.gesture(SidewaysDrag(actions: actions))) }
     )
 }

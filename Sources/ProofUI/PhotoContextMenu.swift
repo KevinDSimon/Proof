@@ -15,35 +15,28 @@ public struct PhotoContextMenu: View {
 
     public var body: some View {
         let photos = library.menuTargets(for: photo)
-        let many = photos.count > 1 ? " \(photos.count) Photos" : ""
         if !library.isEditing {
             Button("Edit") {
                 if library.browse.selectedPhoto != photo { library.browse.selectedPhoto = photo }
                 library.browse.edit()
             }
             .disabled(!photo.isEditable)
-            // The panel describes one photo, so showing it selects only the photo clicked.
+            // The panel describes one photo, so showing it selects only the photo clicked. iOS
+            // shows Info as a sheet, in #233.
+            #if os(macOS)
             Button(library.isInfoShown ? "Hide Info" : "Show Info") {
                 if !library.isInfoShown, library.browse.selectedPhotos != [photo] {
                     library.browse.selectedPhoto = photo
                 }
                 library.isInfoShown.toggle()
             }
+            #endif
             Divider()
         }
-        // A rating or flag the photos share is checked.
-        Picker("Rating", selection: Binding(get: { library.commonRating(of: photos) ?? -1 },
-                                            set: { library.setRating($0, of: photos) })) {
-            ForEach(0...5, id: \.self) { rating in
-                Text(RatingBadges.title(ofRating: rating)).tag(rating)
-            }
-        }
-        Picker("Flag", selection: Binding(get: { library.commonFlag(of: photos) },
-                                          set: { if let flag = $0 { library.setFlag(flag, of: photos) } })) {
-            ForEach(RatingBadges.flags, id: \.self) { flag in
-                Text(RatingBadges.title(of: flag)).tag(PhotoMetadata.Flag?.some(flag))
-            }
-        }
+        RatingPicker(library: library, photos: photos)
+            .submenuOnTouch()
+        FlagPicker(library: library, photos: photos)
+            .submenuOnTouch()
         if library.stackMarks[photo] != nil {
             Divider()
             Button(library.isStackOpen(StackMark.first(of: photo, in: library.visiblePhotos, marks: library.stackMarks) ?? photo)
@@ -51,11 +44,14 @@ public struct PhotoContextMenu: View {
                 library.toggleStackAnimated(of: photo)
             }
         }
-        Divider()
+        // Files on iOS have no path worth copying, and the export and Copy Settings sheets come to
+        // iOS in #234 and #233. Revert waits for Undo on iOS (#227), since one photo reverts
+        // without asking.
         #if os(macOS)
+        Divider()
         Button("Show in Finder") { library.showInFinder(library.urls(of: photos)) }
-        #endif
         Button("Copy Path" + (photos.count > 1 ? "s" : "")) { library.copyPaths(library.urls(of: photos)) }
+        let many = photos.count > 1 ? " \(photos.count) Photos" : ""
         // JPEG and HEIC photos aren't exported or edited until #239.
         let noneEditable = !photos.contains(where: \.isEditable)
         Button(photos.count > 1 ? "Export\(many)…" : "Export…") { library.requestExport(of: photos) }
@@ -73,5 +69,59 @@ public struct PhotoContextMenu: View {
             library.requestRevert(of: photos)
         }
         .disabled(toRevert.isEmpty)
+        #endif
+    }
+}
+
+/// The rating choices for `photos`, with a rating they all share checked. In the photo menus and
+/// the iOS selection toolbar.
+public struct RatingPicker: View {
+    let library: Library
+    let photos: [PhotoReference]
+
+    public init(library: Library, photos: [PhotoReference]) {
+        self.library = library
+        self.photos = photos
+    }
+
+    public var body: some View {
+        Picker("Rating", selection: Binding(get: { library.commonRating(of: photos) ?? -1 },
+                                            set: { library.setRating($0, of: photos) })) {
+            ForEach(0...5, id: \.self) { rating in
+                Text(RatingBadges.title(ofRating: rating)).tag(rating)
+            }
+        }
+    }
+}
+
+/// The flag choices for `photos`, with a flag they all share checked.
+public struct FlagPicker: View {
+    let library: Library
+    let photos: [PhotoReference]
+
+    public init(library: Library, photos: [PhotoReference]) {
+        self.library = library
+        self.photos = photos
+    }
+
+    public var body: some View {
+        Picker("Flag", selection: Binding(get: { library.commonFlag(of: photos) },
+                                          set: { if let flag = $0 { library.setFlag(flag, of: photos) } })) {
+            ForEach(RatingBadges.flags, id: \.self) { flag in
+                Text(RatingBadges.title(of: flag)).tag(PhotoMetadata.Flag?.some(flag))
+            }
+        }
+    }
+}
+
+private extension View {
+    /// iOS lists a picker's choices in the menu itself, which makes Rating and Flag nine rows
+    /// long; as submenus they read as on the Mac.
+    @ViewBuilder func submenuOnTouch() -> some View {
+        #if os(iOS)
+        pickerStyle(.menu)
+        #else
+        self
+        #endif
     }
 }

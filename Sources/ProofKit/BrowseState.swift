@@ -91,6 +91,27 @@ public struct BrowseState: Equatable, Sendable {
         setSelection(selection, primary: selectedPhoto.flatMap { selection.contains($0) ? $0 : nil } ?? photo)
     }
 
+    /// Touch: a drag across thumbnails starts on `photo`. A drag that starts on a selected photo
+    /// deselects the photos it crosses, and one that starts elsewhere selects them, as in Photos.
+    public mutating func beginDragSelection(at photo: PhotoReference) {
+        anchor = photo
+        selectionAtAnchor = selectedPhotos
+    }
+
+    /// Touch: the drag that began at the anchor is over `photo`. The photos from the anchor to it
+    /// are selected, or deselected, on top of the selection the drag started with, so moving back
+    /// toward the anchor undoes what it passed.
+    public mutating func dragSelection(to photo: PhotoReference, in photos: [ListedPhoto]) {
+        guard let anchor, let from = photos.firstIndex(where: { $0.id == anchor }),
+              let to = photos.firstIndex(where: { $0.id == photo }) else { return }
+        let range = photos[min(from, to)...max(from, to)].map(\.id)
+        let selection = selectionAtAnchor.contains(anchor) ? selectionAtAnchor.subtracting(range)
+                                                           : selectionAtAnchor.union(range)
+        let primary = selectedPhoto.flatMap { selection.contains($0) ? $0 : nil }
+            ?? photos.first { selection.contains($0.id) }?.id
+        setSelection(selection, primary: primary)
+    }
+
     /// ⌘A: selects every photo in `photos`, keeping the photo Edit shows.
     public mutating func selectAll(_ photos: [ListedPhoto]) {
         guard !photos.isEmpty else { return }

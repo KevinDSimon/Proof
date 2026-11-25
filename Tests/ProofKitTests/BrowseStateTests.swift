@@ -255,4 +255,33 @@ struct BrowseStateTests {
         #expect(state.selectedPhoto == ref(4))
         #expect(state.mode == .editing)
     }
+
+    @Test("A drag from an unselected photo selects the photos it crosses, and moving back deselects them again")
+    func dragSelects() {
+        var state = BrowseState()
+        state.toggle(ref(1), in: photos)
+        state.beginDragSelection(at: ref(3))
+        state.dragSelection(to: ref(5), in: photos)
+        #expect(state.selectedPhotos == [ref(1), ref(3), ref(4), ref(5)])
+        state.dragSelection(to: ref(4), in: photos)
+        #expect(state.selectedPhotos == [ref(1), ref(3), ref(4)])
+        state.dragSelection(to: ref(2), in: photos)
+        #expect(state.selectedPhotos == [ref(1), ref(2), ref(3)])
+        #expect(state.selectedPhoto == ref(1))
+    }
+
+    @Test("A drag from a selected photo deselects the photos it crosses, and deselecting all clears the selection")
+    func dragDeselects() {
+        var state = BrowseState()
+        state.selectAll(photos)
+        state.beginDragSelection(at: ref(1))
+        state.dragSelection(to: ref(3), in: photos)
+        #expect(state.selectedPhotos == [ref(4), ref(5), ref(6), ref(7)])
+        #expect(state.selectedPhoto == ref(4))
+        state.dragSelection(to: ref(7), in: photos)
+        #expect(state.selectedPhotos.isEmpty)
+        #expect(state.selectedPhoto == nil)
+        state.dragSelection(to: ref(2), in: photos)
+        #expect(state.selectedPhotos == [ref(3), ref(4), ref(5), ref(6), ref(7)])
+    }
 }

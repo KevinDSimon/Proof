@@ -218,6 +218,12 @@ public final class Library {
     private static let canvasColorKey = "canvasColor"
     /// The Info panel beside the grid in Browse (#151).
     public var isInfoShown = false
+    /// iPad and iPhone: Select in the toolbar is on, so a tap adds or removes a photo instead of
+    /// opening it. It starts and ends with nothing selected, as in Photos, except when it ends by
+    /// opening a photo, which stays selected.
+    public var isSelectingPhotos = false {
+        didSet { if isSelectingPhotos != oldValue, !isEditing { browse.selectedPhoto = nil } }
+    }
     /// The Info panel's width when last open, so the grid can lay out for the width it will have
     /// once the panel has slid in or out.
     public var infoPanelWidth: CGFloat = 320
@@ -274,6 +280,8 @@ public final class Library {
     private static let selectionKey = "selectedFolder"
 
     private let platform: LibraryPlatform
+    /// The touch drag the grid selects photos with (`LibraryPlatform.sidewaysDrag`).
+    var sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? { platform.sidewaysDrag }
 
     public init(platform: LibraryPlatform) {
         self.platform = platform

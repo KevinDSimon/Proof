@@ -37,13 +37,11 @@ struct ContentView: View {
                     .background(Color.interfaceBackground.ignoresSafeArea())
                     .navigationTitle(browseTitle)
                     .navigationSubtitle(browseSubtitle)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        // Only in Browse, and only once a row is picked, as on the Mac.
-                        if library.selection != nil, !library.isEditing {
-                            ToolbarItem { FilterButton(library: library) }
-                        }
-                    }
+                    // A large title, as in Notes and Photos, that shrinks into the bar on scrolling.
+                    .navigationBarTitleDisplayMode(.large)
+                    .toolbar { browseToolbar }
+                    // Select All takes the back button's place while selecting, as in Files.
+                    .navigationBarBackButtonHidden(library.isSelectingPhotos)
                     .navigationDestination(isPresented: isEditing) {
                         PhotoView(library: library)
                     }
@@ -66,9 +64,60 @@ struct ContentView: View {
         } message: {
             Text(library.errorMessage ?? "")
         }
+        // Select ends on another row, and on opening a photo from the menu.
+        .onChange(of: library.selection) { library.isSelectingPhotos = false }
+        .onChange(of: library.isEditing) { if library.isEditing { library.isSelectingPhotos = false } }
         // Folders that were added open on the library, so they can be seen; with none, the empty state.
         .onChange(of: library.locations.isEmpty, initial: true) { _, isEmpty in
             compactColumn = isEmpty ? .detail : .sidebar
+        }
+    }
+
+    /// Browse has one More menu, with Select and the filter, so the bar stays clear on iPhone.
+    /// While selecting, the bar has Select All, the filter and Done, and a bottom toolbar rates and
+    /// flags the selected photos, as in Notes.
+    @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
+        if library.isSelectingPhotos {
+            let allSelected = library.browse.selectedPhotos.count == library.shownPhotos.count
+            ToolbarItem(placement: .topBarLeading) {
+                Button(allSelected ? "Deselect All" : "Select All") {
+                    if allSelected { library.deselectAll() } else { library.browse.selectAll(library.shownPhotos) }
+                }
+            }
+            // The filter stays at hand while selecting; photos it hides are deselected, so Rating
+            // and Flag never reach photos out of sight.
+            ToolbarItem { FilterButton(library: library) }
+            ToolbarSpacer(.fixed)
+            // The one filled use of the highlight color: the button that ends selecting, as in Notes.
+            ToolbarItem {
+                Button("Done", systemImage: "checkmark", role: .confirm) { library.isSelectingPhotos = false }
+                    .tint(.highlight)
+            }
+            let photos = library.selectedPhotosInOrder
+            ToolbarItemGroup(placement: .bottomBar) {
+                Menu("Rating", systemImage: "star") {
+                    RatingPicker(library: library, photos: photos).pickerStyle(.inline)
+                }
+                .disabled(photos.isEmpty)
+                Spacer()
+                Menu("Flag", systemImage: "flag") {
+                    FlagPicker(library: library, photos: photos).pickerStyle(.inline)
+                }
+                .disabled(photos.isEmpty)
+            }
+        } else if library.selection != nil, !library.isEditing {
+            ToolbarItem {
+                Menu("More", systemImage: "ellipsis") {
+                    Button("Select", systemImage: "checkmark.circle") { library.isSelectingPhotos = true }
+                        .disabled(library.visiblePhotos.isEmpty)
+                    Menu {
+                        FilterMenu(library: library)
+                    } label: {
+                        Label("Filter", systemImage: "line.3.horizontal.decrease")
+                        if !library.filter.isEmpty { Text(library.filter.summary) }
+                    }
+                }
+            }
         }
     }
 
@@ -79,8 +128,20 @@ struct ContentView: View {
     }
 
     // The grid's title stays the row's while the photo is pushed, so the back button names it.
-    private var browseTitle: String { library.rowTitle }
-    private var browseSubtitle: String { library.isEditing ? "" : library.windowSubtitle }
+    private var browseTitle: String {
+        guard library.isSelectingPhotos else { return library.rowTitle }
+        let count = library.browse.selectedPhotos.count
+        // As in Notes; the subtitle still counts the photos.
+        return count == 0 ? "Select Photos" : "\(count) Selected"
+    }
+    /// How many filter parts are on follows the count, as the More menu has no badge.
+    private var browseSubtitle: String {
+        guard !library.isEditing else { return "" }
+        let parts = max(library.filter.activeCount, 1)
+        let filter = library.filter.isEmpty || library.isSelectingPhotos ? nil
+                                                                         : "\(parts) \(parts == 1 ? "filter" : "filters")"
+        return [library.windowSubtitle, filter].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
 }
 
 /// The photo, centered on the canvas with a margin. Its thumbnail stands in until the edit
