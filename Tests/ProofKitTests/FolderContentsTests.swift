@@ -31,7 +31,44 @@ struct FolderContentsTests {
 
         let contents = try FolderContents.read(at: root)
         #expect(contents.subfolders == ["Trip 2", "Trip 10"])
-        #expect(contents.photos.map(\.name) == ["IMG_2.DNG", "IMG_10.CR3"])
+        #expect(contents.photos.map(\.name) == ["IMG_2.DNG", "web.jpg", "IMG_10.CR3"].sorted { $0.localizedStandardCompare($1) == .orderedAscending })
+    }
+
+    @Test("JPEG and HEIC photos are listed with RAW photos; PNG and TIFF are not")
+    func listsJPEGAndHEIC() throws {
+        try make("A.DNG", "B.jpg", "C.JPEG", "D.HEIC", "E.heif", "F.png", "G.tif", "H.TIFF")
+
+        let contents = try FolderContents.read(at: root)
+        #expect(contents.photos.map(\.name) == ["A.DNG", "B.jpg", "C.JPEG", "D.HEIC", "E.heif"])
+    }
+
+    @Test("A RAW comes before the JPEG or HEIC of the same name, whatever the extensions")
+    func rawFirstInPair() throws {
+        try make("IMG_2.NEF", "IMG_2.JPG", "IMG_10.ARW", "IMG_10.HEIC", "IMG_1.jpg")
+
+        let photos = try FolderContents.read(at: root).photos
+        #expect(photos.map(\.name) == ["IMG_1.jpg", "IMG_2.NEF", "IMG_2.JPG", "IMG_10.ARW", "IMG_10.HEIC"])
+    }
+
+    @Test("A JPEG beside its RAW reads only IMG.JPG.xmp; on its own it reads IMG.xmp too")
+    func pairedSidecars() throws {
+        try make("IMG_1.CR3", "IMG_1.JPG", "IMG_2.JPG")
+        try sidecar("IMG_1.xmp", rating: 5)
+        try sidecar("IMG_1.JPG.xmp", rating: 2)
+        try sidecar("IMG_2.xmp", rating: 3)
+
+        let photos = try FolderContents.read(at: root).photos
+        #expect(photos.map(\.name) == ["IMG_1.CR3", "IMG_1.JPG", "IMG_2.JPG"])
+        #expect(photos.map(\.metadata?.rating) == [5, 2, 3])
+    }
+
+    @Test("A JPEG beside its RAW has no rating until it has a sidecar of its own")
+    func pairedJPEGWithoutSidecar() throws {
+        try make("IMG_1.CR3", "IMG_1.JPG")
+        try sidecar("IMG_1.xmp", rating: 5)
+
+        let photos = try FolderContents.read(at: root).photos
+        #expect(photos.map(\.metadata?.rating) == [5, nil])
     }
 
     @Test("A photo with a .proof sidecar next to it counts as edited")

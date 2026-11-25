@@ -141,6 +141,36 @@ struct XMPSidecarTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted() == ["IMG_1.DNG", "IMG_1.xmp"])
     }
 
+    @Test("A JPEG's new sidecar is IMG.JPG.xmp, so it never shares one with a RAW of the same name")
+    func jpegSidecarName() throws {
+        let folder = try folder()
+        let raw = folder.appendingPathComponent("IMG_1.CR3")
+        let jpeg = folder.appendingPathComponent("IMG_1.JPG")
+        try Data("raw bytes".utf8).write(to: raw)
+        try Data("jpeg bytes".utf8).write(to: jpeg)
+
+        let rawSidecar = try XMPSidecar.save(PhotoMetadata(rating: 5), for: raw)
+        let jpegSidecar = try XMPSidecar.save(PhotoMetadata(rating: 1, flag: .rejected), for: jpeg)
+        #expect(rawSidecar.lastPathComponent == "IMG_1.xmp")
+        #expect(jpegSidecar.lastPathComponent == "IMG_1.JPG.xmp")
+        #expect(PhotoMetadata(xmp: try Data(contentsOf: rawSidecar)) == PhotoMetadata(rating: 5))
+        #expect(PhotoMetadata(xmp: try Data(contentsOf: jpegSidecar)) == PhotoMetadata(rating: 1, flag: .rejected))
+        #expect(try Data(contentsOf: jpeg) == Data("jpeg bytes".utf8))
+    }
+
+    @Test("A JPEG with no RAW beside it writes the IMG.xmp another app left")
+    func loneJPEGUsesExistingSidecar() throws {
+        let folder = try folder()
+        let jpeg = folder.appendingPathComponent("IMG_1.jpg")
+        try Data("jpeg bytes".utf8).write(to: jpeg)
+        let existing = folder.appendingPathComponent("IMG_1.xmp")
+        try Data(Self.lightroom.utf8).write(to: existing)
+
+        let url = try XMPSidecar.save(PhotoMetadata(rating: 4), for: jpeg)
+        #expect(url.lastPathComponent == "IMG_1.xmp")
+        #expect(PhotoMetadata(xmp: try Data(contentsOf: url))?.rating == 4)
+    }
+
     @Test("A new sidecar keeps the label from the XMP inside the photo, which it takes the place of")
     func newSidecarKeepsEmbeddedLabel() throws {
         let photo = try folder().appendingPathComponent("IMG_1.tif")

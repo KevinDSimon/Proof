@@ -278,6 +278,47 @@ final class Library {
         activeFilter.filter(listedPhotos, keeping: changedPhotos)
     }
 
+    /// The stacks of `visiblePhotos`, such as a RAW and its JPEG (decision 0049).
+    var stackMarks: [PhotoReference: StackMark] { StackMark.marks(in: visiblePhotos) }
+
+    /// The stacks opened since Proof started, by their first photo. Stacks start collapsed.
+    private(set) var openStacks: Set<PhotoReference> = []
+
+    /// `visiblePhotos` without the photos hidden in collapsed stacks: what the grid and the
+    /// filmstrip show, and what arrow keys and Select All move through.
+    var shownPhotos: [ListedPhoto] {
+        StackMark.shown(visiblePhotos, marks: stackMarks, open: openStacks)
+    }
+
+    /// The photos after `photo` in its stack, in order, when `photo` is the first photo of a
+    /// collapsed stack; otherwise none.
+    func hiddenStackPhotos(of photo: PhotoReference) -> [PhotoReference] {
+        let marks = stackMarks
+        guard case .first = marks[photo], !openStacks.contains(photo) else { return [] }
+        let visible = visiblePhotos
+        guard let index = visible.firstIndex(where: { $0.id == photo }) else { return [] }
+        return visible[(index + 1)...].prefix { marks[$0.id] == .member }.map(\.id)
+    }
+
+    /// Whether `photo` is the first photo of a stack, and that stack is open.
+    func isStackOpen(_ photo: PhotoReference) -> Bool { openStacks.contains(photo) }
+
+    /// Opens or collapses the stack `photo` is in. Collapsing it selects its first photo in place
+    /// of any it hides.
+    func toggleStack(of photo: PhotoReference) {
+        let visible = visiblePhotos, marks = stackMarks
+        guard let first = StackMark.first(of: photo, in: visible, marks: marks) else { return }
+        if openStacks.remove(first) == nil {
+            openStacks.insert(first)
+            return
+        }
+        let shown = StackMark.shown(visible, marks: marks, open: openStacks)
+        if let selected = browse.selectedPhoto, !shown.contains(where: { $0.id == selected }) {
+            browse.selectedPhoto = first
+        }
+        browse.keep(only: shown)
+    }
+
     /// How many photos read so far under the available locations each filter row matches.
     var filterCounts: [PhotoFilter: Int] {
         PhotoFilter.counts(of: allListedPhotos.lazy.map(\.photo))
@@ -614,12 +655,13 @@ final class Library {
     var photosToExport: [PhotoReference] = []
 
     /// One export at a time: its progress sheet stays open until it ends.
-    var canExport: Bool { !isCropping && !exports.isVisible && !browse.selectedPhotos.isEmpty }
+    var canExport: Bool { !isCropping && !exports.isVisible && browse.selectedPhotos.contains(where: \.isEditable) }
 
     /// File › Export…: opens the export sheet for `photos`, every selected photo by default.
+    /// JPEG and HEIC photos are left out until #239.
     func requestExport(of photos: [PhotoReference]? = nil) {
         guard !isCropping, !exports.isVisible else { return }
-        photosToExport = photos ?? selectedPhotosInOrder
+        photosToExport = (photos ?? selectedPhotosInOrder).filter(\.isEditable)
     }
 
     /// Queues `photos` with the edits Proof has for them now; photos without one in memory are
@@ -642,7 +684,7 @@ final class Library {
     /// show why and let the person choose the folder again.
     func export(_ photos: [PhotoReference]? = nil, to destinationID: UUID) {
         guard !isCropping, !exports.isVisible, let destination = exportDestinations?.destination(destinationID) else { return }
-        let photos = photos ?? selectedPhotosInOrder
+        let photos = (photos ?? selectedPhotosInOrder).filter(\.isEditable)
         guard !photos.isEmpty else { return }
         UserDefaults.standard.set(destinationID.uuidString, forKey: ExportSheet.destinationKey)
         guard let folder = exportDestinations?.folder(of: destinationID) else {
@@ -654,7 +696,7 @@ final class Library {
 
     /// Copies from the photo Edit shows, in Browse too, or from a right-clicked photo.
     var canCopySettings: Bool {
-        !isCropping && browse.selectedPhoto != nil && (!isEditing || selectedEdit != nil)
+        !isCropping && browse.selectedPhoto?.isEditable == true && (!isEditing || selectedEdit != nil)
     }
 
     var canPasteSettings: Bool {
@@ -667,7 +709,7 @@ final class Library {
     /// Edit › Copy Settings…: opens the sheet for `photo`, the photo Edit shows by default, after
     /// reading its edit if it hasn't been opened.
     func chooseSettingsToCopy(from photo: PhotoReference? = nil) {
-        guard !isCropping, let photo = photo ?? browse.selectedPhoto, loadEdit(of: photo) else { return }
+        guard !isCropping, let photo = photo ?? browse.selectedPhoto, photo.isEditable, loadEdit(of: photo) else { return }
         copySource = photo
         isChoosingSettingsToCopy = true
     }
@@ -686,7 +728,7 @@ final class Library {
         let photos = photos ?? selectedPhotosInOrder
         commitTask?.cancel()
         showEdited()
-        for photo in photos where loadEdit(of: photo) {
+        for photo in photos where photo.isEditable && loadEdit(of: photo) {
             commitEdit(of: photo)
             edits[photo]!.recipe = edits[photo]!.recipe.pasting(copied)
             commitEdit(of: photo, label: "Paste Settings")
@@ -805,7 +847,7 @@ final class Library {
 
     /// Opens the photo Edit shows: reads its edit, and what the camera recorded, the first time.
     private func openSelectedEdit() {
-        guard isEditing, let photo = browse.selectedPhoto, let url = selectedPhotoURL,
+        guard isEditing, let photo = browse.selectedPhoto, photo.isEditable, let url = selectedPhotoURL,
               !openedPhotos.contains(photo), loadEdit(of: photo) else { return }
         openedPhotos.insert(photo)
         // Off the main thread: it opens the RAW file, which can be slow on a network volume.

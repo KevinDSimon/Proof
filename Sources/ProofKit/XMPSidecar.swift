@@ -17,20 +17,31 @@ public enum XMPSidecar {
     }
 
     /// The sidecar Proof reads for `photo`, by its name on disk: the most recently modified of
-    /// `IMG.xmp` and `IMG.DNG.xmp`, in any capitalization. `nil` when there is none. Blocks on file I/O.
+    /// `IMG.xmp` and `IMG.DNG.xmp`, in any capitalization. A JPEG or HEIC beside a RAW of the same
+    /// name reads only `IMG.JPG.xmp`. `nil` when there is none. Blocks on file I/O.
     public static func existing(for photo: URL) -> URL? {
         let folder = photo.deletingLastPathComponent()
-        let keys = Set(PhotoMetadata.sidecarKeys(for: photo.lastPathComponent))
         // Listed rather than checked by name, so a sidecar written as `.XMP` keeps its name
         // on disks that ignore case.
         let entries = (try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let keys = Set(PhotoMetadata.sidecarKeys(for: photo.lastPathComponent,
+                                                 besideRAW: besideRAW(photo, in: entries)))
         return FolderContents.newestSidecar(of: entries.filter { keys.contains($0.lastPathComponent.lowercased()) })
     }
 
-    /// Where a new sidecar goes: `IMG.xmp`, as Photomator, Lightroom and Capture One name it.
+    /// Where a new sidecar goes: `IMG.xmp` for a RAW, as Photomator, Lightroom and Capture One name
+    /// it, and `IMG.JPG.xmp` for a JPEG or HEIC, so a RAW+JPEG pair keeps a rating each
+    /// (decision 0049).
     public static func newURL(for photo: URL) -> URL {
-        photo.deletingPathExtension().appendingPathExtension("xmp")
+        FolderContents.isRAW(name: photo.lastPathComponent)
+            ? photo.deletingPathExtension().appendingPathExtension("xmp")
+            : photo.appendingPathExtension("xmp")
+    }
+
+    private static func besideRAW(_ photo: URL, in entries: [URL]) -> Bool {
+        FolderContents.hasRAW(named: photo.lastPathComponent,
+                              among: entries.map(\.lastPathComponent).filter(FolderContents.isRAW(name:)))
     }
 
     /// Writes `metadata`'s rating and flag to `photo`'s sidecar with `NSFileCoordinator`, creating
