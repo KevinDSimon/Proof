@@ -18,6 +18,10 @@ public final class ThumbnailCache: Sendable {
     public typealias RenderEdit = @Sendable (_ url: URL, _ edit: EditRecipe) async -> CGImage?
     /// A string that changes whenever the LUT a look names does, or `nil` if it's missing.
     public typealias LUTVersion = @Sendable (_ lut: String) -> String?
+    /// Whether `url` is in iCloud with no copy on this device, read from its attributes only.
+    public typealias IsInCloud = @Sendable (_ url: URL) -> Bool
+    /// The system's thumbnail of a file that isn't downloaded, at no more than `maxPixelSize`.
+    public typealias CloudThumbnail = @Sendable (_ url: URL, _ maxPixelSize: Int) async -> CGImage?
 
     /// Long edge of a stored thumbnail, in pixels: sharp in a Retina grid cell, small on disk.
     public static let maxPixelSize = 512
@@ -26,24 +30,33 @@ public final class ThumbnailCache: Sendable {
     private let maxConcurrentReads: Int
     private let renderEdit: RenderEdit?
     private let lutVersion: LUTVersion?
+    private let isInCloud: IsInCloud
+    private let cloudThumbnail: CloudThumbnail
 
     /// `directory` is created when the first thumbnail is stored. `maxConcurrentReads` limits how
     /// many photos are read at once when making thumbnails, so a NAS isn't asked for a whole
     /// folder in parallel. Without `renderEdit`, edited photos show their embedded preview.
     /// With `lutVersion`, a thumbnail is made again when the LUT its look names changes, and a look
     /// whose LUT is missing is left out, as the canvas leaves it out.
+    /// A file in iCloud that isn't downloaded is never opened, since that would download it
+    /// (decision 0050): its thumbnail is `cloudThumbnail`'s, unstored.
     public init(directory: URL = .applicationSupportDirectory.appendingPathComponent("Proof/Thumbnails"),
-                maxConcurrentReads: Int = 4, renderEdit: RenderEdit? = nil, lutVersion: LUTVersion? = nil) {
+                maxConcurrentReads: Int = 4, renderEdit: RenderEdit? = nil, lutVersion: LUTVersion? = nil,
+                isInCloud: @escaping IsInCloud = { !CloudDownload.isDownloaded($0) },
+                cloudThumbnail: @escaping CloudThumbnail = CloudDownload.systemThumbnail(of:maxPixelSize:)) {
         self.directory = directory
         self.maxConcurrentReads = maxConcurrentReads
         self.renderEdit = renderEdit
         self.lutVersion = lutVersion
+        self.isInCloud = isInCloud
+        self.cloudThumbnail = cloudThumbnail
     }
 
     /// The thumbnail of `url` showing `edit`, read from the cache or rendered and stored. With no
     /// edit, or the one the photo opens with, it shows the photo as it opens, with any camera
     /// settings. Blocks on file I/O and rendering.
     public func thumbnail(for url: URL, edit: EditRecipe?) async -> CGImage? {
+        if isInCloud(url) { return await cloudThumbnail(url, Self.maxPixelSize) }
         let shown = shown(edit, of: url)
         guard let entry = entry(for: url, showing: shown) else { return nil }
         if let image = Self.readImage(at: entry.file, embeddedOnly: false) { return image }
@@ -55,7 +68,7 @@ public final class ThumbnailCache: Sendable {
     /// its preview without them, unstored, since only `thumbnail(for:edit:)` renders them. `nil` if
     /// the file can't be read as an image. Blocks on file I/O, so call it off the main thread.
     public func thumbnail(for url: URL) -> CGImage? {
-        guard let entry = entry(for: url, showing: .asShot) else { return nil }
+        guard !isInCloud(url), let entry = entry(for: url, showing: .asShot) else { return nil }
         if let image = Self.readImage(at: entry.file, embeddedOnly: false) { return image }
         guard let image = Self.makeThumbnail(of: url) else { return nil }
         if EditRecipe(asShot: CameraSettings(contentsOf: url)).isNeutral { store(image, as: entry) }
@@ -74,7 +87,7 @@ public final class ThumbnailCache: Sendable {
     /// modification date, and its metadata when the edit changes only the crop and perspective,
     /// so it is quick enough to show while the photo itself is rendered.
     public func cachedThumbnail(for url: URL, edit: EditRecipe?) -> CGImage? {
-        guard let entry = entry(for: url, showing: shown(edit, of: url)) else { return nil }
+        guard !isInCloud(url), let entry = entry(for: url, showing: shown(edit, of: url)) else { return nil }
         return Self.readImage(at: entry.file, embeddedOnly: false)
     }
 
@@ -85,6 +98,15 @@ public final class ThumbnailCache: Sendable {
     public func thumbnails(for urls: [URL], edited: Set<URL> = []) -> AsyncStream<(url: URL, image: CGImage?)> {
         AsyncStream { continuation in
             let task = Task.detached { [self] in
+                // Files that aren't downloaded get the system's thumbnail and are never opened.
+                let inCloud = Set(urls.filter(isInCloud))
+                await withTaskGroup(of: (URL, CGImage?).self) { group in
+                    for url in urls where inCloud.contains(url) {
+                        group.addTask { (url, await self.cloudThumbnail(url, Self.maxPixelSize)) }
+                    }
+                    for await (url, image) in group { continuation.yield((url, image)) }
+                }
+                let urls = urls.filter { !inCloud.contains($0) }
                 var missing: [(url: URL, shown: Shown, entry: Entry?)] = []
                 await withTaskGroup(of: (URL, Shown, Entry?, CGImage?).self) { group in
                     var next = 0

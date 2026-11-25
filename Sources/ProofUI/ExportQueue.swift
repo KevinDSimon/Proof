@@ -122,6 +122,12 @@ public final class ExportQueue {
         while !jobs.isEmpty, !wasCancelled {
             let job = jobs.removeFirst()
             current = job.url.lastPathComponent
+            // A photo in iCloud is downloaded first, one at a time, as the queue goes (decision 0050).
+            if !CloudDownload.isDownloaded(job.url), await !CloudDownload.download(job.url) {
+                failures.append(Failure(name: job.url.lastPathComponent, reason: "It couldn't be downloaded from iCloud."))
+                finished += 1
+                continue
+            }
             let result = await Task.detached(priority: .utility) {
                 let lut = await LUTLibrary.shared.lut(for: job.recipe.look)
                 let details = PhotoExport.Details(rating: job.rating, description: PhotoDescription.read(for: job.url))

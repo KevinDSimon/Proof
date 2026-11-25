@@ -284,3 +284,54 @@ struct ThumbnailTimingTests {
 }
 
 private let timingFolder = ProcessInfo.processInfo.environment["PROOF_SAMPLE_FOLDER"].map(URL.init(fileURLWithPath:))
+
+/// Decision 0050: browsing never opens a photo in iCloud that isn't on the device.
+struct ThumbnailCacheCloudTests {
+    let root: URL
+
+    init() throws {
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ThumbnailCacheCloudTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    }
+
+    static func marker() throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil, width: 4, height: 3, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        return try #require(context.makeImage())
+    }
+
+    /// A cache that treats `cloud` as not downloaded. The file doesn't exist, so opening it
+    /// couldn't give an image: only the system thumbnail can.
+    func cache(cloud: URL, marker: CGImage) -> ThumbnailCache {
+        ThumbnailCache(directory: root.appendingPathComponent("Cache"),
+                       isInCloud: { $0 == cloud },
+                       cloudThumbnail: { url, _ in url == cloud ? marker : nil })
+    }
+
+    @Test("A photo that isn't downloaded gets the system thumbnail and nothing is stored")
+    func cloudPhotoUsesSystemThumbnail() async throws {
+        let marker = try Self.marker()
+        let cloud = root.appendingPathComponent("IMG_1.DNG")
+        let cache = cache(cloud: cloud, marker: marker)
+
+        #expect(await cache.thumbnail(for: cloud, edit: nil)?.width == 4)
+        #expect(cache.thumbnail(for: cloud) == nil)
+        #expect(cache.cachedThumbnail(for: cloud, edit: nil) == nil)
+        #expect(!FileManager.default.fileExists(atPath: cache.directory.path))
+    }
+
+    @Test("Browsing a folder gives photos that aren't downloaded their system thumbnail")
+    func streamUsesSystemThumbnail() async throws {
+        let marker = try Self.marker()
+        let cloud = root.appendingPathComponent("IMG_1.DNG")
+        let cache = cache(cloud: cloud, marker: marker)
+
+        var results: [URL: CGImage?] = [:]
+        for await (url, image) in cache.thumbnails(for: [cloud]) { results[url] = image }
+        #expect(results.count == 1)
+        #expect(results[cloud]??.width == 4)
+        #expect(!FileManager.default.fileExists(atPath: cache.directory.path))
+    }
+}

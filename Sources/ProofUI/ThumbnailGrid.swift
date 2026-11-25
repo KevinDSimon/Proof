@@ -178,13 +178,14 @@ public struct ThumbnailGrid: View {
                         .resizable()
                         .scaledToFit()
                         .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
-                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, stack: stack,
+                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, isInCloud: photo.photo.isInCloud,
+                                  isDownloading: library.downloadingPhotos.contains(photo.id), stack: stack,
                                   isStackOpen: library.isStackOpen(photo.id),
                                   toggleStack: { library.toggleStackAnimated(of: photo.id) }, size: 10)
                         .stackLayers(library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] },
                                      inStack: stack != nil, step: 5)
                 } else if photo.photo.isInCloud {
-                    // Not downloaded: reading it for a thumbnail would download it.
+                    // Not downloaded and iCloud has no thumbnail for it (decision 0050).
                     RoundedRectangle(cornerRadius: SelectionOutline.photoCornerRadius)
                         .fill(.quaternary)
                         .overlay {
@@ -275,10 +276,10 @@ public struct ThumbnailGrid: View {
     public static func loadThumbnails(of photos: [ListedPhoto], images: Binding<[PhotoReference: CGImage]>,
                                finished: Binding<Set<PhotoReference>>, library: Library) async {
         let ids = Set(photos.map(\.id))
+        let inCloud = Set(photos.filter(\.photo.isInCloud).map(\.id))
         images.wrappedValue = images.wrappedValue.filter { ids.contains($0.key) }
         finished.wrappedValue.formIntersection(ids)
-        // Photos in iCloud would be downloaded to make a thumbnail; theirs comes once they are opened.
-        let unfinished = photos.filter { !finished.wrappedValue.contains($0.id) && !$0.photo.isInCloud }
+        let unfinished = photos.filter { !finished.wrappedValue.contains($0.id) }
         let urls = unfinished.compactMap { photo in
             library.url(ofPhoto: photo.name, in: photo.folder).map { (photo.id, $0, photo.photo.isEdited) }
         }
@@ -286,7 +287,9 @@ public struct ThumbnailGrid: View {
         let edited = Set(urls.filter(\.2).map(\.1))
         for await (url, image) in ThumbnailCache.shared.thumbnails(for: urls.map(\.1), edited: edited) {
             guard let id = references[url] else { continue }
-            finished.wrappedValue.insert(id)
+            // A photo in iCloud shows the system's thumbnail until it is downloaded, when the load
+            // runs again and its own thumbnail replaces it.
+            if !inCloud.contains(id) { finished.wrappedValue.insert(id) }
             if let image { images.wrappedValue[id] = image }
         }
     }

@@ -76,7 +76,8 @@ struct Filmstrip: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
-                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, stack: stack,
+                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, isInCloud: photo.photo.isInCloud,
+                                  isDownloading: library.downloadingPhotos.contains(photo.id), stack: stack,
                                   isStackOpen: library.isStackOpen(photo.id),
                                   toggleStack: { library.toggleStackAnimated(of: photo.id) }, size: 8)
                     .stackLayers(library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] },
