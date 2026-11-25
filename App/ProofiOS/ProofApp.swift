@@ -243,7 +243,6 @@ private struct PhotoView: View {
             }
         }
         .navigationTitle(library.windowTitle)
-        .navigationSubtitle(library.windowSubtitle)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: PhotoLoad(photo: photo, isInCloud: isInCloud)) {
             image = nil
