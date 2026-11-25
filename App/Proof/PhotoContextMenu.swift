@@ -16,6 +16,7 @@ struct PhotoContextMenu: View {
                 if library.browse.selectedPhoto != photo { library.browse.selectedPhoto = photo }
                 library.browse.edit()
             }
+            .disabled(!photo.isEditable)
             // The panel describes one photo, so showing it selects only the photo clicked.
             Button(library.isInfoShown ? "Hide Info" : "Show Info") {
                 if !library.isInfoShown, library.browse.selectedPhotos != [photo] {
@@ -38,18 +39,27 @@ struct PhotoContextMenu: View {
                 Text(RatingBadges.title(of: flag)).tag(PhotoMetadata.Flag?.some(flag))
             }
         }
+        if library.stackMarks[photo] != nil {
+            Divider()
+            Button(library.isStackOpen(StackMark.first(of: photo, in: library.visiblePhotos, marks: library.stackMarks) ?? photo)
+                   ? "Collapse Stack" : "Open Stack") {
+                library.toggleStackAnimated(of: photo)
+            }
+        }
         Divider()
         Button("Show in Finder") { library.showInFinder(library.urls(of: photos)) }
         Button("Copy Path" + (photos.count > 1 ? "s" : "")) { library.copyPaths(library.urls(of: photos)) }
+        // JPEG and HEIC photos aren't exported or edited until #239.
+        let noneEditable = !photos.contains(where: \.isEditable)
         Button(photos.count > 1 ? "Export\(many)…" : "Export…") { library.requestExport(of: photos) }
-            .disabled(library.isCropping)
-        ExportToMenu(library: library, photos: photos, isDisabled: library.isCropping)
+            .disabled(library.isCropping || noneEditable)
+        ExportToMenu(library: library, photos: photos, isDisabled: library.isCropping || noneEditable)
         Divider()
         // Always from the photo clicked, the one whose settings are in view.
         Button("Copy Settings…") { library.chooseSettingsToCopy(from: photo) }
-            .disabled(library.isCropping)
+            .disabled(library.isCropping || !photo.isEditable)
         Button("Paste Settings" + (many.isEmpty ? "" : " to\(many)")) { library.pasteSettings(to: photos) }
-            .disabled(library.isCropping || library.copiedSettings == nil)
+            .disabled(library.isCropping || library.copiedSettings == nil || noneEditable)
         Divider()
         let toRevert = library.photosToRevert(among: photos)
         Button(toRevert.count > 1 ? "Revert \(toRevert.count) Photos to Original…" : "Revert to Original") {

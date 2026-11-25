@@ -22,8 +22,9 @@ struct Filmstrip: View {
         ScrollViewReader { scroller in
             ScrollView(.horizontal) {
                 LazyHStack(spacing: Self.spacing) {
+                    let stacks = library.stackMarks
                     ForEach(photos) { photo in
-                        cell(for: photo)
+                        cell(for: photo, stack: stacks[photo.id])
                             .id(photo.id)
                     }
                 }
@@ -53,18 +54,19 @@ struct Filmstrip: View {
         }
         .onAppear { isFocused = true }
         // Loaded again when the LUT library changes, since edited thumbnails show looks.
-        .task(id: ThumbnailLoad(photos: photos.map(\.id), lutGeneration: library.looks.generation)) {
+        // The photos collapsed stacks hide too, which peek out above them.
+        .task(id: ThumbnailLoad(photos: library.visiblePhotos.map(\.id), lutGeneration: library.looks.generation)) {
             if lutGeneration != library.looks.generation {
                 lutGeneration = library.looks.generation
                 finished = []
             }
-            await ThumbnailGrid.loadThumbnails(of: photos, images: $images, finished: $finished, library: library)
+            await ThumbnailGrid.loadThumbnails(of: library.visiblePhotos, images: $images, finished: $finished, library: library)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Filmstrip")
     }
 
-    private func cell(for photo: ListedPhoto) -> some View {
+    private func cell(for photo: ListedPhoto, stack: StackMark?) -> some View {
         let isCurrent = library.browse.selectedPhoto == photo.id
         let isSelected = library.browse.selectedPhotos.contains(photo.id)
         return ZStack {
@@ -73,7 +75,11 @@ struct Filmstrip: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
-                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, size: 8)
+                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, stack: stack,
+                                  isStackOpen: library.isStackOpen(photo.id),
+                                  toggleStack: { library.toggleStackAnimated(of: photo.id) }, size: 8)
+                    .stackLayers(library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] },
+                                     inStack: stack != nil, step: 3)
             } else if finished.contains(photo.id) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
@@ -94,11 +100,18 @@ struct Filmstrip: View {
         .help(photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata,
-                                                                 isEdited: photo.photo.isEdited))
+                                                                 isEdited: photo.photo.isEdited, stack: stack))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityValue(isCurrent && library.browse.hasMultipleSelection ? "Shown" : "")
         .accessibilityAction(named: isSelected ? "Remove from Selection" : "Add to Selection") {
             library.browse.toggle(photo.id, in: photos)
+        }
+        .accessibilityActions {
+            if case .first = stack {
+                Button(library.isStackOpen(photo.id) ? "Collapse Stack" : "Open Stack") {
+                    library.toggleStackAnimated(of: photo.id)
+                }
+            }
         }
     }
 }

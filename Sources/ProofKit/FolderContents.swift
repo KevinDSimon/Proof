@@ -1,7 +1,8 @@
 import Foundation
 import UniformTypeIdentifiers
 
-/// What one folder holds: its subfolders and the RAW photos directly inside it, in Finder's order.
+/// What one folder holds: its subfolders and the RAW, JPEG and HEIC photos directly inside it, in
+/// Finder's order, except that a RAW comes before a JPEG or HEIC of the same name (#157).
 /// Subfolders are named but not read, so showing a folder tree costs one listing per visible folder,
 /// which matters on a NAS.
 public struct FolderContents: Equatable, Sendable {
@@ -36,7 +37,7 @@ public struct FolderContents: Equatable, Sendable {
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey, .contentTypeKey, .contentModificationDateKey]
         let values = try url.resourceValues(forKeys: keys)
         guard values.isDirectory == true, values.isPackage != true else {
-            guard isRAW(values) else { return FolderContents(subfolders: [], photos: []) }
+            guard isPhoto(values) else { return FolderContents(subfolders: [], photos: []) }
             let isEdited = FileManager.default.fileExists(atPath: EditRecipe.sidecarURL(for: url).path)
             let photo = Photo(name: url.lastPathComponent, isEdited: isEdited,
                               metadata: XMPSidecar.existing(for: url).flatMap(readSidecar))
@@ -52,13 +53,15 @@ public struct FolderContents: Equatable, Sendable {
         }
         var subfolders: [String] = []
         var photos: [Photo] = []
+        let rawNames = entries.map(\.lastPathComponent).filter(isRAW(name:))
         for entry in entries {
             guard let values = try? entry.resourceValues(forKeys: keys) else { continue }
             let name = entry.lastPathComponent
             if values.isDirectory == true {
                 if values.isPackage != true { subfolders.append(name) }
-            } else if isRAW(values) {
-                let candidates = PhotoMetadata.sidecarKeys(for: name).flatMap { sidecars[$0] ?? [] }
+            } else if isPhoto(values) {
+                let keys = PhotoMetadata.sidecarKeys(for: name, besideRAW: hasRAW(named: name, among: rawNames))
+                let candidates = keys.flatMap { sidecars[$0] ?? [] }
                 photos.append(Photo(name: name, isEdited: names.contains(name + ".proof"),
                                     metadata: newestSidecar(of: candidates).flatMap(readSidecar)))
             }
@@ -66,7 +69,7 @@ public struct FolderContents: Equatable, Sendable {
         let finderOrder = { (a: String, b: String) in a.localizedStandardCompare(b) == .orderedAscending }
         return FolderContents(
             subfolders: subfolders.sorted(by: finderOrder),
-            photos: photos.sorted { finderOrder($0.name, $1.name) })
+            photos: photos.sorted { photoOrder($0.name, $1.name) })
     }
 
     /// Fills in metadata read from the photos themselves, by photo name. A photo that already has
@@ -125,6 +128,42 @@ public struct FolderContents: Equatable, Sendable {
 
     static func isRAW(_ values: URLResourceValues) -> Bool {
         values.contentType?.conforms(to: .rawImage) == true
+    }
+
+    /// The formats Proof lists: RAW, JPEG and HEIC. PNG and TIFF are left out (#157).
+    static func isPhoto(_ values: URLResourceValues) -> Bool {
+        values.contentType.map(isPhoto) ?? false
+    }
+
+    static func isPhoto(_ type: UTType) -> Bool {
+        type.conforms(to: .rawImage) || type.conforms(to: .jpeg) || type.conforms(to: .heic) || type.conforms(to: .heif)
+    }
+
+    /// Whether a file named `name` is a RAW photo, judged by its extension. Only RAW photos open in
+    /// Edit until #239.
+    public static func isRAW(name: String) -> Bool {
+        UTType(filenameExtension: (name as NSString).pathExtension)?.conforms(to: .rawImage) == true
+    }
+
+    /// Whether one of `rawNames`, other than `name` itself, has `name`'s name without its
+    /// extension, ignoring case, as `IMG_0042.CR3` has for `IMG_0042.JPG`.
+    static func hasRAW(named name: String, among rawNames: [String]) -> Bool {
+        let base = (name as NSString).deletingPathExtension.lowercased()
+        return rawNames.contains { $0 != name && ($0 as NSString).deletingPathExtension.lowercased() == base }
+    }
+
+    /// Finder's order by name without the extension, with a RAW before other files of the same
+    /// name, so a RAW+JPEG pair sits together with the RAW first whatever the extensions.
+    static func photoOrder(_ a: String, _ b: String) -> Bool {
+        let (baseA, baseB) = ((a as NSString).deletingPathExtension, (b as NSString).deletingPathExtension)
+        switch baseA.localizedStandardCompare(baseB) {
+        case .orderedAscending: return true
+        case .orderedDescending: return false
+        case .orderedSame:
+            let (rawA, rawB) = (isRAW(name: a), isRAW(name: b))
+            if rawA != rawB { return rawA }
+            return a.localizedStandardCompare(b) == .orderedAscending
+        }
     }
 }
 

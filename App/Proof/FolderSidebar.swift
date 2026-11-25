@@ -37,7 +37,7 @@ struct FolderSidebar: View {
             // The sidebar is hidden while editing, and so is its button.
             if !library.isEditing {
                 Button("Add Folder", systemImage: "folder.badge.plus") { library.requestFolder(.add) }
-                    .help("Add a folder of RAW photos")
+                    .help("Add a folder of photos")
             }
         }
         .confirmationDialog("Remove “\(removing?.name ?? "")” from Proof?",

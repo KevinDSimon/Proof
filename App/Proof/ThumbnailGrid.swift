@@ -43,8 +43,9 @@ struct ThumbnailGrid: View {
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellWidth), spacing: Self.spacing), count: columnCount),
                           spacing: Self.spacing) {
+                    let stacks = library.stackMarks
                     ForEach(photos) { photo in
-                        cell(for: photo)
+                        cell(for: photo, stack: stacks[photo.id])
                             .id(photo.id)
                     }
                 }
@@ -132,9 +133,9 @@ struct ThumbnailGrid: View {
         return max(1, (layoutWidth - 2 * Self.margin - (count - 1) * Self.spacing) / count)
     }
 
-    private func cell(for photo: ListedPhoto) -> some View {
+    private func cell(for photo: ListedPhoto, stack: StackMark?) -> some View {
         let isSelected = library.browse.selectedPhotos.contains(photo.id)
-        return VStack(spacing: 4) {
+        return VStack(spacing: 6) {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
                 if let image = library.editedThumbnails[photo.id] ?? images[photo.id] {
@@ -142,7 +143,11 @@ struct ThumbnailGrid: View {
                         .resizable()
                         .scaledToFit()
                         .clipShape(.rect(cornerRadius: SelectionOutline.photoCornerRadius))
-                        .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, size: 10)
+                    .ratingBadges(photo.photo.metadata, isEdited: photo.photo.isEdited, stack: stack,
+                                  isStackOpen: library.isStackOpen(photo.id),
+                                  toggleStack: { library.toggleStackAnimated(of: photo.id) }, size: 10)
+                        .stackLayers(library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] },
+                                     inStack: stack != nil, step: 5)
                 } else if finished.contains(photo.id) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
@@ -180,7 +185,7 @@ struct ThumbnailGrid: View {
         .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata,
-                                                                 isEdited: photo.photo.isEdited))
+                                                                 isEdited: photo.photo.isEdited, stack: stack))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(named: "Edit") {
             library.browse.selectedPhoto = photo.id
@@ -188,6 +193,13 @@ struct ThumbnailGrid: View {
         }
         .accessibilityAction(named: isSelected ? "Remove from Selection" : "Add to Selection") {
             library.browse.toggle(photo.id, in: photos)
+        }
+        .accessibilityActions {
+            if case .first = stack {
+                Button(library.isStackOpen(photo.id) ? "Collapse Stack" : "Open Stack") {
+                    library.toggleStackAnimated(of: photo.id)
+                }
+            }
         }
     }
 

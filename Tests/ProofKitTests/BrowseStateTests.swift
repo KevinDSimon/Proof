@@ -27,6 +27,16 @@ struct BrowseStateTests {
         #expect(state.selectedPhoto == ref(3))
     }
 
+    @Test("A JPEG or HEIC photo stays in Browse until it can be edited")
+    func jpegStaysInBrowse() {
+        var state = BrowseState()
+        for name in ["IMG_1.JPG", "IMG_1.heic"] {
+            state.selectedPhoto = PhotoReference(folder: folder, name: name)
+            state.edit()
+            #expect(state.mode == .browsing)
+        }
+    }
+
     @Test("Deselecting in Browse clears every selected photo, and a later ⇧-click starts a new range")
     func deselectEverything() {
         var state = BrowseState(selectedPhoto: ref(2))
