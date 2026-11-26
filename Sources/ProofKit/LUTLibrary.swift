@@ -93,6 +93,21 @@ public actor LUTLibrary {
         names.filter { self.folder(of: $0) == folder }
     }
 
+    /// The folders directly below `parent`, among `folders` and the folders that hold them, in the
+    /// order of `folders`, which is `folders(in:)`. A folder that holds only other folders isn't in
+    /// `folders` but is listed here, so the folder menu can open it as a submenu.
+    public static func childFolders(of parent: String, in folders: [String]) -> [String] {
+        let depth = parent.isEmpty ? 0 : parent.split(separator: "/").count
+        var children: [String] = []
+        for folder in folders where !folder.isEmpty && (parent.isEmpty || folder.hasPrefix(parent + "/")) {
+            let components = folder.split(separator: "/").map(String.init)
+            guard components.count > depth else { continue }
+            let child = components[...depth].joined(separator: "/")
+            if !children.contains(child) { children.append(child) }
+        }
+        return children
+    }
+
     /// Whether the LUT at path `a` is listed before the one at `b`.
     static func precedes(_ a: [String], _ b: [String]) -> Bool {
         for (index, (x, y)) in zip(a, b).enumerated() where x != y {
@@ -148,7 +163,7 @@ public actor LUTLibrary {
         // A URL from an Open dialog or a drop is only readable while access is held.
         let started = url.startAccessingSecurityScopedResource()
         defer { if started { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { throw LUTImportError(fileName: fileName, reason: .unreadable) }
+        guard let data = Self.coordinatedData(at: url) else { throw LUTImportError(fileName: fileName, reason: .unreadable) }
         let lut: CubeLUT
         do {
             lut = try CubeLUT(data: data)
@@ -161,6 +176,15 @@ public actor LUTLibrary {
         let name = (folder + [stored]).joined(separator: "/")
         await startPreparing(lut, as: name)
         return name
+    }
+
+    /// The file's contents, read through a file coordinator. In iCloud Drive a file picked in Files
+    /// or found in a picked folder may not be on the device yet, and coordinating downloads it first.
+    static func coordinatedData(at url: URL) -> Data? {
+        var data: Data?
+        var error: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { data = try? Data(contentsOf: $0) }
+        return data
     }
 
     /// Whether path components stay inside the library: none empty, hidden, or leading up and out.
