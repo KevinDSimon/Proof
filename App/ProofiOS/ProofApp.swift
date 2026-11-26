@@ -280,8 +280,8 @@ private struct PhotoView: View {
                 } else if library.isRemovingSpots {
                     SpotRemovalInspector(library: library)
                 } else if isEditable {
-                    // Looks and the tools drawn on the photo come to iOS in #232 and #231.
-                    AdjustmentsInspector(library: library, renderer: renderer, tools: [])
+                    // Looks come to iOS in #232.
+                    AdjustmentsInspector(library: library, renderer: renderer, tools: .all)
                 }
             }
             // Wider than the Mac's: iOS switches are larger, and the longest header, "Lens
@@ -481,6 +481,11 @@ private struct EditCanvas: View {
                            backdrop: library.canvasColor.color)
             } else if library.isRemovingSpots, let size = library.selectedEdit?.size {
                 SpotOverlay(library: library, renderer: renderer, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
+            } else if library.isPickingWhiteBalance {
+                WhiteBalancePicker(library: library, renderer: renderer)
+            } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
+                GuideOverlay(library: library, zoom: library.zoom, transform: shownRecipe.transform, crop: shownRecipe.crop,
+                             photoSize: size)
             }
         }
         .accessibilityElement()

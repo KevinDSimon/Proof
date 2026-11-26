@@ -1473,7 +1473,12 @@ public final class Library {
     /// Upright found no lines to go by, which the Transform card shows for a moment.
     public private(set) var foundNoLines = false
     /// Guided is open: a drag on the photo draws a line to make upright or level.
-    public var isDrawingGuides = false
+    public var isDrawingGuides = false {
+        didSet { selectedGuide = nil }
+    }
+    /// The guide chosen last on the guide tool, by its place in the photo's guides, which Delete
+    /// Guide removes.
+    public var selectedGuide: Int?
     /// The lines found in a photo, kept while its lens corrections stay the same, so trying
     /// each Upright mode in turn doesn't look again.
     private var foundLines: (photo: PhotoReference, lens: LensCorrections, segments: [LineSegment], size: CGSize)?
@@ -1548,6 +1553,7 @@ public final class Library {
     /// there are `maximumGuides`, and straightens to the guides.
     public func addGuide(_ guide: GuideLine) {
         let size = selectedEdit?.size
+        selectedGuide = nil
         changeEdit { recipe in
             recipe.transform.guides = Array((recipe.transform.guides + [guide]).suffix(Self.maximumGuides))
             recipe.transform.upright = .guided
@@ -1570,6 +1576,7 @@ public final class Library {
     /// Removes the guide at `index` and straightens to the ones left.
     public func removeGuide(at index: Int) {
         let size = selectedEdit?.size
+        selectedGuide = nil
         changeEdit { recipe in
             guard recipe.transform.guides.indices.contains(index) else { return }
             recipe.transform.guides.remove(at: index)
@@ -1579,6 +1586,7 @@ public final class Library {
 
     /// Removes the guides and the correction they made.
     public func clearGuides() {
+        selectedGuide = nil
         changeEdit { recipe in
             recipe.transform.guides = []
             recipe.transform = recipe.transform.with(vertical: 0, horizontal: 0, rotate: 0)
