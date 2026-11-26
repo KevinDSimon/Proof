@@ -12,6 +12,21 @@ struct SpotRemovalTests {
     /// 600 × 400, so a radius of 0.02 of the long edge is 12 pixels.
     private let size = CGSize(width: 600, height: 400)
 
+    @Test("A pointer takes the first spot whose outline holds it, and nothing outside every outline")
+    func pointerReach() {
+        // Two overlapping spots, 10 and 5 points from the press, with radii 12 and 8.
+        #expect(SpotReach.pointer.target(distances: [10, 5], radii: [12, 8]) == 0)
+        #expect(SpotReach.pointer.target(distances: [15, 20], radii: [4, 4]) == nil)
+    }
+
+    @Test("A finger takes the nearest small spot within 22 points, but an outline it is inside first")
+    func touchReach() {
+        #expect(SpotReach.touch.target(distances: [20, 15], radii: [4, 4]) == 1)
+        #expect(SpotReach.touch.target(distances: [23, 30], radii: [4, 4]) == nil)
+        // Inside a large spot, beside a small one whose center is nearer.
+        #expect(SpotReach.touch.target(distances: [8, 30], radii: [4, 40]) == 1)
+    }
+
     @Test("No spots pass the image through untouched")
     func noSpots() {
         let image = gray(0.18)

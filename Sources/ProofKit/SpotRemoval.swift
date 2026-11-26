@@ -116,6 +116,30 @@ public struct Spot: Codable, Equatable, Sendable {
     }
 }
 
+/// How far the Spot Removal tool's spots reach for a press: a pointer takes a spot only within
+/// its outline, while a finger also takes a small one from within 22 points of its center or
+/// path, for the 44-point targets of Apple's Human Interface Guidelines.
+public enum SpotReach: Sendable {
+    case pointer
+    case touch
+
+    /// From a spot's center or path, in points, however small the spot shows.
+    public var minimum: Double {
+        switch self {
+        case .pointer: 0
+        case .touch: 22
+        }
+    }
+
+    /// Which target a press takes, given each one's distance from the press and its radius, in
+    /// points, in the order they are tried: the first whose outline holds the press, or else the
+    /// nearest within reach.
+    public func target(distances: [Double], radii: [Double]) -> Int? {
+        if let inside = distances.indices.first(where: { distances[$0] <= radii[$0] }) { return inside }
+        return distances.indices.filter { distances[$0] <= minimum }.min { distances[$0] < distances[$1] }
+    }
+}
+
 /// Fills each spot from its source, in order, so a later spot may take from an earlier one's
 /// result. Runs on the whole uncropped photo in linear light, before halation and bloom, so
 /// dust doesn't glow.
