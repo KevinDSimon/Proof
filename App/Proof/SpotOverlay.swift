@@ -30,9 +30,6 @@ struct SpotOverlay: View {
     @State private var pinched: CGFloat?
     @State private var keyMonitor: Any?
 
-    /// How much [ and ] change the size by.
-    private static let sizeStep = 1.15
-
     var body: some View {
         GeometryReader { geometry in
             let layout = SpotLayout(size: geometry.size, zoom: zoom, crop: crop, photoSize: photoSize)
@@ -145,12 +142,7 @@ struct SpotOverlay: View {
                 return nil
             default:
                 guard let key = event.charactersIgnoringModifiers, key == "[" || key == "]" else { return event }
-                if event.type == .keyDown {
-                    let factor = key == "]" ? Self.sizeStep : 1 / Self.sizeStep
-                    library.changeSpot { spot in
-                        spot.radius = min(max(spot.radius * factor, Spot.radiusRange.lowerBound), Spot.radiusRange.upperBound)
-                    }
-                }
+                if event.type == .keyDown { library.changeSpot { $0 = $0.resized(larger: key == "]") } }
                 return nil
             }
         }

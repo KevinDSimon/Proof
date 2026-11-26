@@ -224,8 +224,14 @@ public final class Library {
     /// opening it. It starts and ends with nothing selected, as in Photos, except when it ends by
     /// opening a photo, which stays selected.
     public var isSelectingPhotos = false {
-        didSet { if isSelectingPhotos != oldValue, !isEditing { browse.selectedPhoto = nil } }
+        didSet {
+            if isSelectingPhotos != oldValue, !isEditing { browse.selectedPhoto = nil }
+            isSelectionFromKeyboard = false
+        }
     }
+    /// iPad with a keyboard: the arrow keys moved the selection in Browse, so the grid outlines it
+    /// and the keyboard's commands act on it (#235). A tap on a photo, Select or Esc ends it.
+    public var isSelectionFromKeyboard = false
     /// The Info panel's width when last open, so the grid can lay out for the width it will have
     /// once the panel has slid in or out.
     public var infoPanelWidth: CGFloat = 320

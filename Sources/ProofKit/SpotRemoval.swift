@@ -39,6 +39,16 @@ public struct Spot: Codable, Equatable, Sendable {
     public static let defaultRadius = 0.006
     public static let defaultFeather = 50.0
     public static let defaultOpacity = 100.0
+    /// How much ] and [ change the size by, on the Mac and on iPad with a keyboard.
+    public static let sizeStep = 1.15
+
+    /// One step of ] (`larger`) or [ (smaller), kept within `radiusRange`.
+    public func resized(larger: Bool) -> Spot {
+        var spot = self
+        let factor = larger ? Self.sizeStep : 1 / Self.sizeStep
+        spot.radius = min(max(radius * factor, Self.radiusRange.lowerBound), Self.radiusRange.upperBound)
+        return spot
+    }
 
     private enum CodingKeys: String, CodingKey {
         case mode, x, y, sourceX, sourceY, radius, feather, opacity, points

@@ -12,6 +12,20 @@ struct SpotRemovalTests {
     /// 600 × 400, so a radius of 0.02 of the long edge is 12 pixels.
     private let size = CGSize(width: 600, height: 400)
 
+    @Test("] and [ change a spot's size by one step each way, and stop at the ends of its range")
+    func keyboardResize() {
+        let spot = Spot(x: 0.5, y: 0.5, sourceX: 0.7, sourceY: 0.5, radius: 0.02)
+        #expect(abs(spot.resized(larger: true).radius - 0.02 * Spot.sizeStep) < 1e-12)
+        #expect(abs(spot.resized(larger: true).resized(larger: false).radius - 0.02) < 1e-12)
+        #expect(spot.resized(larger: true).x == spot.x)
+        var largest = spot
+        largest.radius = Spot.radiusRange.upperBound
+        #expect(largest.resized(larger: true).radius == Spot.radiusRange.upperBound)
+        var smallest = spot
+        smallest.radius = Spot.radiusRange.lowerBound
+        #expect(smallest.resized(larger: false).radius == Spot.radiusRange.lowerBound)
+    }
+
     @Test("A pointer takes the first spot whose outline holds it, and nothing outside every outline")
     func pointerReach() {
         // Two overlapping spots, 10 and 5 points from the press, with radii 12 and 8.
