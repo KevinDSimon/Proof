@@ -1,22 +1,30 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The crop rectangle drawn over the photo while the crop tool is open: the area outside it
 /// faded toward the canvas, a border with handles, and a grid while something is being dragged.
 /// It lays out the same way `RAWRenderer.draw` does: the turned photo fitted to the view as if
 /// upright, then tilted around its center by the straighten angle.
-struct CropOverlay: View {
+public struct CropOverlay: View {
     let library: Library
     let frame: CropFrame
     let aspect: AspectRatio?
     /// The canvas color, which the photo outside the rectangle fades toward.
     let backdrop: Color
+    /// The Mac's pointer outside each corner; macOS has no rotate cursor of its own.
+    @Environment(\.rotatePointer) private var rotatePointer
 
     /// The rectangle when the current drag started; `nil` between drags.
     @State private var dragStart: CropFrame?
 
-    var body: some View {
+    public init(library: Library, frame: CropFrame, aspect: AspectRatio?, backdrop: Color) {
+        self.library = library
+        self.frame = frame
+        self.aspect = aspect
+        self.backdrop = backdrop
+    }
+
+    public var body: some View {
         GeometryReader { proxy in
             let layout = Layout(frame: frame, viewSize: proxy.size)
             ZStack {
@@ -29,27 +37,33 @@ struct CropOverlay: View {
                     let point = layout.point(of: corner)
                     Color.clear
                         .contentShape(Rectangle())
-                        .frame(width: 2 * Self.rotateReach, height: 2 * Self.rotateReach)
+                        .frame(width: 2 * Self.reach.rotate, height: 2 * Self.reach.rotate)
                         .position(point)
-                        .pointerStyle(.image(Image(nsImage: RotateCursor.image(for: corner)), hotSpot: .center))
+                        #if os(macOS)
+                        .pointerStyle(rotatePointer.map { .image($0(corner), hotSpot: .center) })
+                        #endif
                         .gesture(rotate(around: CGPoint(x: layout.box.midX, y: layout.box.midY)))
                         .accessibilityHidden(true)
                 }
                 Color.clear
                     .contentShape(Rectangle())
-                    .frame(width: max(layout.box.width - 2 * Self.handleReach, 0),
-                           height: max(layout.box.height - 2 * Self.handleReach, 0))
+                    .frame(width: max(layout.box.width - 2 * Self.reach.handle, 0),
+                           height: max(layout.box.height - 2 * Self.reach.handle, 0))
                     .position(x: layout.box.midX, y: layout.box.midY)
+                    #if os(macOS)
                     .pointerStyle(dragStart == nil ? .grabIdle : .grabActive)
+                    #endif
                     .gesture(drag(layout: layout) { start, delta in start.moved(by: delta) })
                     .accessibilityHidden(true)
                 ForEach(CropHandle.allCases, id: \.self) { handle in
-                    let area = layout.hitArea(of: handle, reach: Self.handleReach)
+                    let area = handle.hitArea(on: layout.box, reach: Self.reach.handle)
                     Color.clear
                         .contentShape(Rectangle())
                         .frame(width: area.width, height: area.height)
                         .position(x: area.midX, y: area.midY)
+                        #if os(macOS)
                         .pointerStyle(.frameResize(position: handle.resizePosition))
+                        #endif
                         .gesture(drag(layout: layout) { start, delta in start.dragging(handle, by: delta, aspect: aspect) })
                         .accessibilityHidden(true)
                 }
@@ -59,8 +73,10 @@ struct CropOverlay: View {
                     let ends = shownLevelEnds(layout: layout)
                     Color.clear
                         .contentShape(Rectangle())
+                        #if os(macOS)
                         .pointerStyle(levelDrag.map { if case .drawing = $0 { .rectSelection } else { .grabActive } }
                                       ?? (hoveredLevelPart == nil ? .rectSelection : .grabIdle))
+                        #endif
                         .onContinuousHover { phase in
                             if case let .active(location) = phase { hoveredLevelPart = levelPart(at: location, in: ends) } else { hoveredLevelPart = nil }
                         }
@@ -98,10 +114,6 @@ struct CropOverlay: View {
     /// The part of the kept line under the pointer.
     @State private var hoveredLevelPart: LevelPart?
 
-    /// How close, in points, a press must be to an end of the kept line to take it.
-    private static let levelEndReach = 10.0
-    /// How close, in points, a press must be to the kept line to take all of it.
-    private static let levelLineReach = 6.0
     private static let levelEndRadius = 4.0
 
     /// The kept line's ends where they now fall in the view.
@@ -119,11 +131,11 @@ struct CropOverlay: View {
         guard let (a, b) = ends else { return nil }
         let toStart = hypot(a.x - point.x, a.y - point.y)
         let toEnd = hypot(b.x - point.x, b.y - point.y)
-        if min(toStart, toEnd) <= Self.levelEndReach { return toStart <= toEnd ? .start : .end }
+        if min(toStart, toEnd) <= Self.reach.levelEnd { return toStart <= toEnd ? .start : .end }
         let dx = b.x - a.x, dy = b.y - a.y
         let lengthSquared = dx * dx + dy * dy
         let t = lengthSquared > 0 ? min(max(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared, 0), 1) : 0
-        return hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy)) <= Self.levelLineReach ? .line : nil
+        return hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy)) <= Self.reach.levelLine ? .line : nil
     }
 
     /// Draws a new line to level the photo along, or moves an end of the kept one, which turns
@@ -175,10 +187,12 @@ struct CropOverlay: View {
             }
     }
 
-    /// How far from the border a drag still takes a handle, in points.
-    private static let handleReach = 12.0
-    /// How far outside a corner a drag turns the photo, in points.
-    private static let rotateReach = 36.0
+    /// How far each part reaches for a press: wider for a finger than for a pointer.
+    #if os(iOS)
+    private static let reach = CropReach.touch
+    #else
+    private static let reach = CropReach.pointer
+    #endif
     private static let corners: [CropHandle] = [.topLeft, .topRight, .bottomRight, .bottomLeft]
 
     /// The straighten angle and the turn's center when the current corner drag started.
@@ -316,24 +330,10 @@ struct CropOverlay: View {
             CGPoint(x: box.midX + Double(handle.horizontal) * box.width / 2,
                     y: box.midY + Double(handle.vertical) * box.height / 2)
         }
-
-        /// The area that picks up `handle`: a square at a corner, the rest of the edge between.
-        func hitArea(of handle: CropHandle, reach: Double) -> CGRect {
-            let x: (Double, Double) = switch handle.horizontal {
-            case -1: (box.minX - reach, box.minX + reach)
-            case 1: (box.maxX - reach, box.maxX + reach)
-            default: (box.minX + reach, box.maxX - reach)
-            }
-            let y: (Double, Double) = switch handle.vertical {
-            case -1: (box.minY - reach, box.minY + reach)
-            case 1: (box.maxY - reach, box.maxY + reach)
-            default: (box.minY + reach, box.maxY - reach)
-            }
-            return CGRect(x: x.0, y: y.0, width: max(x.1 - x.0, 0), height: max(y.1 - y.0, 0))
-        }
     }
 }
 
+#if os(macOS)
 private extension CropHandle {
     var resizePosition: FrameResizePosition {
         switch self {
@@ -348,57 +348,9 @@ private extension CropHandle {
         }
     }
 }
+#endif
 
-/// The pointer outside a crop corner, and on the Masks tool's turning handles. macOS has no
-/// rotate cursor, so this draws one in the style of its resize cursors: a black curved arrow
-/// with a white outline, curving around the corner.
-@MainActor
-enum RotateCursor {
-    private static var images: [CropHandle: NSImage] = [:]
-
-    static func image(for corner: CropHandle) -> NSImage {
-        if let image = images[corner] { return image }
-        // Drawn for the top right corner, then turned a quarter turn clockwise per corner.
-        let turns: Double = switch corner {
-        case .topRight: 0
-        case .bottomRight: 1
-        case .bottomLeft: 2
-        default: 3
-        }
-        let size = 24.0
-        let image = NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
-            let transform = NSAffineTransform()
-            transform.translateX(by: size / 2, yBy: size / 2)
-            transform.rotate(byDegrees: turns * 90)
-            transform.translateX(by: -size / 2, yBy: -size / 2)
-            transform.concat()
-
-            // A quarter circle bulging toward the corner, from its top end to its right end.
-            let center = NSPoint(x: 6, y: 18), radius = 11.0
-            let arc = NSBezierPath()
-            arc.appendArc(withCenter: center, radius: radius, startAngle: -86, endAngle: -4, clockwise: false)
-            let heads = NSBezierPath()
-            for (point, direction) in [(NSPoint(x: center.x, y: center.y - radius), CGVector(dx: -1, dy: 0)),
-                                       (NSPoint(x: center.x + radius, y: center.y), CGVector(dx: 0, dy: 1))] {
-                heads.move(to: NSPoint(x: point.x + 3 * direction.dx, y: point.y + 3 * direction.dy))
-                heads.line(to: NSPoint(x: point.x - 1.5 * direction.dx + 3.2 * direction.dy, y: point.y - 1.5 * direction.dy + 3.2 * direction.dx))
-                heads.line(to: NSPoint(x: point.x - 1.5 * direction.dx - 3.2 * direction.dy, y: point.y - 1.5 * direction.dy - 3.2 * direction.dx))
-                heads.close()
-            }
-            NSColor.white.set()
-            arc.lineWidth = 4.5
-            arc.stroke()
-            heads.lineWidth = 2.5
-            heads.lineJoinStyle = .round
-            heads.stroke()
-            heads.fill()
-            NSColor.black.set()
-            arc.lineWidth = 1.5
-            arc.stroke()
-            heads.fill()
-            return true
-        }
-        images[corner] = image
-        return image
-    }
+public extension EnvironmentValues {
+    /// The Mac's pointer outside a crop corner, for that corner; `nil` for the system's own.
+    @Entry var rotatePointer: (@MainActor @Sendable (CropHandle) -> Image)? = nil
 }

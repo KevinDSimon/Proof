@@ -252,6 +252,38 @@ public enum CropHandle: CaseIterable, Sendable {
         case .left, .right: 0
         }
     }
+
+    /// The area, in points, that picks up this handle on `box`, the rectangle as shown: a square
+    /// `2 * reach` wide at a corner, and the rest of the edge between, `2 * reach` thick.
+    public func hitArea(on box: CGRect, reach: Double) -> CGRect {
+        let x: (Double, Double) = switch horizontal {
+        case -1: (box.minX - reach, box.minX + reach)
+        case 1: (box.maxX - reach, box.maxX + reach)
+        default: (box.minX + reach, box.maxX - reach)
+        }
+        let y: (Double, Double) = switch vertical {
+        case -1: (box.minY - reach, box.minY + reach)
+        case 1: (box.maxY - reach, box.maxY + reach)
+        default: (box.minY + reach, box.maxY - reach)
+        }
+        return CGRect(x: x.0, y: y.0, width: max(x.1 - x.0, 0), height: max(y.1 - y.0, 0))
+    }
+}
+
+/// How far, in points, the crop tool's parts reach for a press: a pointer is precise, while a
+/// finger needs the 44-point targets of Apple's Human Interface Guidelines.
+public struct CropReach: Equatable, Sendable {
+    /// From the border, in each direction, for a handle.
+    public var handle: Double
+    /// Outside a corner, for turning the photo.
+    public var rotate: Double
+    /// From an end of the level line.
+    public var levelEnd: Double
+    /// From the level line itself.
+    public var levelLine: Double
+
+    public static let pointer = CropReach(handle: 12, rotate: 36, levelEnd: 10, levelLine: 6)
+    public static let touch = CropReach(handle: 22, rotate: 44, levelEnd: 22, levelLine: 22)
 }
 
 /// The crop rectangle in the units of the turned photo, which is `imageSize` with its origin at

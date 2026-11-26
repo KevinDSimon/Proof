@@ -285,4 +285,31 @@ struct CropPointTests {
         let back = crop.photoPoint(of: mapped, photoSize: size)
         #expect(abs(back.x - point.x) < 1e-9 && abs(back.y - point.y) < 1e-9)
     }
+
+    // MARK: Handles
+
+    @Test("With touch reach, every crop handle is at least a 44-point target")
+    func touchHandlesMeetTargetSize() {
+        let box = CGRect(x: 50, y: 40, width: 300, height: 200)
+        for handle in CropHandle.allCases {
+            let area = handle.hitArea(on: box, reach: CropReach.touch.handle)
+            #expect(area.width >= 44 && area.height >= 44, "\(handle)")
+        }
+        #expect(2 * CropReach.touch.rotate >= 44)
+        #expect(2 * CropReach.touch.levelEnd >= 44)
+        #expect(2 * CropReach.touch.levelLine >= 44)
+    }
+
+    @Test("A handle's area straddles its border, and corners and edges don't overlap")
+    func handleAreasTile() {
+        let box = CGRect(x: 0, y: 0, width: 200, height: 100)
+        let reach = CropReach.pointer.handle
+        let corner = CropHandle.topLeft.hitArea(on: box, reach: reach)
+        #expect(corner == CGRect(x: -reach, y: -reach, width: 2 * reach, height: 2 * reach))
+        let top = CropHandle.top.hitArea(on: box, reach: reach)
+        #expect(top == CGRect(x: reach, y: -reach, width: 200 - 2 * reach, height: 2 * reach))
+        #expect(!corner.intersection(top).isNull && corner.intersection(top).width == 0)
+        let right = CropHandle.right.hitArea(on: box, reach: reach)
+        #expect(right.minX == 200 - reach && right.height == 100 - 2 * reach)
+    }
 }

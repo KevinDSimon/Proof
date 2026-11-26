@@ -81,10 +81,12 @@ extension EditKeyWatch {
 }
 
 extension View {
-    /// The Mac's own controls for the shared inspector: AppKit's pop-up buttons, its click count,
-    /// the keys a selected curve point answers to, and the pointer that says a point will go.
+    /// The Mac's own controls for the shared inspector and crop tool: AppKit's pop-up buttons, its
+    /// click count, the keys a selected curve point answers to, the pointer that says a point
+    /// will go, and the pointer that turns the photo outside a crop corner.
     func macInspectorControls() -> some View {
         environment(\.doubleClickCheck, .mac)
+            .environment(\.rotatePointer) { corner in Image(nsImage: RotateCursor.image(for: corner)) }
             .environment(\.editKeyWatch, .mac)
             .environment(\.popUpMenu) { title, items in AnyView(MenuPopUp(title: title, items: items)) }
             .environment(\.showsRemovalPointer) { removing in

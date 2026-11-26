@@ -1,9 +1,8 @@
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The crop tool's controls, which take the inspector's place while the tool is open.
-struct CropInspector: View {
+public struct CropInspector: View {
     let library: Library
     /// Renders the photo for Auto to look for the horizon in.
     let renderer: RAWRenderer?
@@ -12,7 +11,12 @@ struct CropInspector: View {
     @State private var customWidth = ""
     @State private var customHeight = ""
 
-    var body: some View {
+    public init(library: Library, renderer: RAWRenderer?) {
+        self.library = library
+        self.renderer = renderer
+    }
+
+    public var body: some View {
         InspectorPanel {
             // One card, without a switch: the tool already shows the whole photo, and Done or
             // Cancel is the comparison.
@@ -23,8 +27,8 @@ struct CropInspector: View {
                           }) {
                 // Each control's name above it, as the sliders have theirs.
                 InspectorField("Aspect Ratio") {
-                    MenuPopUp(title: shownChoice.title, items: AspectChoice.allCases.flatMap { choice -> [MenuPopUp.Item] in
-                        let item = MenuPopUp.Item.action(choice.title, isChecked: choice == shownChoice) { choose(choice) }
+                    PopUpMenu(title: shownChoice.title, items: AspectChoice.allCases.flatMap { choice -> [PopUpMenu.Item] in
+                        let item = PopUpMenu.Item.action(choice.title, isChecked: choice == shownChoice) { choose(choice) }
                         return choice == .freeform || choice == .original ? [item, .separator] : [item]
                     })
                     .frame(maxWidth: .infinity)
@@ -99,6 +103,10 @@ struct CropInspector: View {
                     }
                 }
             }
+            #if os(iOS)
+            // A Mac button has a bezel of its own; on iOS a plain button is bare text.
+            .buttonStyle(.bordered)
+            #endif
         }
         // The photo's size comes from the file, read when it opens.
         .disabled(library.turnedPhotoSize == nil)
@@ -145,7 +153,15 @@ struct CropInspector: View {
             .labelsHidden()
             .multilineTextAlignment(.center)
             .monospacedDigit()
+            #if os(iOS)
+            // The decimal pad has no Return key to apply the ratio with.
+            .keyboardType(.numbersAndPunctuation)
+            .submitLabel(.done)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 64)
+            #else
             .frame(width: 48)
+            #endif
             .onSubmit(applyCustomRatio)
             .accessibilityLabel("Ratio \(title.lowercased())")
     }
