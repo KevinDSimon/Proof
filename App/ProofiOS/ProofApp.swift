@@ -12,6 +12,7 @@ struct ProofApp: App {
         WindowGroup {
             ContentView(library: library)
         }
+        .commands { ProofCommands(library: library) }
     }
 }
 
@@ -70,7 +71,10 @@ struct ContentView: View {
         // photos, and carries on when Proof returns.
         .onChange(of: scenePhase) { library.exports.pause.isPaused = scenePhase == .background }
         // Select ends on another row, and on opening a photo from the menu.
-        .onChange(of: library.selection) { library.isSelectingPhotos = false }
+        .onChange(of: library.selection) {
+            library.isSelectingPhotos = false
+            library.isSelectionFromKeyboard = false
+        }
         .onChange(of: library.isEditing) {
             if library.isEditing { library.isSelectingPhotos = false }
             // Edit hides the library so the photo has the width, as on the Mac; the sidebar

@@ -41,8 +41,9 @@ public struct ThumbnailGrid: View {
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
     #else
-    /// A tap opens the photo, so there's no current photo to mark, except while Select is on.
-    private var marksSelection: Bool { library.isSelectingPhotos }
+    /// A tap opens the photo, so there's no current photo to mark, except while Select is on or
+    /// after the arrow keys have moved it on iPad (#235).
+    private var marksSelection: Bool { library.isSelectingPhotos || library.isSelectionFromKeyboard }
     private static let sizes = ThumbnailSize.touch
     private static let spacing: CGFloat = 8
     private static let margin: CGFloat = 16
@@ -151,17 +152,48 @@ public struct ThumbnailGrid: View {
             }
             if let move { library.browse.move(move, in: photos, columns: columnCount) }
         }
+        #else
+        // A hardware keyboard on iPad: the first press outlines the photo last opened, or the
+        // first, and later ones move it, as on the Mac. Select keeps its own selection.
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+            guard !library.isSelectingPhotos, !photos.isEmpty else { return .ignored }
+            let isShown = library.browse.selectedPhoto.map { photo in photos.contains { $0.id == photo } } ?? false
+            if library.isSelectionFromKeyboard || !isShown {
+                let move: BrowseState.Move = switch press.key {
+                case .leftArrow: .left
+                case .rightArrow: .right
+                case .upArrow: .up
+                default: .down
+                }
+                library.browse.move(move, in: photos, columns: columnCount)
+            }
+            library.isSelectionFromKeyboard = true
+            return .handled
+        }
+        // The grid holds the focus, so Return reaches it before Photo › Edit in the menu bar.
+        .onKeyPress(.return) {
+            guard library.isSelectionFromKeyboard, !library.isSelectingPhotos,
+                  library.browse.selectedPhoto?.isEditable == true else { return .ignored }
+            // The outline stays for the return to Browse, so the arrow keys carry on from the photo.
+            library.browse.edit()
+            return .handled
+        }
         #endif
         // With nothing selected, Esc passes on to whatever else handles it.
         .onKeyPress(.escape) {
             guard library.browse.selectedPhoto != nil else { return .ignored }
             library.deselectAll()
+            library.isSelectionFromKeyboard = false
             return .handled
         }
         // Coming back from Edit, a photo is selected and the arrow keys should move from it. After a
         // sidebar row is picked nothing is, and the sidebar keeps focus so its selection stays in
         // the highlight; clicking a photo or pressing Tab moves focus here.
         .onAppear { if library.browse.selectedPhoto != nil { isFocused = true } }
+        #if os(iOS)
+        // iPad has no other place for the arrow keys to go, so the grid takes them from the start.
+        .onAppear { isFocused = true }
+        #endif
         // Loaded again when the LUT library changes, since edited thumbnails show looks.
         .task(id: ThumbnailLoad(photos: allPhotos, lutGeneration: library.looks.generation)) {
             await loadThumbnails()
@@ -268,6 +300,7 @@ public struct ThumbnailGrid: View {
             if library.isSelectingPhotos {
                 library.browse.toggle(photo.id, in: photos)
             } else {
+                library.isSelectionFromKeyboard = false
                 library.browse.selectedPhoto = photo.id
                 library.browse.edit()
             }

@@ -13,6 +13,7 @@ Proof is a RAW photo editor for the Mac. It opens photos where they already are,
 - Folders shown as they are on disk, with an All Photos view across every folder you've added
 - A thumbnail grid and a filmstrip while editing
 - Star ratings, pick and reject flags, and filters that combine them
+- Lightroom's keys for rating and flagging (0–5, P, U, X), on the Mac and on iPad with a keyboard
 - Ratings and flags read from and saved to XMP sidecars, so other photo apps see them
 - An Info panel with camera details, and a title, caption, keywords, creator, copyright and location
 - Folders on external and network drives; renamed photos are found again with their edits
