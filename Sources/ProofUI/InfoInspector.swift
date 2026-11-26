@@ -32,6 +32,47 @@ public struct InfoInspector: View {
     }
 }
 
+#if !os(macOS)
+/// iPad and iPhone: the Info panel's cards in a sheet, for the photo whose menu showed it (#233).
+/// iOS has no panel beside the grid, and a sheet describes the photo touched without selecting it.
+public struct PhotoInfoSheet: View {
+    let library: Library
+    let photo: PhotoReference
+    @Environment(\.dismiss) private var dismiss
+
+    public init(library: Library, photo: PhotoReference) {
+        self.library = library
+        self.photo = photo
+    }
+
+    public var body: some View {
+        NavigationStack {
+            Group {
+                if let url = library.url(ofPhoto: photo.name, in: photo.folder) {
+                    InspectorPanel {
+                        PhotoInfoView(library: library, photo: photo, url: url, style: .cards)
+                    }
+                } else {
+                    ContentUnavailableView("Photo Not Found", systemImage: "info.circle")
+                }
+            }
+            .navigationTitle("Info")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // Close, not Done: a confirming button takes the highlight as a fill.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
+        }
+        // The iPhone inspector sheet's grays, with darker cards on the lighter sheet.
+        .environment(\.isInspectorSheet, true)
+        .presentationBackground(Color.sheetBackground)
+        .presentationDetents([.medium, .large])
+    }
+}
+#endif
+
 /// The Info card below the histogram in Edit: the same details, collapsed until opened.
 public struct InfoCard: View {
     let library: Library
