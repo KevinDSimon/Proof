@@ -7,6 +7,10 @@ public extension Color {
     /// color is chosen.
     static let interfaceBackground = Color(white: CanvasColor.darkGray.components.red)
 
+    /// The gray of a sheet below the photo on iPhone: the inspector cards' own gray, a step
+    /// lighter than the canvas, so the sheet stands apart from it.
+    static let sheetBackground = Color(white: InspectorCard<EmptyView>.fillGray(for: .dark))
+
     /// The one color in the interface, #FFD52E (#192). It marks small things only: switches that
     /// are on and the selection outline. The focused sidebar selection uses a darker version, the
     /// `AccentColor` asset, so its white text stays readable. Large areas and anything
