@@ -1,32 +1,34 @@
-import AppKit
 import ProofKit
-import ProofUI
 import SwiftUI
 
 /// The tone curve: a channel picker, a square graph of the chosen channel's curve with the
 /// photo's histogram behind it, and black, midtone and white handles under the graph.
 ///
-/// Clicking the graph adds a point on the curve and dragging moves it. A point is removed by
-/// dragging it off the graph, by double-clicking it, or by selecting it and pressing Delete.
-/// The end points can't be removed. Arrow keys nudge the selected point, Shift for larger steps.
+/// Clicking or touching the graph adds a point on the curve and dragging moves it. A point is
+/// removed by dragging it off the graph, by double-clicking or double-tapping it, or by selecting
+/// it and pressing Delete. The end points can't be removed. Arrow keys nudge the selected point,
+/// Shift for larger steps.
 /// The handles apply before the points: the graph draws the whole channel, handles and points
 /// together, and each point where it lands on that curve.
 ///
 /// The red, green and blue curves are drawn in the histogram's colors, so like the histogram
 /// they are an exception to the inspector's gray.
-struct CurveEditor: View {
+public struct CurveEditor: View {
     let library: Library
     @State private var channel: ToneCurve.Channel = .rgb
     @State private var selected: Int?
     @State private var drag: Drag?
-    @State private var lastClick: Click?
+    @State private var doublePress = DoublePress<Int>(interval: DoubleClickCheck.touch.interval)
     /// The graph's size, which the gesture needs to turn locations into curve values.
     @State private var canvasSize: CGSize = .zero
-    /// Watches the keyboard, and clicks elsewhere, while a point is selected.
-    @State private var keyMonitor: Any?
+    /// Stops watching the keyboard, and clicks elsewhere, while a point is selected.
+    @State private var stopWatchingKeys: (@MainActor () -> Void)?
     /// The graph's frame in the window, to tell a click on it from a click elsewhere.
     @State private var graphFrame: CGRect = .zero
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.doubleClickCheck) private var doubleClickCheck
+    @Environment(\.editKeyWatch) private var editKeyWatch
+    @Environment(\.showsRemovalPointer) private var showsRemovalPointer
     /// True while a drag is in progress. It resets when the drag ends and also when the system
     /// cancels it, which `onEnded` doesn't report, so a drag can't be left half finished.
     @GestureState private var isDragging = false
@@ -43,19 +45,21 @@ struct CurveEditor: View {
         var isRemoving = false
     }
 
-    private struct Click {
-        var index: Int
-        var time: Date
+    /// How close a click must be to a point to grab it, and how far past the plot's edge a point
+    /// must be dragged to be removed. A fingertip covers far more than a pointer, so touch reaches
+    /// further, close to the 44-point target Apple asks for.
+    #if os(macOS)
+    private static let hitRadius: CGFloat = 8
+    #else
+    private static let hitRadius: CGFloat = 20
+    #endif
+    private static let removeDistance: CGFloat = 12
+
+    public init(library: Library) {
+        self.library = library
     }
 
-    /// How close a click must be to a point to grab it, and how far past the plot's edge a point
-    /// must be dragged to be removed.
-    private static let hitRadius: CGFloat = 8
-    private static let removeDistance: CGFloat = 12
-    /// The closest two points can be, as a fraction of the graph's width.
-    private static let minimumGap = 0.01
-
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Picker("Channel", selection: $channel) {
                 ForEach(ToneCurve.Channel.allCases, id: \.self) { Text(Self.title(of: $0)) }
@@ -86,12 +90,12 @@ struct CurveEditor: View {
                     .contentShape(Rectangle())
                     .gesture(dragGesture)
                     .onChange(of: isDragging) { if !isDragging { endDrag() } }
-                    .onChange(of: selected) { updateKeyMonitor() }
-                    .onDisappear { selected = nil; updateKeyMonitor() }
+                    .onChange(of: selected) { updateKeyWatch() }
+                    .onDisappear { selected = nil; updateKeyWatch() }
                     .accessibilityElement()
                     .accessibilityLabel("Tone curve")
                     .accessibilityValue("\(Self.title(of: channel)), \(points.count) points")
-                    .accessibilityHint("Click to add a point and drag to move it. Drag a point off the graph or double-click it to remove it.")
+                    .accessibilityHint(Self.hint)
                 // The handles belong to the RGB curve, as in Lightroom, where the color channels
                 // show their color field instead. The space stays so the graph doesn't jump.
                 if channel == .rgb {
@@ -226,8 +230,8 @@ struct CurveEditor: View {
                 let bounds = CGRect(origin: .zero, size: size).insetBy(dx: -Self.removeDistance, dy: -Self.removeDistance)
                 let removing = !isEnd && !bounds.contains(target)
                 if removing != current.isRemoving {
-                    // The system's "poof" pointer says the point will go when the button is released.
-                    if removing { NSCursor.disappearingItem.push() } else { NSCursor.pop() }
+                    // The Mac's "poof" pointer says the point will go when the button is released.
+                    showsRemovalPointer(removing)
                     current.isRemoving = removing
                 }
                 drag = current
@@ -237,19 +241,17 @@ struct CurveEditor: View {
 
     private func endDrag() {
         guard let ended = drag else { return }
-        if ended.isRemoving { NSCursor.pop() }
+        if ended.isRemoving { showsRemovalPointer(false) }
         drag = nil
-        // A second click on the same point, without moving it, removes it.
+        // A second click or tap on the same point, without moving it, removes it.
+        doublePress.interval = doubleClickCheck.interval
         if let index = ended.index, !ended.moved, !ended.added {
-            if let lastClick, lastClick.index == index, Date().timeIntervalSince(lastClick.time) < NSEvent.doubleClickInterval {
-                self.lastClick = nil
+            if doublePress.press(index) {
                 selected = index
                 removeSelected()
-            } else {
-                lastClick = Click(index: index, time: Date())
             }
         } else {
-            lastClick = nil
+            doublePress.cancel()
         }
         library.isAdjusting = false
     }
@@ -265,19 +267,12 @@ struct CurveEditor: View {
                         offset: CGSize(width: center.x - location.x, height: center.y - location.y), added: false)
         }
         selected = nil
-        guard current.count < ToneCurve.maximumPoints else {
-            return Drag(index: nil, points: current, offset: .zero, added: false)
-        }
         // A click away from every point adds one on the curve where it was clicked, so the curve
         // doesn't change until the point is dragged.
-        let input = min(max(value(at: location, in: size).input, 0), 1)
-        let index = current.firstIndex { $0.input > input } ?? current.count
-        let gapBefore = index == 0 || input - current[index - 1].input >= Self.minimumGap
-        let gapAfter = index == current.count || current[index].input - input >= Self.minimumGap
-        guard index > 0, index < current.count, gapBefore, gapAfter else {
+        guard let (added, index) = CurveEditing.adding(at: value(at: location, in: size).input, to: current) else {
             return Drag(index: nil, points: current, offset: .zero, added: false)
         }
-        current.insert(Self.rounded(CurvePoint(input, CurveSpline(current)(input))), at: index)
+        current = added
         selected = index
         let center = position(of: current[index], in: size)
         return Drag(index: index, points: current,
@@ -294,53 +289,30 @@ struct CurveEditor: View {
             selected = nil
             return points
         }
-        points[index] = clamped(value(at: target, in: size), at: index, in: points)
+        points[index] = CurveEditing.clamped(value(at: target, in: size), at: index, in: points)
         selected = index
         return points
-    }
-
-    private func clamped(_ point: CurvePoint, at index: Int, in points: [CurvePoint]) -> CurvePoint {
-        let low = index == 0 ? 0 : points[index - 1].input + Self.minimumGap
-        let high = index == points.count - 1 ? 1 : points[index + 1].input - Self.minimumGap
-        return Self.rounded(CurvePoint(min(max(point.input, low), high), min(max(point.output, 0), 1)))
     }
 
     // MARK: Keyboard
 
     /// While a point is selected, Delete removes it and the arrow keys nudge it, Shift for larger
-    /// steps. A local event monitor rather than keyboard focus: a custom view on the Mac only
-    /// takes focus by click with keyboard navigation turned on, so focus-based key handling
-    /// doesn't reach the graph for most people. Keys typed into a text field pass through, and
-    /// a click anywhere else deselects the point, so the keys go back to the other controls.
-    private func updateKeyMonitor() {
-        if selected == nil, let monitor = keyMonitor {
-            NSEvent.removeMonitor(monitor)
-            keyMonitor = nil
-        } else if selected != nil, keyMonitor == nil {
-            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { event in
-                handle(event)
+    /// steps, and a click anywhere else deselects it, so the keys go back to the other controls.
+    private func updateKeyWatch() {
+        if selected == nil, let stop = stopWatchingKeys {
+            stop()
+            stopWatchingKeys = nil
+        } else if selected != nil, stopWatchingKeys == nil {
+            stopWatchingKeys = editKeyWatch.start({ graphFrame }, { selected = nil }) { key, shift in
+                let step = shift ? 0.1 : 0.01
+                return switch key {
+                case .delete: removeSelected()
+                case .left: nudge(dx: -step, dy: 0)
+                case .right: nudge(dx: step, dy: 0)
+                case .down: nudge(dx: 0, dy: -step)
+                case .up: nudge(dx: 0, dy: step)
+                }
             }
-        }
-    }
-
-    private func handle(_ event: NSEvent) -> NSEvent? {
-        if event.type == .leftMouseDown {
-            if let content = event.window?.contentView {
-                let location = CGPoint(x: event.locationInWindow.x, y: content.bounds.height - event.locationInWindow.y)
-                if !graphFrame.contains(location) { selected = nil }
-            }
-            return event
-        }
-        guard event.window?.firstResponder as? NSText == nil,
-              event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
-        let step = event.modifierFlags.contains(.shift) ? 0.1 : 0.01
-        switch event.keyCode {
-        case 51, 117: return removeSelected() ? nil : event
-        case 123: return nudge(dx: -step, dy: 0) ? nil : event
-        case 124: return nudge(dx: step, dy: 0) ? nil : event
-        case 125: return nudge(dx: 0, dy: -step) ? nil : event
-        case 126: return nudge(dx: 0, dy: step) ? nil : event
-        default: return event
         }
     }
 
@@ -350,14 +322,14 @@ struct CurveEditor: View {
         point.input += dx
         point.output += dy
         var moved = points
-        moved[selected] = clamped(point, at: selected, in: points)
+        moved[selected] = CurveEditing.clamped(point, at: selected, in: points)
         set(moved)
         return true
     }
 
     @discardableResult
     private func removeSelected() -> Bool {
-        guard let selected, selected > 0, selected < points.count - 1 else { return false }
+        guard let selected, CurveEditing.canRemove(at: selected, in: points) else { return false }
         var removed = points
         removed.remove(at: selected)
         self.selected = nil
@@ -376,12 +348,11 @@ struct CurveEditor: View {
         return hypot(center.x - location.x, center.y - location.y)
     }
 
-    /// Four decimals is finer than the lookup can show and keeps sidecars short.
-    static func rounded(_ value: Double) -> Double { (value * 10_000).rounded() / 10_000 }
-
-    private static func rounded(_ point: CurvePoint) -> CurvePoint {
-        CurvePoint(rounded(point.input), rounded(point.output))
-    }
+    #if os(macOS)
+    private static let hint = "Click to add a point and drag to move it. Drag a point off the graph or double-click it to remove it."
+    #else
+    private static let hint = "Touch to add a point and drag to move it. Drag a point off the graph or double-tap it to remove it."
+    #endif
 
     static func title(of channel: ToneCurve.Channel) -> String {
         switch channel {
@@ -416,13 +387,14 @@ struct CurveEditor: View {
 /// The black, midtone and white handles under the curve, as in Photoshop's Levels: drag the
 /// black or white handle inward to clip, and the midtone handle to brighten (left) or darken
 /// (right) the middle tones. The midtone keeps its place between the other two as they move.
-/// Double-clicking a handle puts it back.
+/// Double-clicking or double-tapping a handle puts it back.
 private struct LevelsTrack: View {
     let library: Library
     let channel: ToneCurve.Channel
     let color: Color
     @State private var dragged: Handle?
-    @State private var lastClick: (handle: Handle, time: Date)?
+    @State private var doublePress = DoublePress<Handle>(interval: DoubleClickCheck.touch.interval)
+    @Environment(\.doubleClickCheck) private var doubleClickCheck
     @State private var moved = false
     @State private var width: CGFloat = 0
     @GestureState private var isDragging = false
@@ -430,7 +402,11 @@ private struct LevelsTrack: View {
     private enum Handle: CaseIterable { case black, midtone, white }
 
     static let height: CGFloat = 16
+    #if os(macOS)
     private static let hitDistance: CGFloat = 12
+    #else
+    private static let hitDistance: CGFloat = 20
+    #endif
 
     var body: some View {
         Canvas { context, size in draw(in: &context, size: size) }
@@ -527,9 +503,9 @@ private struct LevelsTrack: View {
     private func ended() {
         guard let handle = dragged else { return }
         dragged = nil
+        doublePress.interval = doubleClickCheck.interval
         if !moved {
-            if let lastClick, lastClick.handle == handle, Date().timeIntervalSince(lastClick.time) < NSEvent.doubleClickInterval {
-                self.lastClick = nil
+            if doublePress.press(handle) {
                 var levels = library.selectedEdit?.recipe.curve[levels: channel] ?? Levels()
                 switch handle {
                 case .black: levels.black = 0
@@ -537,17 +513,17 @@ private struct LevelsTrack: View {
                 case .white: levels.white = 1
                 }
                 set(levels)
-            } else {
-                lastClick = (handle, Date())
             }
+        } else {
+            doublePress.cancel()
         }
         library.isAdjusting = false
     }
 
     private func set(_ levels: Levels) {
         let channel = channel
-        let rounded = Levels(black: CurveEditor.rounded(levels.black), midtone: CurveEditor.rounded(levels.midtone),
-                             white: CurveEditor.rounded(levels.white))
+        let rounded = Levels(black: CurveEditing.rounded(levels.black), midtone: CurveEditing.rounded(levels.midtone),
+                             white: CurveEditing.rounded(levels.white))
         library.setOn(.curve, true)
         library.changeEdit { $0.curve[levels: channel] = rounded }
     }

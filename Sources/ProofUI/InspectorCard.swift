@@ -87,9 +87,15 @@ public struct InspectorCard<Content: View>: View {
             if let reset {
                 // A small bordered button, so it reads as a control beside the title and the switch.
                 Button("Reset", action: reset)
+                    #if os(macOS)
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
                     .controlSize(.small)
+                    #else
+                    // iOS's disabled bordered button is a near-black fill with unreadable text on
+                    // the card's gray; Reset is disabled on most cards, so it must stay legible.
+                    .buttonStyle(ResetButtonStyle())
+                    #endif
                     .fixedSize()
                     .disabled(!canReset)
                     .accessibilityLabel("Reset \(title)")
@@ -182,7 +188,37 @@ public struct InspectorPanel<Content: View>: View {
             }
             .padding(16)
         }
+        #if !os(macOS)
+        // On iPad the panel is one column of several under the toolbar, and only it scrolls, so
+        // the soft edge's blur of the cards showed over this column alone. The cards stop at the
+        // bar instead, as the photo beside them does; the gray behind them still runs under it.
+        .scrollEdgeEffectHidden(true, for: .top)
+        .clipped()
+        #endif
         .background(Color.interfaceBackground.ignoresSafeArea())
+        #if !os(macOS)
+        // iOS draws buttons, menus and the cards' headers in the app's accent color, the
+        // highlight, which is for small marks of state only (decision 0041). White, not
+        // `.primary`: the interface is always dark, and disabled buttons drew `.primary` as a
+        // black fill with unreadable text. The switches set their own.
+        .tint(.white)
+        #endif
     }
 }
 
+#if !os(macOS)
+/// The cards' Reset on iOS: a light capsule, as the bordered style is when enabled, whose text
+/// dims while there is nothing to reset.
+private struct ResetButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline)
+            .foregroundStyle(isEnabled ? .primary : .tertiary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.white.opacity(configuration.isPressed ? 0.24 : 0.12)))
+    }
+}
+#endif
