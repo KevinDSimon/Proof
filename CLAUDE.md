@@ -31,12 +31,11 @@ Proof is a Mac RAW photo editor in Swift, built on Core Image and Metal. These r
 
 ## Mac, iPad and iPhone
 
-Proof is one app on Mac, iPad and iPhone (see `docs/decisions/0048-ipad-iphone-app.md`). New features land on every platform.
+Proof is one app on Mac, iPad and iPhone, but iPad and iPhone serve a mobile workflow: browse, cull, rate, quick edits and sharing now and then, picked back up on the Mac for detailed editing and export (see `docs/decisions/0051-mobile-workflow.md`). The Mac is the complete app.
 
-- Write a feature once. Engine work goes in `ProofKit`; the app model and views both apps can share go in `ProofUI`. Only what really differs by platform lives in an app target: pointer versus touch and Pencil input, menus versus touch-and-hold, the Mac inspector versus the iPhone sheet.
-- When the whole feature fits one small PR, it ships on all platforms in that PR.
-- When it doesn't, split it by layer: one issue for the engine and shared parts plus the first platform, and a paired issue for the other platform's input and layout. File both when the work is planned, in the same milestone, linked to each other. The milestone isn't done until both are closed. Never park the other half in `Later`.
-- Until the iOS app has the area a feature belongs to (for example, its inspector), add the feature to the `Done when` list of the iOS issue for that area instead of filing a new one.
+- Design features for the Mac first. Bring one to iPad and iPhone only when it serves the mobile workflow, and design it for that workflow rather than copying the Mac: fewer choices, sensible defaults, one hand on iPhone, done in a few taps. The issue says whether the feature comes to iOS and, if it does, what the mobile version leaves out.
+- Engine work goes in `ProofKit`, so an edit renders the same on every device even where iOS has no control for it. The app model and views that suit both apps go in `ProofUI`; when iOS needs a simpler design, it gets its own view in its app target over the same model.
+- A feature that fits one small PR ships on every platform it is for in that PR. When the iOS half is larger, file it as its own issue in the same milestone, linked to the Mac issue.
 - A feature meant for one platform only, such as Show in Finder or Pencil hover, says so in its issue.
 
 ## Interface
