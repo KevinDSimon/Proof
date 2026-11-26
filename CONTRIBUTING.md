@@ -21,7 +21,7 @@ swift build
 swift test
 ```
 
-`ProofKit` and `ProofUI` also build for iOS, and CI runs the tests on an iPhone simulator. To do the same locally, name any iPhone simulator that Xcode has installed:
+`ProofKit` and `ProofUI` also build for iOS, and CI runs the tests on an iPhone simulator when a pull request changes `Sources/ProofKit`, `Tests`, `Package.swift` or the CI workflow. The tests cover only `ProofKit`, so a pull request that changes only `ProofUI`, the apps or the docs skips them; the iOS builds still check that it compiles. To run them locally, name any iPhone simulator that Xcode has installed:
 
 ```bash
 xcodebuild test -scheme Proof-Package -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
