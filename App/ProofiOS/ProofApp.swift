@@ -141,7 +141,12 @@ struct ContentView: View {
             // Select All takes the back button's place while selecting, as in Files.
             .navigationBarBackButtonHidden(library.isSelectingPhotos)
             .navigationDestination(isPresented: isEditing) {
-                PhotoView(library: library, renderer: renderer)
+                // iPhone has its own editor of a few tools (decision 0054); iPad keeps the inspector.
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    PhoneEditor(library: library, renderer: renderer)
+                } else {
+                    PhotoView(library: library, renderer: renderer)
+                }
             }
     }
 
@@ -272,9 +277,10 @@ private enum BrowseScreen: Hashable {
     case grid
 }
 
-/// The photo in Edit, centered on the canvas with a margin, with the filmstrip under it. The
-/// adjustments are in the trailing inspector in regular width, and in a sheet below the photo in
-/// compact width, as `.inspector` presents there. Undo and Redo lead the toolbar, as in Photos.
+/// The photo in Edit on iPad, centered on the canvas with a margin, with the filmstrip under it.
+/// The adjustments are in the trailing inspector in regular width, and in a sheet below the photo
+/// in a narrow window, as `.inspector` presents there. Undo and Redo lead the toolbar, as in
+/// Photos. iPhone has `PhoneEditor` instead (decision 0054).
 private struct PhotoView: View {
     @Bindable var library: Library
     let renderer: RAWRenderer?
@@ -496,7 +502,15 @@ private struct PhotoView: View {
     /// JPEG and HEIC photos, reached from the filmstrip, aren't edited until #239.
     private var isEditable: Bool { library.browse.selectedPhoto?.isEditable != false }
 
-    @ViewBuilder private var photo: some View {
+    private var photo: some View { EditPhoto(library: library, renderer: renderer) }
+}
+
+/// The photo in Edit, or why it can't be shown.
+struct EditPhoto: View {
+    let library: Library
+    let renderer: RAWRenderer?
+
+    var body: some View {
         if let renderer, let url = library.selectedPhotoURL {
             if library.browse.selectedPhoto?.isEditable == false {
                 // Reached from the filmstrip; Edit doesn't open them until #239.
@@ -518,7 +532,7 @@ private struct PhotoView: View {
 
 /// The photo being edited, rendered with its current edit. A view of its own so it reads the
 /// edit in its own body, and redraws on every change to it.
-private struct EditCanvas: View {
+struct EditCanvas: View {
     let library: Library
     let url: URL
     let renderer: RAWRenderer

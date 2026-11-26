@@ -7,51 +7,30 @@ import UniformTypeIdentifiers
 /// The arrow keys move through the grid, choosing as they go. The pop-up also adds `.cube` files
 /// and folders, from an Open panel on the Mac and the Files picker on iPad and iPhone, and on the
 /// Mac opens the library in the Finder; files can be dropped on the grid too. Reset removes the
-/// look, so there is no None row.
+/// look, so there is no None row. The iPhone's Looks sheet shows the same controls without the
+/// card, since the sheet has the title and no switch (decision 0054).
 public struct LookSection: View {
     let library: Library
+    let isCard: Bool
     @State private var isImporting = false
     @FocusState private var isGridFocused: Bool
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
-    public init(library: Library) {
+    public init(library: Library, isCard: Bool = true) {
         self.library = library
+        self.isCard = isCard
     }
 
     public var body: some View {
-        InspectorCard(title: "Looks", isOn: library.isOnBinding(.look), canReset: look != nil,
-                      reset: { library.changeEdit { $0.look = nil } }) {
-            if looks.names.isEmpty {
-                // One line of description, so the empty card isn't much taller than the others.
-                ContentUnavailableView {
-                    Label("No Looks", systemImage: "camera.filters")
-                } description: {
-                    Text(Self.emptyDescription)
-                } actions: {
-                    Button("Add Looks…") { isImporting = true }
-                }
-                .dropDestination(for: URL.self) { urls, _ in
-                    importItems(urls)
-                    return true
+        Group {
+            if isCard {
+                InspectorCard(title: "Looks", isOn: library.isOnBinding(.look), canReset: look != nil,
+                              reset: { library.changeEdit { $0.look = nil } }) {
+                    controls
                 }
             } else {
-                // First, so choosing a look or another folder never moves it.
-                AdjustmentSlider(
-                    title: "Strength",
-                    value: Binding(get: { (look?.strength ?? 1) * 100 },
-                                   set: { value in library.changeEdit { $0.look?.strength = value / 100 } }),
-                    range: 0...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
-                    unit: "percent",
-                    reset: { library.changeEdit { $0.look?.strength = 1 } },
-                    isAdjusting: { library.isAdjusting = $0 })
-                    .disabled(look == nil)
-                if let look, !looks.names.contains(look.lut) {
-                    Text("“\(Self.title(of: look.lut))” isn’t in the LUT library, so the photo is shown without it.")
-                        .foregroundStyle(.secondary)
-                }
-                folderMenu
-                grid
+                VStack(alignment: .leading, spacing: 12) { controls }
             }
         }
         .disabled(library.selectedEdit == nil)
@@ -70,6 +49,44 @@ public struct LookSection: View {
         .task(id: previewKey) {
             guard let previewKey else { return }
             looks.makePreviews(of: previewKey.url, recipe: previewKey.recipe)
+        }
+    }
+
+    @ViewBuilder private var controls: some View {
+        if looks.names.isEmpty {
+            // One line of description, so the empty card isn't much taller than the others.
+            ContentUnavailableView {
+                Label("No Looks", systemImage: "camera.filters")
+            } description: {
+                Text(Self.emptyDescription)
+            } actions: {
+                Button("Add Looks…") { isImporting = true }
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                importItems(urls)
+                return true
+            }
+        } else {
+            // First, so choosing a look or another folder never moves it.
+            AdjustmentSlider(
+                title: "Strength",
+                value: Binding(get: { (look?.strength ?? 1) * 100 },
+                               set: { value in
+                                   // The iPhone's sheet has no switch, so a switched-off look comes back on.
+                                   if !library.isOn(.look) { library.setOn(.look, true) }
+                                   library.changeEdit { $0.look?.strength = value / 100 }
+                               }),
+                range: 0...100, fineStep: 1, step: 1, coarseStep: 10, fractionDigits: 0,
+                unit: "percent",
+                reset: { library.changeEdit { $0.look?.strength = 1 } },
+                isAdjusting: { library.isAdjusting = $0 })
+                .disabled(look == nil)
+            if let look, !looks.names.contains(look.lut) {
+                Text("“\(Self.title(of: look.lut))” isn’t in the LUT library, so the photo is shown without it.")
+                    .foregroundStyle(.secondary)
+            }
+            folderMenu
+            grid
         }
     }
 
