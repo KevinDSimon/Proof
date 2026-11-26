@@ -282,7 +282,6 @@ private struct PhotoView: View {
                 } else if library.isMasking {
                     MasksInspector(library: library, renderer: renderer)
                 } else if isEditable {
-                    // Looks come to iOS in #232.
                     AdjustmentsInspector(library: library, renderer: renderer, tools: .all)
                 }
             }

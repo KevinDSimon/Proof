@@ -13,11 +13,6 @@ public struct OnPhotoTools: OptionSet, Sendable {
     public static let all: OnPhotoTools = [.eyedropper, .guides]
 }
 
-public extension AdjustmentsInspector where Looks == EmptyView {
-    init(library: Library, renderer: RAWRenderer?, tools: OnPhotoTools) {
-        self.init(library: library, renderer: renderer, tools: tools) { EmptyView() }
-    }
-}
 
 /// The White Balance card's eyedropper button. While the eyedropper is open it is inverted, as
 /// selection is marked throughout Proof, rather than tinted.
@@ -53,22 +48,19 @@ private struct SelectedHistogram: View {
 /// The adjustments for the photo being edited, in the trailing inspector. It sits on the same
 /// plain color as the photo's canvas, so the panel and the photo read as one surface.
 ///
-/// `looks` is the Looks section, which only the Mac has until #232. `tools` are the tools that
-/// work on the photo itself, which iPad and iPhone get with touch in #231.
-public struct AdjustmentsInspector<Looks: View>: View {
+/// `tools` are the tools that work on the photo itself, which each app draws over it.
+public struct AdjustmentsInspector: View {
     let library: Library
     let renderer: RAWRenderer?
     let tools: OnPhotoTools
-    let looks: Looks
     /// Whether Transform's Aspect, Scale and Offset are shown; `nil` follows whether the photo
     /// uses them. Back to `nil` for each photo.
     @State private var showsMoreTransform: Bool?
 
-    public init(library: Library, renderer: RAWRenderer?, tools: OnPhotoTools, @ViewBuilder looks: () -> Looks) {
+    public init(library: Library, renderer: RAWRenderer?, tools: OnPhotoTools) {
         self.library = library
         self.renderer = renderer
         self.tools = tools
-        self.looks = looks()
     }
 
     public var body: some View {
@@ -82,7 +74,7 @@ public struct AdjustmentsInspector<Looks: View>: View {
             }
             InfoCard(library: library)
             // Looks next, as Lightroom's Profile: a look is where an edit starts (decision 0034).
-            looks
+            LookSection(library: library)
             InspectorCard(title: "White Balance", isOn: library.isOnBinding(.whiteBalance),
                           canReset: basic.whiteBalance != .asShot,
                           reset: { library.changeEdit { $0.basic.resetWhiteBalance() } }) {
