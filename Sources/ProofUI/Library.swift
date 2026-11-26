@@ -724,16 +724,35 @@ public final class Library {
     /// Queues `photos` with the edits Proof has for them now; photos without one in memory are
     /// exported with their sidecar's.
     public func export(_ photos: [PhotoReference], settings: ExportSettings, to folder: URL) {
+        exports.start(exportItems(photos), settings: settings, folder: folder)
+        // The export sheet, if it is open, shows the export's progress instead.
+        photosToExport = []
+    }
+
+    /// iPad and iPhone: queues `photos` for the share sheet, Save to Files or Photos.
+    public func export(_ photos: [PhotoReference], settings: ExportSettings, delivery: ExportQueue.Delivery) {
+        exports.start(exportItems(photos), settings: settings, delivery: delivery)
+        photosToExport = []
+    }
+
+    /// The touch-and-hold menu's Export To on iPad and iPhone: exports `photos` right away with
+    /// the last export's settings.
+    public func export(_ photos: [PhotoReference]? = nil, delivery: ExportQueue.Delivery) {
+        guard !isCropping, !exports.isVisible else { return }
+        let photos = (photos ?? selectedPhotosInOrder).filter(\.isEditable)
+        guard !photos.isEmpty else { return }
+        export(photos, settings: .remembered(), delivery: delivery)
+    }
+
+    /// The photos with the edits Proof has for them now, saved first.
+    private func exportItems(_ photos: [PhotoReference]) -> [ExportQueue.Item] {
         commitTask?.cancel()
         for photo in photos where edits[photo] != nil { commitEdit(of: photo) }
-        let items = photos.compactMap { photo in
+        return photos.compactMap { photo in
             url(ofPhoto: photo.name, in: photo.folder).map {
                 ExportQueue.Item(url: $0, recipe: edits[photo]?.recipe, rating: metadata(of: photo)?.rating ?? 0)
             }
         }
-        exports.start(items, settings: settings, folder: folder)
-        // The export sheet, if it is open, shows the export's progress instead.
-        photosToExport = []
     }
 
     /// File › Export To: exports `photos`, the selected photos by default, to a saved destination

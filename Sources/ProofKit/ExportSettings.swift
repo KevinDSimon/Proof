@@ -125,3 +125,25 @@ public struct ExportSettings: Codable, Equatable, Sendable {
         return CGSize(width: max((photoSize.width * scale).rounded(), 1), height: max((photoSize.height * scale).rounded(), 1))
     }
 }
+
+public extension ExportSettings {
+    /// Whether the size can be exported: any size for Original, and a long edge, and a resolution
+    /// for a print size, above 0.
+    var isValid: Bool {
+        size == .original || (longEdge > 0 && (!unit.isPrintSize || resolution > 0))
+    }
+
+    /// The key the settings of the last export without a destination are kept under, as JSON.
+    static let rememberedKey = "exportSettings"
+
+    /// The settings of the last export without a destination, or the defaults before the first.
+    static func remembered(in defaults: UserDefaults = .standard) -> ExportSettings {
+        defaults.data(forKey: rememberedKey).flatMap { try? JSONDecoder().decode(ExportSettings.self, from: $0) }
+            ?? ExportSettings()
+    }
+
+    /// Keeps these settings for the next export without a destination.
+    func remember(in defaults: UserDefaults = .standard) {
+        defaults.set((try? JSONEncoder().encode(self)) ?? Data(), forKey: Self.rememberedKey)
+    }
+}

@@ -45,6 +45,7 @@ Proof is a RAW photo editor for the Mac. It opens photos where they already are,
 - sRGB, Display P3 or Adobe RGB color
 - Several photos at once in the background, keeping camera details, rating and description
 - Saved export destinations for folders you export to often
+- On iPad and iPhone, to the share sheet, Files or Photos
 
 ## Install
 

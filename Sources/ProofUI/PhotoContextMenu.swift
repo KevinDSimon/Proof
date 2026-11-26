@@ -49,15 +49,16 @@ public struct PhotoContextMenu: View {
         let many = photos.count > 1 ? " \(photos.count) Photos" : ""
         // JPEG and HEIC photos aren't exported or edited until #239.
         let noneEditable = !photos.contains(where: \.isEditable)
-        // Files on iOS have no path worth copying, and the export sheet comes to iOS in #234.
-        #if os(macOS)
         Divider()
+        // Files on iOS have no path worth copying.
+        #if os(macOS)
         Button("Show in Finder") { library.showInFinder(library.urls(of: photos)) }
         Button("Copy Path" + (photos.count > 1 ? "s" : "")) { library.copyPaths(library.urls(of: photos)) }
-        Button(photos.count > 1 ? "Export\(many)…" : "Export…") { library.requestExport(of: photos) }
-            .disabled(library.isCropping || noneEditable)
-        ExportToMenu(library: library, photos: photos, isDisabled: library.isCropping || noneEditable)
         #endif
+        Button(photos.count > 1 ? "Export\(many)…" : "Export…") { library.requestExport(of: photos) }
+            .disabled(library.isCropping || noneEditable || library.exports.isVisible)
+        ExportToMenu(library: library, photos: photos,
+                     isDisabled: library.isCropping || noneEditable || library.exports.isVisible)
         Divider()
         // Always from the photo clicked, the one whose settings are in view.
         Button("Copy Settings…") { library.chooseSettingsToCopy(from: photo) }
