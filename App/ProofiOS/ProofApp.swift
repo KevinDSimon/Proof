@@ -272,13 +272,15 @@ private struct PhotoView: View {
         .background(Color.interfaceBackground.ignoresSafeArea())
         .navigationTitle(library.windowTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(library.isCropping || library.isRemovingSpots)
+        .navigationBarBackButtonHidden(library.isCropping || library.isRemovingSpots || library.isMasking)
         .inspector(isPresented: $library.isInspectorShown) {
             Group {
                 if library.isCropping {
                     CropInspector(library: library, renderer: renderer)
                 } else if library.isRemovingSpots {
                     SpotRemovalInspector(library: library)
+                } else if library.isMasking {
+                    MasksInspector(library: library, renderer: renderer)
                 } else if isEditable {
                     // Looks come to iOS in #232.
                     AdjustmentsInspector(library: library, renderer: renderer, tools: .all)
@@ -294,7 +296,7 @@ private struct PhotoView: View {
             .presentationBackgroundInteraction(.enabled)
             .presentationContentInteraction(.scrolls)
             // The tools' controls are only here, so the sheet stays up until the tool is closed.
-            .interactiveDismissDisabled(library.isCropping || library.isRemovingSpots)
+            .interactiveDismissDisabled(library.isCropping || library.isRemovingSpots || library.isMasking)
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
                 if sizeClass == .compact { sheetTop = top }
             }
@@ -325,6 +327,12 @@ private struct PhotoView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { library.finishRemovingSpots() }
                 }
+            } else if library.isMasking {
+                // As in Spot Removal: each change to a mask is a step.
+                undoItems
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { library.finishMasking() }
+                }
             } else {
                 editToolbar
             }
@@ -354,6 +362,14 @@ private struct PhotoView: View {
             // Size, Feather and Opacity take the adjustments' place, as Crop's controls do.
             Button("Spot Removal", systemImage: "bandage") {
                 library.toggleSpotRemoval()
+                library.isInspectorShown = true
+            }
+            .disabled(!isEditable || library.selectedEdit == nil)
+        }
+        ToolbarItem {
+            // The masks and their adjustments take the adjustments' place, as Crop's controls do.
+            Button("Masks", systemImage: "circle.lefthalf.filled") {
+                library.toggleMasks()
                 library.isInspectorShown = true
             }
             .disabled(!isEditable || library.selectedEdit == nil)
@@ -481,6 +497,8 @@ private struct EditCanvas: View {
                            backdrop: library.canvasColor.color)
             } else if library.isRemovingSpots, let size = library.selectedEdit?.size {
                 SpotOverlay(library: library, renderer: renderer, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
+            } else if library.isMasking, let size = library.selectedEdit?.size {
+                MaskOverlay(library: library, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
             } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
