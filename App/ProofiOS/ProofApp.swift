@@ -272,11 +272,13 @@ private struct PhotoView: View {
         .background(Color.interfaceBackground.ignoresSafeArea())
         .navigationTitle(library.windowTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(library.isCropping)
+        .navigationBarBackButtonHidden(library.isCropping || library.isRemovingSpots)
         .inspector(isPresented: $library.isInspectorShown) {
             Group {
                 if library.isCropping {
                     CropInspector(library: library, renderer: renderer)
+                } else if library.isRemovingSpots {
+                    SpotRemovalInspector(library: library)
                 } else if isEditable {
                     // Looks and the tools drawn on the photo come to iOS in #232 and #231.
                     AdjustmentsInspector(library: library, renderer: renderer, tools: [])
@@ -291,8 +293,8 @@ private struct PhotoView: View {
             .presentationDetents(sheetHeights, selection: $sheetHeight)
             .presentationBackgroundInteraction(.enabled)
             .presentationContentInteraction(.scrolls)
-            // The crop controls are only here, so the sheet stays up until Cancel or Done.
-            .interactiveDismissDisabled(library.isCropping)
+            // The tools' controls are only here, so the sheet stays up until the tool is closed.
+            .interactiveDismissDisabled(library.isCropping || library.isRemovingSpots)
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
                 if sizeClass == .compact { sheetTop = top }
             }
@@ -317,23 +319,41 @@ private struct PhotoView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { library.finishCropping() }
                 }
+            } else if library.isRemovingSpots {
+                // Undo and Redo stay, since each spot is a step; Done leaves the tool.
+                undoItems
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { library.finishRemovingSpots() }
+                }
             } else {
                 editToolbar
             }
         }
     }
 
-    @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
+    @ToolbarContentBuilder private var undoItems: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarLeading) {
             Button("Undo", systemImage: "arrow.uturn.backward") { library.undoEdit() }
                 .disabled(!library.canUndoEdit)
             Button("Redo", systemImage: "arrow.uturn.forward") { library.redoEdit() }
                 .disabled(!library.canRedoEdit)
         }
+    }
+
+    @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
+        undoItems
         ToolbarItem {
             // The crop controls take the adjustments' place, so they come up with the tool.
             Button("Crop", systemImage: "crop") {
                 library.startCropping()
+                library.isInspectorShown = true
+            }
+            .disabled(!isEditable || library.selectedEdit == nil)
+        }
+        ToolbarItem {
+            // Size, Feather and Opacity take the adjustments' place, as Crop's controls do.
+            Button("Spot Removal", systemImage: "bandage") {
+                library.toggleSpotRemoval()
                 library.isInspectorShown = true
             }
             .disabled(!isEditable || library.selectedEdit == nil)
@@ -459,6 +479,8 @@ private struct EditCanvas: View {
             if library.isCropping, let frame = library.selectedCropFrame {
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect,
                            backdrop: library.canvasColor.color)
+            } else if library.isRemovingSpots, let size = library.selectedEdit?.size {
+                SpotOverlay(library: library, renderer: renderer, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
             }
         }
         .accessibilityElement()
