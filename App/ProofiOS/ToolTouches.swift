@@ -68,13 +68,22 @@ final class ToolTouchView: UIView, UIGestureRecognizerDelegate {
         onTouch(.ended(location, location))
     }
 
+    /// Where the latest touch landed. The drag begins only once the touch has moved, and by then
+    /// its translation no longer reaches back to where it landed, so a press beside a small
+    /// target, such as a mask's handle, would be taken from a point past its reach.
+    private var landed: CGPoint?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        if let touch = touches.first, (event?.allTouches?.count ?? 1) == 1 { landed = touch.location(in: self) }
+    }
+
     @objc private func dragged(_ drag: UIPanGestureRecognizer) {
         let location = drag.location(in: self)
         switch drag.state {
         case .began:
-            // The drag begins once the touch has moved a little, so it landed back where it started.
             let moved = drag.translation(in: self)
-            let start = CGPoint(x: location.x - moved.x, y: location.y - moved.y)
+            let start = landed ?? CGPoint(x: location.x - moved.x, y: location.y - moved.y)
             dragStart = start
             onTouch(.moved(start, location))
         case .changed:
