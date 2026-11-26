@@ -51,6 +51,9 @@ struct CameraProfileTests {
         #expect(CameraProfiles.newestDNGDecoder(in: ["6.dng", "7", "7.dng", "8", "8.dng", "9.dng"]) == "9.dng")
         #expect(CameraProfiles.newestDNGDecoder(in: ["9.dng", "10.dng", "8"]) == "10.dng")
         #expect(CameraProfiles.newestDNGDecoder(in: ["7", "8"]) == nil)
+        // A version that gives no image, as 9.dng does in the iOS simulator for the M11 (#236), is skipped.
+        #expect(CameraProfiles.newestDNGDecoder(in: ["7.dng", "8", "8.dng", "9.dng"]) { $0 != "9.dng" } == "8.dng")
+        #expect(CameraProfiles.newestDNGDecoder(in: ["9.dng"]) { _ in false } == nil)
     }
 
     @Test("Labels name whose profile it is")

@@ -50,6 +50,11 @@ struct PhotoCanvas: UIViewRepresentable {
         return view
     }
 
+    /// Leaving Edit frees the photo's cached decode, which browsing doesn't use (#236).
+    static func dismantleUIView(_ view: CanvasView, coordinator: PhotoCanvasCoordinator) {
+        coordinator.releaseMemory()
+    }
+
     func updateUIView(_ view: CanvasView, context: Context) {
         view.actions = actions
         context.coordinator.onError = onError
@@ -107,6 +112,15 @@ final class CanvasView: MTKView, MTKViewDelegate, CanvasSurface, UIGestureRecogn
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
+        // A 60 MP photo's cached decode takes about a gigabyte. It is freed when memory runs low,
+        // and in the background, where iOS ends the apps using the most memory first (#236).
+        for name in [UIApplication.didReceiveMemoryWarningNotification, UIApplication.didEnterBackgroundNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(releaseMemory), name: name, object: nil)
+        }
+    }
+
+    @objc private func releaseMemory() {
+        coordinator?.releaseMemory()
     }
 
     required init(coder: NSCoder) {
