@@ -32,7 +32,7 @@ struct PhoneEditor: View {
                             .equatable()
                             .frame(width: 120)
                             .padding(10)
-                            .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                            .background(Color.toolPanel, in: .rect(cornerRadius: 14))
                             .padding(12)
                             .transition(.opacity)
                     }
@@ -53,9 +53,9 @@ struct PhoneEditor: View {
         .navigationBarBackButtonHidden(isInTool)
         .sheet(isPresented: isSheetUp) {
             sheet
-                // Opaque, in the Mac and iPad adjustment panel's color rather than glass, so the
-                // controls read as that panel moved below the photo.
-                .presentationBackground(Color.interfaceBackground)
+                // Opaque rather than glass. The tool sheets are a step lighter than the canvas; the
+                // touch tools' panels keep the iPad inspector's colors, cards on the canvas gray.
+                .presentationBackground(isInTool ? Color.interfaceBackground : Color.toolPanel)
                 .presentationDetents(sheetHeights, selection: $sheetHeight)
                 .presentationBackgroundInteraction(.enabled)
                 .presentationContentInteraction(.scrolls)
@@ -242,7 +242,7 @@ struct PhoneEditor: View {
 }
 
 /// One tool's sheet: its sliders, or the LUT library for Looks, under the tool's name with Reset
-/// and Close, on the adjustment panel's color.
+/// and Close, on the tool panel's gray.
 private struct ToolSheet: View {
     let library: Library
     let tool: PhoneTool
@@ -262,7 +262,7 @@ private struct ToolSheet: View {
                 .padding(.bottom, 16)
                 .disabled(library.selectedEdit == nil)
             }
-            .background(Color.interfaceBackground.ignoresSafeArea())
+            .background(Color.toolPanel.ignoresSafeArea())
             .navigationTitle(tool.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -290,6 +290,13 @@ private struct ToolSheet: View {
             if tool == .looks { recipe.look = nil } else { tool.reset(in: &recipe) }
         }
     }
+}
+
+private extension Color {
+    /// The tool sheets' and histogram's gray: the system's tertiary background, which in the
+    /// app's dark interface is about 18% gray, a step lighter than the 13% canvas and close to
+    /// the inspector cards' gray on the Mac and iPad.
+    static let toolPanel = Color(uiColor: .tertiarySystemBackground)
 }
 
 private extension PresentationDetent {
