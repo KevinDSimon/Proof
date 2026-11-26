@@ -117,6 +117,13 @@ public actor RAWRenderer {
         openURL = url
     }
 
+    /// Frees the open photo's cached decode and intermediates, keeping the photo open. The next
+    /// render decodes it again. iPad and iPhone call it when the system warns that memory is low
+    /// and when the app goes to the background (#236).
+    public func clearCaches() {
+        context.clearCaches()
+    }
+
     /// The open photo's filter, set to decode with the profile `recipe` asks for, with the camera's
     /// white balance, detail and lens as that profile reads them. Set before the scale is worked
     /// out, since the embedded profile's frame can be a few pixels larger.
@@ -533,6 +540,23 @@ public actor RAWRenderer {
     /// decodes the file on its own, without caching, and leaves the open photo alone. The image
     /// has no alpha channel, and 16 bits per channel for TIFF.
     public func export(_ url: URL, recipe: EditRecipe, lut: PreparedLUT? = nil, settings: ExportSettings) throws -> CGImage {
+        try export(url, recipe: recipe, lut: lut, settings: settings, maxTextureSide: Self.maxTextureSide)
+    }
+
+    /// The widest or tallest texture the device makes: 16384 pixels on the GPUs Proof supports,
+    /// and 8192 in the iOS simulator, narrower than a 60 MP photo.
+    static var maxTextureSide: Int {
+        #if targetEnvironment(simulator)
+        8192
+        #else
+        16384
+        #endif
+    }
+
+    /// `export`, rendering in tiles of at most `maxTextureSide` on a side. Tests pass a small side
+    /// to check that tiles give the same pixels as one texture.
+    func export(_ url: URL, recipe: EditRecipe, lut: PreparedLUT?, settings: ExportSettings,
+                maxTextureSide: Int) throws -> CGImage {
         guard let filter = CIRAWFilter(imageURL: url), filter.nativeSize != .zero else {
             throw RAWRendererError.unsupportedFile(url)
         }
@@ -563,6 +587,10 @@ public actor RAWRenderer {
                     kCIInputAspectRatioKey: (size.width / decoded.width) / (size.height / decoded.height),
                 ])
         }
+        // The intermediates a full-size render caches take several times the photo's own size.
+        // Nothing reuses them, so they are freed with the render rather than kept until the
+        // context's cache fills (#236).
+        defer { exportContext.clearCaches() }
         let bounds = CGRect(origin: .zero, size: size)
         let is16Bit = settings.format.bitsPerChannel == 16
         let colorSpace = settings.colorSpace.cgColorSpace
@@ -575,19 +603,33 @@ public actor RAWRenderer {
         // Rendered into one texture the size of the export, not straight into the bitmap: into a
         // bitmap Core Image works in tiles and, for a full edit, builds the whole-photo maps that
         // clarity, dehaze and highlights and shadows use again for each tile, which took minutes (#196).
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: is16Bit ? .rgba16Unorm : .rgba8Unorm, width: Int(size.width), height: Int(size.height),
-            mipmapped: false)
-        descriptor.usage = [.shaderWrite, .renderTarget]
-        descriptor.storageMode = .shared
-        guard let texture = device.makeTexture(descriptor: descriptor) else { throw RAWRendererError.renderFailed }
-        let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: nil)
-        destination.colorSpace = colorSpace
-        // Flipped, so row 0 holds the top of the photo, as a CGImage does.
-        destination.isFlipped = true
-        try exportContext.startTask(toRender: image.cropped(to: bounds), to: destination).waitUntilCompleted()
-        texture.getBytes(data, bytesPerRow: bitmap.bytesPerRow,
-                         from: MTLRegionMake2D(0, 0, Int(size.width), Int(size.height)), mipmapLevel: 0)
+        // A photo wider or taller than the device's largest texture, as a 60 MP photo is in the
+        // iOS simulator, renders in as few tiles as fit; the context's cache keeps those maps
+        // between them (#236).
+        let width = Int(size.width), height = Int(size.height)
+        let bytesPerPixel = is16Bit ? 8 : 4
+        for top in stride(from: 0, to: height, by: maxTextureSide) {
+            for left in stride(from: 0, to: width, by: maxTextureSide) {
+                let tileWidth = min(maxTextureSide, width - left), tileHeight = min(maxTextureSide, height - top)
+                let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                    pixelFormat: is16Bit ? .rgba16Unorm : .rgba8Unorm, width: tileWidth, height: tileHeight,
+                    mipmapped: false)
+                descriptor.usage = [.shaderWrite, .renderTarget]
+                descriptor.storageMode = .shared
+                guard let texture = device.makeTexture(descriptor: descriptor) else { throw RAWRendererError.renderFailed }
+                let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: nil)
+                destination.colorSpace = colorSpace
+                // Flipped, so row 0 holds the top of the tile, as a CGImage does. Core Image's y
+                // axis points up, so the tile's bottom edge is measured from the photo's bottom.
+                destination.isFlipped = true
+                let tile = CGRect(x: left, y: height - top - tileHeight, width: tileWidth, height: tileHeight)
+                let shifted = image.cropped(to: bounds.intersection(tile))
+                    .transformed(by: CGAffineTransform(translationX: -tile.minX, y: -tile.minY))
+                try exportContext.startTask(toRender: shifted, to: destination).waitUntilCompleted()
+                texture.getBytes(data + top * bitmap.bytesPerRow + left * bytesPerPixel, bytesPerRow: bitmap.bytesPerRow,
+                                 from: MTLRegionMake2D(0, 0, tileWidth, tileHeight), mipmapLevel: 0)
+            }
+        }
         guard let result = bitmap.makeImage() else { throw RAWRendererError.renderFailed }
         return result
     }
@@ -700,7 +742,12 @@ public actor RAWRenderer {
                             width: photo.region.width * frame.width, height: photo.region.height * frame.height)
         let scaleX = target.width / image.extent.width
         let scaleY = target.height / image.extent.height
-        let sampled = scaleX > 1.01 && photo.region != CGRect(x: 0, y: 0, width: 1, height: 1) ? image.samplingNearest() : image
+        // A region decoded below full resolution, as iPhone limits zoom (decision 0053), is
+        // enlarged smoothly; nearest pixels would show its pixels as blocks no photo has.
+        let isFullResolution = photo.photoSize.width > 0
+            && image.extent.width >= photo.region.width * photo.photoSize.width * 0.99
+        let sampled = scaleX > 1.01 && isFullResolution && photo.region != CGRect(x: 0, y: 0, width: 1, height: 1)
+            ? image.samplingNearest() : image
         return sampled.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY)
             .concatenating(CGAffineTransform(translationX: target.minX, y: bounds.height - target.maxY)))
     }

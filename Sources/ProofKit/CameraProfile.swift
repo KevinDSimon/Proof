@@ -65,7 +65,14 @@ public struct CameraProfiles: Equatable, Sendable {
         let dng = properties[kCGImagePropertyDNGDictionary as String] as? [String: Any]
         isEmbeddedOnly = filter.decoderVersion.rawValue.hasSuffix(".dng")
         if !isEmbeddedOnly, let dng, Self.isAppliedInFull(dng) {
-            embeddedDecoder = Self.newestDNGDecoder(in: filter.supportedDecoderVersions.map(\.rawValue))
+            // In the iOS 27 simulator, 9.dng gives no image for the Leica M11 sample, which made
+            // every render with the embedded profile fail there (#236); the newest that does is used.
+            let original = filter.decoderVersion
+            embeddedDecoder = Self.newestDNGDecoder(in: filter.supportedDecoderVersions.map(\.rawValue)) { version in
+                filter.decoderVersion = CIRAWDecoderVersion(rawValue: version)
+                return filter.outputImage != nil
+            }
+            filter.decoderVersion = original
         }
         guard readingDefaults else { return }
         let original = filter.decoderVersion
@@ -130,10 +137,11 @@ public struct CameraProfiles: Equatable, Sendable {
         }
     }
 
-    /// The newest `.dng` entry of `versions`, such as "9.dng".
-    static func newestDNGDecoder(in versions: [String]) -> String? {
+    /// The newest `.dng` entry of `versions`, such as "9.dng", for which `decodes` is true.
+    static func newestDNGDecoder(in versions: [String], decodes: (String) -> Bool = { _ in true }) -> String? {
         versions.filter { $0.hasSuffix(".dng") }
-            .max { (Int($0.prefix { $0.isNumber }) ?? 0) < (Int($1.prefix { $0.isNumber }) ?? 0) }
+            .sorted { (Int($0.prefix { $0.isNumber }) ?? 0) > (Int($1.prefix { $0.isNumber }) ?? 0) }
+            .first(where: decodes)
     }
 
     /// The pixel size, before orientation, that the embedded profile's decoder gives the DNG

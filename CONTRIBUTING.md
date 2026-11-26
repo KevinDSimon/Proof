@@ -54,6 +54,20 @@ The run takes about 9 minutes, most of it the two export timings. Run it before 
 
 It isn't needed for interface-only changes, recipe or sidecar changes that don't affect rendering, or docs. For those, `swift test` and the run with `PROOF_SAMPLE_DNG` are enough. Close other apps that use the GPU while it runs, since they slow the renders and can make a time check fail. Say in the pull request whether the timing run was made and what it showed.
 
+To measure the peak memory and times of opening, editing, zooming and exporting the photo at an iPhone canvas's size (#236), set `PROOF_MEMORY`. On the Mac, where GPU memory counts toward the footprint:
+
+```bash
+PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG PROOF_MEMORY=1 swift test --no-parallel --filter MemoryTests
+```
+
+In an iPhone simulator, with the variables passed through `TEST_RUNNER_`. The simulator runs the GPU in software and leaves GPU memory out of the footprint, so its times are slower than a device's and its memory lower:
+
+```bash
+TEST_RUNNER_PROOF_SAMPLE_DNG=~/Pictures/L1000725.DNG TEST_RUNNER_PROOF_MEMORY=1 xcodebuild test -scheme Proof-Package -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -only-testing:ProofKitTests/MemoryTests
+```
+
+Each test measures from a new renderer, but memory a test frees isn't always returned to the system before the next, so run one test at a time (`-only-testing:ProofKitTests/MemoryTests/export()`, or `--filter` with its name) for numbers to compare.
+
 To compare Highlights and Shadows with Core Image's `CIHighlightShadowAdjust`, point `PROOF_COMPARE_DIR` at a folder of RAW photos. The test writes one strip per photo and method to `PROOF_COMPARE_OUTPUT`, or to a temporary folder:
 
 ```bash

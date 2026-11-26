@@ -61,6 +61,9 @@ public final class PhotoCanvasCoordinator {
     private var unmeasured: (photo: RenderedPhoto, url: URL)?
     private var isMeasuring = false
     private var resizeTask: Task<Void, Never>?
+    /// How much memory zoomed renders may use, read when a photo opens and after a memory
+    /// warning, not on every request, so that the scale it allows stays put while zoomed.
+    private var budget = RenderBudget.current()
 
     private var background = CIColor(red: 0, green: 0, blue: 0, colorSpace: RAWRenderer.colorSpace)!
     private var backdrop: CanvasColor?
@@ -99,6 +102,7 @@ public final class PhotoCanvasCoordinator {
     public func show(_ url: URL, recipe: EditRecipe) {
         if url != self.url {
             self.url = url
+            budget = .current()
             photo = nil
             detail = nil
             renderedDetail = nil
@@ -136,6 +140,16 @@ public final class PhotoCanvasCoordinator {
                 onWaiting(true)
             }
         }
+    }
+
+    /// Frees what the renderer keeps of the open photo and reads the memory budget again. iPad
+    /// and iPhone call it when the system warns that memory is low and when the app goes to the
+    /// background, where iOS ends the apps using the most memory first (#236). The photo stays
+    /// on screen, with the zoomed region already rendered, which is only the view's size; the
+    /// next render decodes the photo again.
+    public func releaseMemory() {
+        budget = .current()
+        Task { [renderer] in await renderer.clearCaches() }
     }
 
     public func drawableSizeWillChange(_ size: CGSize) {
@@ -180,7 +194,9 @@ public final class PhotoCanvasCoordinator {
     private var latestDetail: DetailRequest? {
         guard let url, let photo, let rendered, rendered.url == url, rendered.recipe.crop == recipe.crop,
               size.width > 0, photo.photoSize.width > 0 else { return nil }
-        let scale = min(viewport.effectiveScale(photo: photo.photoSize, view: size), 1)
+        // On iPhone and iPad, at most the scale whose whole-photo decode fits the memory budget;
+        // past it the region is enlarged (decision 0053).
+        let scale = min(viewport.effectiveScale(photo: photo.photoSize, view: size), budget.maxScale(photoSize: photo.photoSize))
         let screenScale = Double(photo.texture.width) / photo.photoSize.width
         guard !viewport.isFit, scale > screenScale * 1.02 else { return nil }
         let visible = viewport.visibleRegion(photo: photo.photoSize, view: size)

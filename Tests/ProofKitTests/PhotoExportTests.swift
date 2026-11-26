@@ -146,6 +146,28 @@ struct PhotoExportTests {
         #expect(difference < 0.02, "mean difference \(difference)")
     }
 
+    /// A photo wider than the device's largest texture, as a 60 MP photo is in the iOS
+    /// simulator, exports in tiles (#236). Clarity, dehaze and highlights and shadows build maps
+    /// of the whole photo, which every tile must share.
+    @Test("An export rendered in tiles has the pixels of one rendered whole", .enabled(if: sampleDNG != nil))
+    func tiledExportMatchesWhole() async throws {
+        let url = try #require(sampleDNG)
+        var recipe = EditRecipe.exposure(0.3)
+        recipe.basic.clarity = 40
+        recipe.basic.dehaze = 20
+        recipe.basic.highlights = -50
+        recipe.crop = Crop(x: 0.05, y: 0.1, width: 0.8, height: 0.7)
+        for format in [ExportSettings.Format.jpeg, .tiff] {
+            let settings = ExportSettings(format: format, size: .longEdge, longEdge: 1200)
+            let whole = try await RAWRenderer().export(url, recipe: recipe, lut: nil, settings: settings, maxTextureSide: 16384)
+            let tiled = try await RAWRenderer().export(url, recipe: recipe, lut: nil, settings: settings, maxTextureSide: 500)
+            #expect(tiled.width == whole.width && tiled.height == whole.height)
+            // Along the seams a value can round a level or two the other way: one level in 8 bits,
+            // two of 65,535 in 16 (measured on the sample photo).
+            #expect(try largestDifference(tiled, whole) <= (format.bitsPerChannel == 16 ? 4 : 1), "\(format.title)")
+        }
+    }
+
     @Test("A TIFF export has 16 bits per channel", .enabled(if: sampleDNG != nil))
     func sixteenBitTIFF() async throws {
         let renderer = try RAWRenderer()
@@ -153,6 +175,19 @@ struct PhotoExportTests {
                                               settings: ExportSettings(format: .tiff, size: .longEdge, longEdge: 300))
         #expect(image.bitsPerComponent == 16)
         #expect(image.colorSpace?.name == CGColorSpace.sRGB)
+    }
+
+    /// The largest difference between two images' channel values, in levels of their own bit
+    /// depth. Both must have the same size and layout.
+    private func largestDifference(_ a: CGImage, _ b: CGImage) throws -> Int {
+        let da = try #require(a.dataProvider?.data as Data?), db = try #require(b.dataProvider?.data as Data?)
+        #expect(da.count == db.count && a.bitsPerComponent == b.bitsPerComponent)
+        if a.bitsPerComponent == 16 {
+            // Little-endian, as `export` writes 16-bit images.
+            func values(_ data: Data) -> [UInt16] { data.withUnsafeBytes { Array($0.bindMemory(to: UInt16.self)) } }
+            return zip(values(da), values(db)).map { abs(Int($0) - Int($1)) }.max() ?? 0
+        }
+        return zip(da, db).map { abs(Int($0) - Int($1)) }.max() ?? 0
     }
 
     /// The mean absolute difference of two images' channels, from 0 to 1, drawn at the smaller

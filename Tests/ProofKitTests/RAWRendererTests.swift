@@ -113,6 +113,20 @@ struct RAWRendererTests {
         #expect(actual == expected)
     }
 
+    /// iPad and iPhone free the cached decode when memory runs low (#236); the photo stays open
+    /// and renders the same.
+    @Test("After its caches are cleared, the open photo renders the same pixels", .enabled(if: sampleDNG != nil))
+    func clearedCachesRenderTheSame() async throws {
+        let url = try #require(sampleDNG)
+        let target = CGSize(width: 400, height: 400)
+        let renderer = try RAWRenderer()
+        try await renderer.open(url)
+        let before = try pixels(await renderer.render(fitting: target, recipe: .exposure(1)))
+        await renderer.clearCaches()
+        let after = try pixels(await renderer.render(fitting: target, recipe: .exposure(1)))
+        #expect(after == before)
+    }
+
     @Test("A higher temperature warms a real RAW photo and a positive tint adds magenta", .enabled(if: sampleDNG != nil))
     func whiteBalanceShiftsColor() async throws {
         let url = try #require(sampleDNG)
