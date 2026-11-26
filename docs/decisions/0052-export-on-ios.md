@@ -1,4 +1,4 @@
-# 0051. Export on iPad and iPhone
+# 0052. Export on iPad and iPhone
 
 Date: 2026-11-26
 Status: Accepted. Extends 0031 and 0048.
