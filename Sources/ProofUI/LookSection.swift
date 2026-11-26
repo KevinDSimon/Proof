@@ -1,21 +1,25 @@
-import AppKit
 import ProofKit
-import ProofUI
 import SwiftUI
 import UniformTypeIdentifiers
 
 /// The Looks section of the inspector: the strength of the chosen look, a pop-up of the library's
 /// folders, and the shown folder's LUTs as a grid of small previews of the photo through each.
 /// The arrow keys move through the grid, choosing as they go. The pop-up also adds `.cube` files
-/// and folders, and opens the library in the Finder; files can be dropped on the grid too. Reset removes the look, so there is no None row.
-struct LookSection: View {
+/// and folders, from an Open panel on the Mac and the Files picker on iPad and iPhone, and on the
+/// Mac opens the library in the Finder; files can be dropped on the grid too. Reset removes the
+/// look, so there is no None row.
+public struct LookSection: View {
     let library: Library
     @State private var isImporting = false
     @FocusState private var isGridFocused: Bool
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
-    var body: some View {
+    public init(library: Library) {
+        self.library = library
+    }
+
+    public var body: some View {
         InspectorCard(title: "Looks", isOn: library.isOnBinding(.look), canReset: look != nil,
                       reset: { library.changeEdit { $0.look = nil } }) {
             if looks.names.isEmpty {
@@ -23,7 +27,7 @@ struct LookSection: View {
                 ContentUnavailableView {
                     Label("No Looks", systemImage: "camera.filters")
                 } description: {
-                    Text("Drag .cube files or folders here.")
+                    Text(Self.emptyDescription)
                 } actions: {
                     Button("Add Looks…") { isImporting = true }
                 }
@@ -72,14 +76,27 @@ struct LookSection: View {
     /// The folder pop-up, titled with the chosen look, or with the shown folder when no look in
     /// it is chosen. A folder that holds other folders opens as a submenu.
     private var folderMenu: some View {
-        MenuPopUp(title: menuTitle, items: folderItems(under: "") + [
-            .separator,
-            .action("Add Looks…") { isImporting = true },
-            .action("Reveal in Finder") { looks.revealInFinder() },
-        ])
+        PopUpMenu(title: menuTitle, items: folderItems(under: "") + [.separator] + libraryItems)
         .frame(maxWidth: .infinity)
         .accessibilityLabel("Looks folder")
     }
+
+    /// The library's own files are only in the Finder: on iPad and iPhone they're in Proof's
+    /// container, which Files doesn't show.
+    private var libraryItems: [PopUpMenu.Item] {
+        #if os(macOS)
+        [.action("Add Looks…") { isImporting = true },
+         .action("Reveal in Finder") { looks.revealInFinder() }]
+        #else
+        [.action("Add Looks…") { isImporting = true }]
+        #endif
+    }
+
+    #if os(macOS)
+    private static let emptyDescription = "Drag .cube files or folders here."
+    #else
+    private static let emptyDescription = "Add .cube files or folders from Files."
+    #endif
 
     private var menuTitle: String {
         if let look, looks.shownNames.contains(look.lut) { return Self.title(of: look.lut) }
@@ -88,10 +105,10 @@ struct LookSection: View {
 
     /// Menu items for the folders directly below `parent`, and for `parent` itself when it holds
     /// LUTs and has subfolders. LUTs outside any folder come last, as Ungrouped.
-    private func folderItems(under parent: String) -> [MenuPopUp.Item] {
+    private func folderItems(under parent: String) -> [PopUpMenu.Item] {
         let folders = looks.folders
-        let children = Self.childFolders(of: parent, in: folders)
-        var items: [MenuPopUp.Item] = children.map { child in
+        let children = LUTLibrary.childFolders(of: parent, in: folders)
+        var items: [PopUpMenu.Item] = children.map { child in
             let grandchildren = folderItems(under: child)
             guard !grandchildren.isEmpty else { return folderItem(child) }
             return .submenu(Self.folderTitle(child),
@@ -105,7 +122,7 @@ struct LookSection: View {
     }
 
     /// A menu item that shows `folder`, checked while it is shown.
-    private func folderItem(_ folder: String) -> MenuPopUp.Item {
+    private func folderItem(_ folder: String) -> PopUpMenu.Item {
         .action(Self.folderTitle(folder), isChecked: looks.shownFolder == folder) { looks.shownFolder = folder }
     }
 
@@ -197,20 +214,6 @@ struct LookSection: View {
     private func showChosenLook() {
         guard let path = look?.lut, looks.names.contains(path) else { return }
         looks.show(folderOf: path)
-    }
-
-    /// The folders, among `folders` and the folders around them, directly below `parent`.
-    private static func childFolders(of parent: String, in folders: [String]) -> [String] {
-        var children: [String] = []
-        for folder in folders where !folder.isEmpty {
-            let components = folder.split(separator: "/").map(String.init)
-            let depth = parent.isEmpty ? 0 : parent.split(separator: "/").count
-            guard components.count > depth,
-                  parent.isEmpty || folder.hasPrefix(parent + "/") else { continue }
-            let child = components[...depth].joined(separator: "/")
-            if !children.contains(child) { children.append(child) }
-        }
-        return children
     }
 
     private var previewKey: PreviewKey? {

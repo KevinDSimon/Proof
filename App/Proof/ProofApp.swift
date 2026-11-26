@@ -303,9 +303,7 @@ struct ContentView: View {
                     } else if library.isMasking {
                         MasksInspector(library: library, renderer: renderer)
                     } else {
-                        AdjustmentsInspector(library: library, renderer: renderer, tools: .all) {
-                            LookSection(library: library)
-                        }
+                        AdjustmentsInspector(library: library, renderer: renderer, tools: .all)
                     }
                 }
                 // Wide enough at its narrowest for the longest card header, "Lens Corrections" beside Reset and its switch.

@@ -145,6 +145,26 @@ struct LUTLibraryTests {
         #expect(LUTLibrary.folder(of: "Agfa.cube") == "")
     }
 
+    @Test("The folder menu lists the folders below each folder, including ones that hold only folders")
+    func childFolders() {
+        let folders = LUTLibrary.folders(in: ["Film/Kodak/Portra.cube", "Film/Fuji/Velvia.cube",
+                                              "Film/Kodak/Old/Ektachrome.cube", "Teal.cube", "Mono/Grey.cube"])
+        #expect(folders == ["Film/Kodak", "Film/Fuji", "Film/Kodak/Old", "", "Mono"])
+        #expect(LUTLibrary.childFolders(of: "", in: folders) == ["Film", "Mono"])
+        #expect(LUTLibrary.childFolders(of: "Film", in: folders) == ["Film/Kodak", "Film/Fuji"])
+        #expect(LUTLibrary.childFolders(of: "Film/Kodak", in: folders) == ["Film/Kodak/Old"])
+        #expect(LUTLibrary.childFolders(of: "Mono", in: folders).isEmpty)
+        // A folder whose name only starts with another's isn't below it.
+        #expect(LUTLibrary.childFolders(of: "Fil", in: folders).isEmpty)
+    }
+
+    @Test("A file is read through a file coordinator, and a missing one can't be read")
+    func coordinatedRead() throws {
+        let url = try makeFile("Portra.cube")
+        #expect(LUTLibrary.coordinatedData(at: url) == Data(Self.cubeText().utf8))
+        #expect(LUTLibrary.coordinatedData(at: root.appendingPathComponent("Missing.cube")) == nil)
+    }
+
     @Test("A look saved with a file name only, before folders, still loads; paths can't leave the library")
     func pathsAndPlainNames() async throws {
         _ = try await library.importFile(at: try makeFile("Portra.cube"))
