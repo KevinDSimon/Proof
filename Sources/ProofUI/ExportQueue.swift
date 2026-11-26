@@ -11,6 +11,17 @@ public final class ExportQueue {
     /// The destination last exported to, as a UUID string; empty for Choose Folder.
     public static let destinationKey = "exportDestination"
 
+    /// Where an export goes on iPad and iPhone, chosen with the settings rather than as a folder
+    /// beforehand (decision 0048). The photos render into an `ExportStaging` folder first.
+    public enum Delivery: Sendable {
+        /// The share sheet, once every photo is ready.
+        case share
+        /// Save to Files, once every photo is ready.
+        case files
+        /// The photo library, each photo as soon as it is ready.
+        case photos
+    }
+
     /// A photo as it was when Export was clicked.
     public struct Item: Sendable {
         public let url: URL
@@ -41,6 +52,12 @@ public final class ExportQueue {
     public private(set) var exported: [URL] = []
     public private(set) var failures: [Failure] = []
     public private(set) var wasCancelled = false
+    /// Where this export goes on iPad and iPhone; `nil` for a folder.
+    public private(set) var delivery: Delivery?
+    /// The share sheet or Save to Files has taken the exported photos.
+    public var isDelivered = false
+    /// Holds the next photo back, as while the iOS app is in the background.
+    public let pause = PauseGate()
 
     private var jobs: [Job] = []
     private var task: Task<Void, Never>?
@@ -48,6 +65,7 @@ public final class ExportQueue {
     private var reading = 0
     /// Folders chosen in the open panel, whose access lasts until the queue is cleared.
     private var accessedFolders: Set<URL> = []
+    private var staging: ExportStaging?
     private let renderer = try? RAWRenderer()
 
     public var isRunning: Bool { task != nil || reading > 0 }
@@ -62,8 +80,30 @@ public final class ExportQueue {
     public func start(_ items: [Item], settings: ExportSettings, folder: URL) {
         guard !items.isEmpty else { return }
         if !isRunning { clear() }
-        wasCancelled = false
         if accessedFolders.insert(folder).inserted { _ = folder.startAccessingSecurityScopedResource() }
+        queue(items, settings: settings, folder: folder)
+    }
+
+    /// Queues `items` for `delivery` on iPad and iPhone, rendered into a temporary folder that
+    /// `clear()` removes. One delivery at a time: the export sheet stays up until it ends.
+    public func start(_ items: [Item], settings: ExportSettings, delivery: Delivery) {
+        guard !items.isEmpty, !isRunning else { return }
+        clear()
+        ExportStaging.removeLeftovers()
+        do {
+            staging = try ExportStaging()
+        } catch {
+            failures = items.map { Failure(name: $0.url.lastPathComponent, reason: error.localizedDescription) }
+            total = items.count
+            finished = items.count
+            return
+        }
+        self.delivery = delivery
+        queue(items, settings: settings, folder: staging!.folder)
+    }
+
+    private func queue(_ items: [Item], settings: ExportSettings, folder: URL) {
+        wasCancelled = false
         total += items.count
         reading += 1
         Task {
@@ -97,6 +137,7 @@ public final class ExportQueue {
         guard isRunning else { return }
         wasCancelled = true
         jobs = []
+        pause.release()
     }
 
     /// Dismisses the summary and ends access to the folders exported to.
@@ -108,18 +149,30 @@ public final class ExportQueue {
         exported = []
         failures = []
         wasCancelled = false
+        delivery = nil
+        isDelivered = false
+        staging?.remove()
+        staging = nil
         for folder in accessedFolders { folder.stopAccessingSecurityScopedResource() }
         accessedFolders = []
     }
 
     private func run() async {
         guard let renderer else {
-            failures += jobs.map { Failure(name: $0.url.lastPathComponent, reason: "Proof needs a Mac with a Metal GPU to export.") }
+            failures += jobs.map { Failure(name: $0.url.lastPathComponent, reason: "Proof needs a Metal GPU to export.") }
+            finished += jobs.count
+            jobs = []
+            return
+        }
+        if delivery == .photos, await !PhotoLibrary.requestAddAccess() {
+            failures += jobs.map { Failure(name: $0.url.lastPathComponent, reason: PhotoLibrary.deniedReason) }
             finished += jobs.count
             jobs = []
             return
         }
         while !jobs.isEmpty, !wasCancelled {
+            await pause.waitWhilePaused()
+            guard !jobs.isEmpty, !wasCancelled else { break }
             let job = jobs.removeFirst()
             current = job.url.lastPathComponent
             // A photo in iCloud is downloaded first, one at a time, as the queue goes (decision 0050).
@@ -128,6 +181,9 @@ public final class ExportQueue {
                 finished += 1
                 continue
             }
+            // iOS takes the GPU from an app in the background, which fails a render in flight;
+            // that photo goes back in the queue for when the app returns.
+            let pausesBefore = pause.pauses
             let result = await Task.detached(priority: .utility) {
                 let lut = await LUTLibrary.shared.lut(for: job.recipe.look)
                 let details = PhotoExport.Details(rating: job.rating, description: PhotoDescription.read(for: job.url))
@@ -135,7 +191,18 @@ public final class ExportQueue {
                                                     settings: job.settings, into: job.folder, with: renderer)
             }.result
             switch result {
+            case .success(let url) where delivery == .photos:
+                do {
+                    try await PhotoLibrary.add(url)
+                    exported.append(url)
+                } catch {
+                    failures.append(Failure(name: job.url.lastPathComponent,
+                                            reason: "It couldn't be added to Photos. \(error.localizedDescription)"))
+                }
             case .success(let url): exported.append(url)
+            case .failure where pause.pauses != pausesBefore:
+                jobs.insert(job, at: 0)
+                continue
             case .failure(let error):
                 failures.append(Failure(name: job.url.lastPathComponent, reason: Self.reason(for: error)))
             }

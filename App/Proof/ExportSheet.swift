@@ -10,7 +10,7 @@ struct ExportSheet: View {
     let photos: [PhotoReference]
     @Environment(\.dismiss) private var dismiss
     /// The last export's settings without a destination, as JSON. Empty until the first export.
-    @AppStorage("exportSettings") private var storedSettings = Data()
+    @AppStorage(ExportSettings.rememberedKey) private var storedSettings = Data()
     /// The folder last exported to, where the open panel starts.
     @AppStorage("exportFolderPath") private var lastFolderPath = ""
     @AppStorage(ExportQueue.destinationKey) private var storedDestination = ""
@@ -53,73 +53,7 @@ struct ExportSheet: View {
                 if let destinations {
                     destinationSection(destinations)
                 }
-                Section {
-                    Picker("Format", selection: $settings.format) {
-                        ForEach(ExportSettings.Format.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    if settings.format.hasQuality {
-                        LabeledContent("Quality") {
-                            HStack {
-                                Slider(value: $settings.quality, in: 0.1...1, step: 0.05)
-                                    .tint(.sliderFill)
-                                Text(settings.quality, format: .percent.precision(.fractionLength(0)))
-                                    .monospacedDigit()
-                                    .frame(width: 40, alignment: .trailing)
-                            }
-                        }
-                    } else {
-                        Text("16 bits per channel, uncompressed, for printing and further editing.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Section {
-                    Picker("Size", selection: $settings.size) {
-                        Text("Original").tag(ExportSettings.Size.original)
-                        Text("Long Edge").tag(ExportSettings.Size.longEdge)
-                    }
-                    .pickerStyle(.segmented)
-                    if settings.size == .longEdge {
-                        LabeledContent("Long Edge") {
-                            HStack {
-                                TextField("Long Edge", value: $settings.longEdge, format: .number.precision(.fractionLength(0...2)))
-                                    .labelsHidden()
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(width: 80)
-                                Picker("Unit", selection: $settings.unit) {
-                                    ForEach(ExportSettings.Unit.allCases, id: \.self) { Text($0.title).tag($0) }
-                                }
-                                .labelsHidden()
-                                .fixedSize()
-                            }
-                        }
-                        if settings.unit.isPrintSize {
-                            LabeledContent("Resolution") {
-                                HStack {
-                                    TextField("Resolution", value: $settings.resolution, format: .number.precision(.fractionLength(0)))
-                                        .labelsHidden()
-                                        .multilineTextAlignment(.trailing)
-                                        .frame(width: 80)
-                                    Text("ppi")
-                                }
-                            }
-                        }
-                        Text(sizeSummary)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Section {
-                    Picker("Color Space", selection: $settings.colorSpace) {
-                        ForEach(ExportSettings.ColorSpace.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
-                    Text(colorHint)
-                        .foregroundStyle(.secondary)
-                }
-                Section {
-                    Toggle("Remove Location", isOn: $settings.removesLocation)
-                        .toggleStyle(.switch)
-                        .tint(.highlight)
-                }
+                ExportSettingsForm(settings: $settings)
             }
             .formStyle(.grouped)
             // The sheet's own background, so the title above and the buttons below sit on the same surface.
@@ -134,7 +68,7 @@ struct ExportSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button(destination == nil ? "Export…" : "Export") { export() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!isValid || (destination != nil && destinationFolder == nil))
+                    .disabled(!settings.isValid || (destination != nil && destinationFolder == nil))
             }
             .padding([.horizontal, .bottom], 20)
         }
@@ -308,26 +242,4 @@ struct ExportSheet: View {
         case .export, nil: photos.count == 1 ? "Choose a folder for the photo." : "Choose a folder for the \(photos.count) photos."
         }
     }
-
-    private var isValid: Bool {
-        settings.size == .original || (settings.longEdge > 0 && (!settings.unit.isPrintSize || settings.resolution > 0))
-    }
-
-    /// The long edge in pixels, which a print size alone doesn't show.
-    private var sizeSummary: String {
-        guard isValid, let pixels = settings.longEdgePixels else { return "Enter a size above 0." }
-        let length = pixels.formatted()
-        return settings.unit.isPrintSize
-            ? "\(length) pixels on the long edge. Photos smaller than this keep their size."
-            : "Photos smaller than this keep their size."
-    }
-
-    private var colorHint: String {
-        switch settings.colorSpace {
-        case .sRGB: "Looks the same everywhere. Best for social media, the web and most print labs."
-        case .displayP3: "Wider color for iPhone, iPad and Mac screens."
-        case .adobeRGB: "Wider color for printers and print services that ask for it."
-        }
-    }
 }
-

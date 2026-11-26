@@ -21,6 +21,7 @@ struct ProofApp: App {
 struct ContentView: View {
     @Bindable var library: Library
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
     /// In compact width, whether a row's grid is pushed onto the library.
     @State private var compactPath: [BrowseScreen] = []
     @State private var renderer = try? RAWRenderer()
@@ -62,6 +63,12 @@ struct ContentView: View {
                 PhotoInfoSheet(library: library, photo: photo)
             }
         }
+        .sheet(isPresented: library.exportSheet(presentedWhere: { !library.isEditing })) {
+            ExportSheet(library: library)
+        }
+        // iOS takes the GPU from an app in the background, so an export waits there, between
+        // photos, and carries on when Proof returns.
+        .onChange(of: scenePhase) { library.exports.pause.isPaused = scenePhase == .background }
         // Select ends on another row, and on opening a photo from the menu.
         .onChange(of: library.selection) { library.isSelectingPhotos = false }
         .onChange(of: library.isEditing) {
@@ -164,6 +171,10 @@ struct ContentView: View {
             }
             let photos = library.selectedPhotosInOrder
             ToolbarItemGroup(placement: .bottomBar) {
+                // Leading, as in Photos. Opens the export sheet for the photos selected.
+                Button("Share", systemImage: "square.and.arrow.up") { library.requestExport(of: photos) }
+                    .disabled(!photos.contains(where: \.isEditable) || library.exports.isVisible)
+                Spacer()
                 Menu("Rating", systemImage: "star") {
                     RatingPicker(library: library, photos: photos).pickerStyle(.inline)
                 }
@@ -319,10 +330,12 @@ private struct PhotoView: View {
             // Presented from the sheet, which is the top presentation while it is up.
             .sheet(isPresented: compactHistory(whileSheetIsUp: true)) { historySheet }
             .sheet(isPresented: copySettings(whileSheetIsUp: true)) { CopySettingsSheet(library: library) }
+            .sheet(isPresented: export(whileSheetIsUp: true)) { ExportSheet(library: library) }
         }
         // While the inspector's sheet is down, History and Copy Settings present from here.
         .sheet(isPresented: compactHistory(whileSheetIsUp: false)) { historySheet }
         .sheet(isPresented: copySettings(whileSheetIsUp: false)) { CopySettingsSheet(library: library) }
+        .sheet(isPresented: export(whileSheetIsUp: false)) { ExportSheet(library: library) }
         .onChange(of: sizeClass) { if sizeClass != .compact { sheetTop = nil } }
         // A phone in landscape has room for the photo only above a small sheet.
         .onChange(of: verticalSizeClass, initial: true) {
@@ -367,6 +380,12 @@ private struct PhotoView: View {
 
     @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
         undoItems
+        ToolbarItem {
+            Button("Share", systemImage: "square.and.arrow.up") {
+                if let photo = library.browse.selectedPhoto { library.requestExport(of: [photo]) }
+            }
+            .disabled(!isEditable || library.exports.isVisible)
+        }
         ToolbarItem {
             // The crop controls take the adjustments' place, so they come up with the tool.
             Button("Crop", systemImage: "crop") {
@@ -453,6 +472,10 @@ private struct PhotoView: View {
     private func copySettings(whileSheetIsUp: Bool) -> Binding<Bool> {
         Binding(get: { library.isEditing && library.isChoosingSettingsToCopy && (sheetTop != nil) == whileSheetIsUp },
                 set: { if !$0 { library.isChoosingSettingsToCopy = false } })
+    }
+
+    private func export(whileSheetIsUp: Bool) -> Binding<Bool> {
+        library.exportSheet(presentedWhere: { library.isEditing && (sheetTop != nil) == whileSheetIsUp })
     }
 
     /// The sheet's heights: small and medium, or only small in landscape on a phone.
