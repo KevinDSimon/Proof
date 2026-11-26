@@ -33,17 +33,14 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      # Starting the simulator takes two to four minutes on the runner. It
-      # starts up while the tests build, instead of after.
-      - name: Start an iPhone simulator
-        run: |
-          udid=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone' | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}')
-          echo "udid=$udid" >> "$GITHUB_ENV"
-          xcrun simctl boot "$udid"
+      # The simulator starts only after the build: starting it alongside the
+      # build slowed both, as they compete for the runner (#265).
       - name: Build the tests
         run: xcodebuild build-for-testing -scheme Proof-Package -destination "id=$udid"
-      - name: Wait for the simulator
-        run: xcrun simctl bootstatus "$udid" -b
+      - name: Start the iPhone simulator
+        run: |
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
       - name: Test on the iPhone simulator
         run: xcodebuild test-without-building -scheme Proof-Package -destination "id=$udid"
 
