@@ -25,10 +25,40 @@ jobs:
       - name: Build Mac app
         run: xcodebuild -project App/Proof.xcodeproj -scheme Proof -configuration Debug build
 
+  # The simulator tests take 5 to 10 minutes, so they run only when what they
+  # test changes: ProofKit, the tests, the package or this workflow. They test
+  # only ProofKit; ProofUI and the apps are checked by the iOS builds. A new
+  # test target for ProofUI would need Sources/ProofUI added below.
+  changes:
+    name: Check what changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      package: ${{ steps.diff.outputs.package }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        # git diff exits 0 for no changes and 1 for changes. Anything else,
+        # such as a base it can't find, runs the tests to be safe.
+        run: |
+          set +e
+          git diff --quiet "$BASE" HEAD -- Sources/ProofKit Tests Package.swift .github/workflows/ci.yml
+          status=$?
+          if [ "$status" -eq 0 ]; then package=false; else package=true; fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "Package, tests or workflow changed: $package"
+
   # The simulator tests and the iOS builds run as two jobs, beside the Mac job,
   # so no job waits for another's builds.
   ios-test:
     name: Test on an iPhone simulator
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
