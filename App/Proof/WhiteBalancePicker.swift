@@ -104,27 +104,6 @@ struct WhiteBalancePicker: View {
     }
 }
 
-/// The White Balance card's eyedropper button. While the eyedropper is open it is inverted, as
-/// selection is marked throughout Proof, rather than tinted.
-struct EyedropperButton: View {
-    let isOn: Bool
-    let action: () -> Void
-
-    var body: some View {
-        let button = Button(action: action) {
-            Label("White Balance Selector", systemImage: "eyedropper")
-                .labelStyle(.iconOnly)
-        }
-        .help("Click something neutral gray in the photo to set the white balance (W)")
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-        if isOn {
-            button.buttonStyle(.borderedProminent).tint(.primary)
-        } else {
-            button.buttonStyle(.bordered)
-        }
-    }
-}
-
 /// The eyedropper's loupe: the pixels under the pointer enlarged on a grid, the center one, which
 /// the click measures, outlined, and its red, green and blue as percentages, as Lightroom shows
 /// them; the three are close to equal over something neutral.

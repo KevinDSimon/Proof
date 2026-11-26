@@ -1,8 +1,10 @@
+import ProofKit
 import SwiftUI
 
 /// One adjustment in the inspector: its name and value on one line, the slider below.
 /// The value can be typed. Up and Down arrows in it step by `step`, by `coarseStep` with Shift
-/// and by `fineStep` with Option. Double-clicking the name or the slider resets the adjustment.
+/// and by `fineStep` with Option. Double-clicking or double-tapping the name or the slider resets
+/// the adjustment.
 public struct AdjustmentSlider: View {
     let title: String
     /// Read by VoiceOver in place of `title` when the title leans on a heading above it, such as
@@ -54,6 +56,8 @@ public struct AdjustmentSlider: View {
     @State private var text = ""
     @FocusState private var isEditingText: Bool
     @State private var resetsOnRelease = false
+    @State private var doublePress = DoublePress<Bool>(interval: DoubleClickCheck.touch.interval)
+    @State private var valueAtPress: Double?
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -91,11 +95,20 @@ public struct AdjustmentSlider: View {
                 // double-click shows up as the click count of the press that starts the drag.
                 // The reset waits until after the release, because the slider sends its own
                 // position once more as the mouse comes up and would undo it.
+                // On touch, a double-tap on the thumb is two presses that don't move it.
                 if editing {
-                    resetsOnRelease = doubleClickCheck.isDoubleClick()
+                    valueAtPress = value
+                    if let isDoubleClick = doubleClickCheck.isDoubleClick {
+                        resetsOnRelease = isDoubleClick()
+                    } else {
+                        doublePress.interval = doubleClickCheck.interval
+                        resetsOnRelease = doublePress.press(true)
+                    }
                 } else if resetsOnRelease {
                     resetsOnRelease = false
                     Task { @MainActor in reset() }
+                } else if value != valueAtPress {
+                    doublePress.cancel()
                 }
             }
                 .labelsHidden()
@@ -135,7 +148,10 @@ public struct AdjustmentSlider: View {
     /// Sets a value from any of the controls, rounded to what is shown and kept in range.
     private func set(_ newValue: Double) {
         let scale = pow(10, Double(fractionDigits))
-        value = min(max((newValue * scale).rounded() / scale, range.lowerBound), range.upperBound)
+        let rounded = min(max((newValue * scale).rounded() / scale, range.lowerBound), range.upperBound)
+        // A touch on the thumb that doesn't move it, such as the start of a scroll, sends the
+        // value it already has; setting it would add an undo step and turn As Shot into Custom.
+        if formatted(rounded) != formatted(value) { value = rounded }
         text = formatted(value)
     }
 
@@ -155,18 +171,27 @@ public struct AdjustmentSlider: View {
     }
 }
 
-/// Tells whether the press being handled is a double-click. Only the system's event knows, so the
-/// Mac app sets one from AppKit; elsewhere a press is never a double-click.
+/// Tells a double-click or double-tap from two presses. On the Mac the system's event knows the
+/// click count, which follows the person's double-click speed, so the Mac app sets one from
+/// AppKit. A touch has no click count; two presses within `interval` are a double-tap.
 public struct DoubleClickCheck: Sendable {
-    public var isDoubleClick: @MainActor @Sendable () -> Bool
+    /// The longest gap between two presses that makes them a double press.
+    public var interval: TimeInterval
+    /// Whether the press being handled is a double-click; `nil` where only the time between
+    /// presses tells.
+    public var isDoubleClick: (@MainActor @Sendable () -> Bool)?
 
-    public init(isDoubleClick: @escaping @MainActor @Sendable () -> Bool) {
+    public init(interval: TimeInterval, isDoubleClick: (@MainActor @Sendable () -> Bool)? = nil) {
+        self.interval = interval
         self.isDoubleClick = isDoubleClick
     }
+
+    /// About UIKit's own double-tap time.
+    public static let touch = DoubleClickCheck(interval: 0.35)
 }
 
 public extension EnvironmentValues {
-    @Entry var doubleClickCheck = DoubleClickCheck { false }
+    @Entry var doubleClickCheck = DoubleClickCheck.touch
 }
 
 public extension AdjustmentSlider {

@@ -45,8 +45,7 @@ public struct PhotoContextMenu: View {
             }
         }
         // Files on iOS have no path worth copying, and the export and Copy Settings sheets come to
-        // iOS in #234 and #233. Revert waits for Undo on iOS (#227), since one photo reverts
-        // without asking.
+        // iOS in #234 and #233.
         #if os(macOS)
         Divider()
         Button("Show in Finder") { library.showInFinder(library.urls(of: photos)) }
@@ -63,13 +62,14 @@ public struct PhotoContextMenu: View {
             .disabled(library.isCropping || !photo.isEditable)
         Button("Paste Settings" + (many.isEmpty ? "" : " to\(many)")) { library.pasteSettings(to: photos) }
             .disabled(library.isCropping || library.copiedSettings == nil || noneEditable)
+        #endif
+        // One photo reverts without asking, as Undo in Edit brings it back.
         Divider()
         let toRevert = library.photosToRevert(among: photos)
         Button(toRevert.count > 1 ? "Revert \(toRevert.count) Photos to Original…" : "Revert to Original") {
             library.requestRevert(of: photos)
         }
         .disabled(toRevert.isEmpty)
-        #endif
     }
 }
 

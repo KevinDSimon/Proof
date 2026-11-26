@@ -183,6 +183,12 @@ public struct InspectorPanel<Content: View>: View {
             .padding(16)
         }
         .background(Color.interfaceBackground.ignoresSafeArea())
+        #if !os(macOS)
+        // iOS draws buttons, menus and the cards' headers in the app's accent color, the
+        // highlight, which is for small marks of state only (decision 0041). The switches set
+        // their own.
+        .tint(.primary)
+        #endif
     }
 }
 

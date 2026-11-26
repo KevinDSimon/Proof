@@ -43,8 +43,52 @@ extension LibraryPlatform {
 }
 
 extension DoubleClickCheck {
-    /// The click count of the press AppKit is handling.
-    static let mac = DoubleClickCheck {
+    /// The click count of the press AppKit is handling, and the person's double-click speed.
+    static let mac = DoubleClickCheck(interval: NSEvent.doubleClickInterval) {
         NSApp.currentEvent.map { $0.type == .leftMouseDown && $0.clickCount == 2 } ?? false
+    }
+}
+
+extension EditKeyWatch {
+    /// A local event monitor rather than keyboard focus: a custom view on the Mac only takes focus
+    /// by click with keyboard navigation turned on, so focus-based key handling doesn't reach it
+    /// for most people. Keys typed into a text field pass through.
+    static let mac = EditKeyWatch { frame, clickOutside, key in
+        let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { event in
+            if event.type == .leftMouseDown {
+                if let content = event.window?.contentView {
+                    let location = CGPoint(x: event.locationInWindow.x, y: content.bounds.height - event.locationInWindow.y)
+                    if !frame().contains(location) { clickOutside() }
+                }
+                return event
+            }
+            guard event.window?.firstResponder as? NSText == nil,
+                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+            let shift = event.modifierFlags.contains(.shift)
+            let editKey: EditKey? = switch event.keyCode {
+            case 51, 117: .delete
+            case 123: .left
+            case 124: .right
+            case 125: .down
+            case 126: .up
+            default: nil
+            }
+            guard let editKey else { return event }
+            return key(editKey, shift) ? nil : event
+        }
+        return { if let monitor { NSEvent.removeMonitor(monitor) } }
+    }
+}
+
+extension View {
+    /// The Mac's own controls for the shared inspector: AppKit's pop-up buttons, its click count,
+    /// the keys a selected curve point answers to, and the pointer that says a point will go.
+    func macInspectorControls() -> some View {
+        environment(\.doubleClickCheck, .mac)
+            .environment(\.editKeyWatch, .mac)
+            .environment(\.popUpMenu) { title, items in AnyView(MenuPopUp(title: title, items: items)) }
+            .environment(\.showsRemovalPointer) { removing in
+                if removing { NSCursor.disappearingItem.push() } else { NSCursor.pop() }
+            }
     }
 }

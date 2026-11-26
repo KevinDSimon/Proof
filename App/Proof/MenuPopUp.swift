@@ -1,16 +1,12 @@
 import AppKit
+import ProofUI
 import SwiftUI
 
 /// A full-width pop-up button, as in Finder's settings: a filled control with up and down arrows,
 /// showing `title`, whose menu can hold submenus. SwiftUI's pickers and menus in an inspector form
 /// draw as plain text with a chevron instead, so this is AppKit's `NSPopUpButton`.
 struct MenuPopUp: NSViewRepresentable {
-    /// An item in the menu: a command, a checked choice, a submenu, or a separator.
-    indirect enum Item {
-        case action(String, isChecked: Bool = false, perform: () -> Void)
-        case submenu(String, [Item])
-        case separator
-    }
+    typealias Item = PopUpMenu.Item
 
     let title: String
     let items: [Item]
@@ -40,7 +36,7 @@ struct MenuPopUp: NSViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject {
-        var actions: [() -> Void] = []
+        var actions: [@MainActor () -> Void] = []
 
         func menuItem(for item: Item) -> NSMenuItem {
             switch item {

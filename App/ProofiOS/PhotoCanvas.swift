@@ -22,6 +22,8 @@ struct PhotoCanvas: UIViewRepresentable {
     var onError: (Error) -> Void
     /// Told `true` while the photo has neither a render nor a preview to show, and `false` once
     /// it has one, so the view around the canvas can show that it is loading.
+    /// Receives the histogram of each render shown, with the photo it belongs to.
+    var onHistogram: (Histogram, URL) -> Void = { _, _ in }
     var onWaiting: (Bool) -> Void = { _ in }
 
     func makeCoordinator() -> PhotoCanvasCoordinator {
@@ -48,6 +50,7 @@ struct PhotoCanvas: UIViewRepresentable {
     func updateUIView(_ view: CanvasView, context: Context) {
         view.actions = actions
         context.coordinator.onError = onError
+        context.coordinator.onHistogram = onHistogram
         context.coordinator.onWaiting = onWaiting
         context.coordinator.setBackdrop(backdrop)
         context.coordinator.setViewport(viewport)

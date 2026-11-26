@@ -24,11 +24,16 @@ struct ContentView: View {
     /// In compact width, whether a row's grid is pushed onto the library.
     @State private var compactPath: [BrowseScreen] = []
     @State private var renderer = try? RAWRenderer()
+    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    /// The sidebar's visibility in Browse, restored when Edit ends.
+    @State private var browseColumnVisibility = NavigationSplitViewVisibility.automatic
 
     var body: some View {
         Group {
             if sizeClass == .compact { compactStack } else { splitView }
         }
+        // Inside the folder picker's view: two presentations on one view can keep one from opening.
+        .revertConfirmation(library)
         .fileImporter(isPresented: $library.isChoosingFolder, allowedContentTypes: [.folder],
                       allowsMultipleSelection: library.folderPickerAllowsSeveral) { result in
             switch result {
@@ -48,11 +53,21 @@ struct ContentView: View {
         }
         // Select ends on another row, and on opening a photo from the menu.
         .onChange(of: library.selection) { library.isSelectingPhotos = false }
-        .onChange(of: library.isEditing) { if library.isEditing { library.isSelectingPhotos = false } }
+        .onChange(of: library.isEditing) {
+            if library.isEditing { library.isSelectingPhotos = false }
+            // Edit hides the library so the photo has the width, as on the Mac; the sidebar
+            // button brings it back.
+            if library.isEditing {
+                browseColumnVisibility = columnVisibility
+                columnVisibility = .detailOnly
+            } else {
+                columnVisibility = browseColumnVisibility
+            }
+        }
     }
 
     private var splitView: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             FolderSidebar(library: library)
                 .navigationTitle("Library")
         } detail: {
@@ -184,6 +199,18 @@ struct ContentView: View {
 }
 
 private extension View {
+    /// A single photo reverts without asking, as Undo in Edit brings it back. Several may never be
+    /// opened again, so they ask first, as on the Mac.
+    func revertConfirmation(_ library: Library) -> some View {
+        @Bindable var library = library
+        return confirmationDialog("Revert \(library.photosPendingRevert.count) photos to their originals?",
+                                  isPresented: $library.isConfirmingRevert, titleVisibility: .visible) {
+            Button("Revert \(library.photosPendingRevert.count) Photos", role: .destructive) { library.revertPendingPhotos() }
+        } message: {
+            Text("Their edits are removed. To bring one back, open it in Edit and choose Undo before quitting Proof.")
+        }
+    }
+
     /// A yellow badge counting the filter parts that are set, on the button that holds the
     /// filter. The system's toolbar badge is always red (decision 0041).
     func filterBadge(_ filter: FilterCriteria) -> some View {
@@ -214,10 +241,12 @@ private enum BrowseScreen: Hashable {
     case grid
 }
 
-/// The photo in Edit, centered on the canvas with a margin, with the filmstrip under it.
+/// The photo in Edit, centered on the canvas with a margin, with the filmstrip under it and the
+/// adjustments in the trailing inspector on iPad. Undo and Redo lead the toolbar, as in Photos.
 private struct PhotoView: View {
-    let library: Library
+    @Bindable var library: Library
     let renderer: RAWRenderer?
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         VStack(spacing: 0) {
@@ -233,15 +262,59 @@ private struct PhotoView: View {
         .background(Color.interfaceBackground.ignoresSafeArea())
         .navigationTitle(library.windowTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // iPhone's layout, with the inspector as a sheet below the photo, comes in #228.
+        .inspector(isPresented: Binding(get: { hasInspector && library.isInspectorShown },
+                                        set: { library.isInspectorShown = $0 })) {
+            Group {
+                if isEditable {
+                    // Looks and the tools drawn on the photo come to iOS in #232 and #231.
+                    AdjustmentsInspector(library: library, renderer: renderer, tools: [])
+                }
+            }
+            // Wider than the Mac's: iOS switches are larger, and the longest header, "Lens
+            // Corrections" beside Reset and its switch, needs the room.
+            .inspectorColumnWidth(min: 360, ideal: 380, max: 460)
+        }
         .toolbar {
+            ToolbarItemGroup(placement: .topBarLeading) {
+                Button("Undo", systemImage: "arrow.uturn.backward") { library.undoEdit() }
+                    .disabled(!library.canUndoEdit)
+                Button("Redo", systemImage: "arrow.uturn.forward") { library.redoEdit() }
+                    .disabled(!library.canRedoEdit)
+            }
             ToolbarItem {
                 Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip",
                        systemImage: "rectangle.bottomthird.inset.filled") {
                     library.isFilmstripShown.toggle()
                 }
             }
+            if hasInspector {
+                ToolbarItem {
+                    Button(library.isHistoryShown ? "Hide History" : "Show History",
+                           systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                        library.isHistoryShown.toggle()
+                    }
+                    .disabled(!isEditable)
+                    .popover(isPresented: $library.isHistoryShown) {
+                        HistorySidebar(library: library)
+                            .frame(idealWidth: 320, idealHeight: 480)
+                            .presentationCompactAdaptation(.popover)
+                    }
+                }
+                ToolbarItem {
+                    Button(library.isInspectorShown ? "Hide Adjustments" : "Show Adjustments",
+                           systemImage: "slider.horizontal.3") {
+                        library.isInspectorShown.toggle()
+                    }
+                }
+            }
         }
     }
+
+    private var hasInspector: Bool { sizeClass == .regular }
+
+    /// JPEG and HEIC photos, reached from the filmstrip, aren't edited until #239.
+    private var isEditable: Bool { library.browse.selectedPhoto?.isEditable != false }
 
     @ViewBuilder private var photo: some View {
         if let renderer, let url = library.selectedPhotoURL {
@@ -277,6 +350,8 @@ private struct EditCanvas: View {
                     viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailCache.shared,
                     actions: actions) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
+        } onHistogram: { histogram, url in
+            library.showHistogram(histogram, of: url)
         } onWaiting: { isWaiting = $0 }
         // A temporary indicator, so it may sit where the photo will appear.
         .overlay {
