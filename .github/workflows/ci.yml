@@ -25,17 +25,35 @@ jobs:
       - name: Build Mac app
         run: xcodebuild -project App/Proof.xcodeproj -scheme Proof -configuration Debug build
 
-  ios:
-    name: Build and test on iOS
+  # The simulator tests and the iOS builds run as two jobs, beside the Mac job,
+  # so no job waits for another's builds.
+  ios-test:
+    name: Test on an iPhone simulator
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # Starting the simulator takes two to four minutes on the runner. It
+      # starts up while the tests build, instead of after.
+      - name: Start an iPhone simulator
+        run: |
+          udid=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone' | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}')
+          echo "udid=$udid" >> "$GITHUB_ENV"
+          xcrun simctl boot "$udid"
+      - name: Build the tests
+        run: xcodebuild build-for-testing -scheme Proof-Package -destination "id=$udid"
+      - name: Wait for the simulator
+        run: xcrun simctl bootstatus "$udid" -b
+      - name: Test on the iPhone simulator
+        run: xcodebuild test-without-building -scheme Proof-Package -destination "id=$udid"
+
+  ios-build:
+    name: Build for iOS
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Build for iOS
         run: xcodebuild -scheme Proof-Package -destination 'generic/platform=iOS' build
-      - name: Test on an iPhone simulator
-        run: |
-          udid=$(xcrun simctl list devices available | grep -m1 -E '^ +iPhone' | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}')
-          xcodebuild test -scheme Proof-Package -destination "id=$udid"
       - name: Build iOS app for the simulator
         run: xcodebuild -project App/Proof.xcodeproj -scheme ProofiOS -configuration Debug -destination 'generic/platform=iOS Simulator' build
