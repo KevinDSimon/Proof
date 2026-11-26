@@ -28,14 +28,13 @@ struct PhoneEditor: View {
                 // over the corner of the canvas as a temporary tool does.
                 .overlay(alignment: .topLeading) {
                     if isHistogramShown {
-                        HistogramView(histogram: library.selectedHistogram)
+                        HistogramView(histogram: library.selectedHistogram, height: 48)
                             .equatable()
-                            .frame(width: 128, height: 52)
-                            .padding(8)
+                            .frame(width: 120)
+                            .padding(10)
                             .glassEffect(.regular, in: .rect(cornerRadius: 14))
                             .padding(12)
                             .transition(.opacity)
-                            .accessibilityLabel("Histogram")
                     }
                 }
             // The filmstrip makes way for a sheet, so the photo keeps the room.
