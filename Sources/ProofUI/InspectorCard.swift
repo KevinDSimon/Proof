@@ -26,6 +26,7 @@ public struct InspectorCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isInspectorSheet) private var isInspectorSheet
     @Environment(\.foldedCards) private var foldedCards
 
     public init(title: String? = nil, isOn: Binding<Bool>? = nil, canReset: Bool = false, reset: (() -> Void)? = nil,
@@ -70,7 +71,7 @@ public struct InspectorCard<Content: View>: View {
         .padding(Self.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-            .fill(Color(white: Self.fillGray(for: colorScheme))))
+            .fill(Color(white: isInspectorSheet ? Self.sheetFillGray : Self.fillGray(for: colorScheme))))
     }
 
     /// `fold`, when given, runs on a click anywhere in the row but Reset and the switch, so the
@@ -125,9 +126,13 @@ public struct InspectorCard<Content: View>: View {
 
     /// The card's gray, a step lighter than the canvas in the dark appearance and darker in the light.
     /// Neutral grays match in Display P3 and sRGB, like the canvas's own.
-    public static func fillGray(for colorScheme: ColorScheme) -> Double {
+    nonisolated public static func fillGray(for colorScheme: ColorScheme) -> Double {
         colorScheme == .dark ? 0.18 : 0.95
     }
+
+    /// The card's gray in the iPhone sheet: a step darker than the sheet, and a little lighter
+    /// than the canvas, so the cards don't read as holes in it.
+    static var sheetFillGray: Double { 0.15 }
 }
 
 /// A control with its name above it, as the sliders have theirs, so every name in a card starts
@@ -176,6 +181,7 @@ public extension Library {
 /// The inspector's cards in a scrolling column on the interface's dark gray, 16 pt from every edge.
 public struct InspectorPanel<Content: View>: View {
     @ViewBuilder var content: () -> Content
+    @Environment(\.isInspectorSheet) private var isInspectorSheet
 
     public init(@ViewBuilder content: @escaping () -> Content) {
         self.content = content
@@ -195,7 +201,7 @@ public struct InspectorPanel<Content: View>: View {
         .scrollEdgeEffectHidden(true, for: .top)
         .clipped()
         #endif
-        .background(Color.interfaceBackground.ignoresSafeArea())
+        .background((isInspectorSheet ? Color.sheetBackground : Color.interfaceBackground).ignoresSafeArea())
         #if !os(macOS)
         // iOS draws buttons, menus and the cards' headers in the app's accent color, the
         // highlight, which is for small marks of state only (decision 0041). White, not
@@ -222,3 +228,10 @@ private struct ResetButtonStyle: ButtonStyle {
     }
 }
 #endif
+
+public extension EnvironmentValues {
+    /// Whether the inspector is a sheet below the photo, as on iPhone. There the panel and the
+    /// cards swap grays: the sheet takes the cards' lighter gray, so it stands apart from the
+    /// canvas above it, and the cards a darker gray near the canvas's.
+    @Entry var isInspectorSheet = false
+}

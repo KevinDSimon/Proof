@@ -241,12 +241,19 @@ private enum BrowseScreen: Hashable {
     case grid
 }
 
-/// The photo in Edit, centered on the canvas with a margin, with the filmstrip under it and the
-/// adjustments in the trailing inspector on iPad. Undo and Redo lead the toolbar, as in Photos.
+/// The photo in Edit, centered on the canvas with a margin, with the filmstrip under it. The
+/// adjustments are in the trailing inspector in regular width, and in a sheet below the photo in
+/// compact width, as `.inspector` presents there. Undo and Redo lead the toolbar, as in Photos.
 private struct PhotoView: View {
     @Bindable var library: Library
     let renderer: RAWRenderer?
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var sheetHeight = PresentationDetent.inspectorSmall
+    /// The top of the inspector's sheet, in global coordinates, while it is up.
+    @State private var sheetTop: CGFloat?
+    /// The bottom of the space the photo and filmstrip are laid out in, in global coordinates.
+    @State private var photoAreaBottom: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -258,13 +265,14 @@ private struct PhotoView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        // The photo and filmstrip fit above the sheet, so it never covers them.
+        .padding(.bottom, sheetInset)
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { photoAreaBottom = $0 }
         .animation(.snappy(duration: 0.25), value: library.isFilmstripShown)
         .background(Color.interfaceBackground.ignoresSafeArea())
         .navigationTitle(library.windowTitle)
         .navigationBarTitleDisplayMode(.inline)
-        // iPhone's layout, with the inspector as a sheet below the photo, comes in #228.
-        .inspector(isPresented: Binding(get: { hasInspector && library.isInspectorShown },
-                                        set: { library.isInspectorShown = $0 })) {
+        .inspector(isPresented: $library.isInspectorShown) {
             Group {
                 if isEditable {
                     // Looks and the tools drawn on the photo come to iOS in #232 and #231.
@@ -274,6 +282,25 @@ private struct PhotoView: View {
             // Wider than the Mac's: iOS switches are larger, and the longest header, "Lens
             // Corrections" beside Reset and its switch, needs the room.
             .inspectorColumnWidth(min: 360, ideal: 380, max: 460)
+            // In compact width the inspector is a sheet. These apply to it only there.
+            .environment(\.isInspectorSheet, sizeClass == .compact)
+            .presentationBackground(Color.sheetBackground)
+            .presentationDetents(sheetHeights, selection: $sheetHeight)
+            .presentationBackgroundInteraction(.enabled)
+            .presentationContentInteraction(.scrolls)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
+                if sizeClass == .compact { sheetTop = top }
+            }
+            .onDisappear { sheetTop = nil }
+            // Presented from the sheet, which is the top presentation while it is up.
+            .sheet(isPresented: compactHistory(whileSheetIsUp: true)) { historySheet }
+        }
+        // While the inspector's sheet is down, History presents from here.
+        .sheet(isPresented: compactHistory(whileSheetIsUp: false)) { historySheet }
+        .onChange(of: sizeClass) { if sizeClass != .compact { sheetTop = nil } }
+        // A phone in landscape has room for the photo only above a small sheet.
+        .onChange(of: verticalSizeClass, initial: true) {
+            if verticalSizeClass == .compact { sheetHeight = .inspectorSmall }
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarLeading) {
@@ -288,35 +315,69 @@ private struct PhotoView: View {
                     library.isFilmstripShown.toggle()
                 }
             }
-            if hasInspector {
-                ToolbarItem {
-                    Button(library.isHistoryShown ? "Hide History" : "Show History",
-                           systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
-                        library.isHistoryShown.toggle()
-                    }
-                    .disabled(!isEditable)
-                    .popover(isPresented: $library.isHistoryShown) {
-                        NavigationStack {
-                            HistorySidebar(library: library)
-                                .navigationTitle("History")
-                                .navigationBarTitleDisplayMode(.inline)
-                        }
+            ToolbarItem {
+                Button(library.isHistoryShown ? "Hide History" : "Show History",
+                       systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                    library.isHistoryShown.toggle()
+                }
+                .disabled(!isEditable)
+                .popover(isPresented: Binding(get: { sizeClass == .regular && library.isHistoryShown },
+                                              set: { library.isHistoryShown = $0 })) {
+                    history
                         // As tall as its steps, up to most of the screen, where it scrolls.
                         .frame(width: 320, height: min(CGFloat(HistorySidebar.rowCount(for: library)) * 52 + 100, 600))
                         .presentationCompactAdaptation(.popover)
-                    }
                 }
-                ToolbarItem {
-                    Button(library.isInspectorShown ? "Hide Adjustments" : "Show Adjustments",
-                           systemImage: "slider.horizontal.3") {
-                        library.isInspectorShown.toggle()
-                    }
+            }
+            ToolbarItem {
+                Button(library.isInspectorShown ? "Hide Adjustments" : "Show Adjustments",
+                       systemImage: "slider.horizontal.3") {
+                    library.isInspectorShown.toggle()
                 }
             }
         }
     }
 
-    private var hasInspector: Bool { sizeClass == .regular }
+    private var history: some View {
+        NavigationStack {
+            HistorySidebar(library: library)
+                .navigationTitle("History")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if sizeClass == .compact {
+                        // Close, not Done: a confirming button takes the highlight as a fill.
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(role: .close) { library.isHistoryShown = false }
+                        }
+                    }
+                }
+        }
+        // The iPhone inspector sheet's gray, rather than glass, as a sheet and as a popover.
+        .scrollContentBackground(.hidden)
+        .presentationBackground(Color.sheetBackground)
+    }
+
+    private var historySheet: some View {
+        history.presentationDetents([.medium, .large])
+    }
+
+    /// History is a sheet in compact width, presented from the inspector's sheet while it is up,
+    /// since a view under a presented sheet can't present another.
+    private func compactHistory(whileSheetIsUp: Bool) -> Binding<Bool> {
+        Binding(get: { sizeClass == .compact && library.isHistoryShown && (sheetTop != nil) == whileSheetIsUp },
+                set: { library.isHistoryShown = $0 })
+    }
+
+    /// The sheet's heights: small and medium, or only small in landscape on a phone.
+    private var sheetHeights: Set<PresentationDetent> {
+        verticalSizeClass == .compact ? [.inspectorSmall] : [.inspectorSmall, .medium]
+    }
+
+    /// How much of the photo's space the inspector's sheet takes from the bottom.
+    private var sheetInset: CGFloat {
+        guard let sheetTop else { return 0 }
+        return max(0, photoAreaBottom - sheetTop)
+    }
 
     /// JPEG and HEIC photos, reached from the filmstrip, aren't edited until #239.
     private var isEditable: Bool { library.browse.selectedPhoto?.isEditable != false }
@@ -399,4 +460,9 @@ private struct EditCanvas: View {
         let photos = library.shownPhotos
         library.browse.move(move, in: photos, columns: photos.count)
     }
+}
+
+private extension PresentationDetent {
+    /// The inspector sheet's small height on iPhone: the histogram and the start of the next card.
+    static let inspectorSmall = PresentationDetent.height(220)
 }
