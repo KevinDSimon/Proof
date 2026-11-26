@@ -296,9 +296,14 @@ private struct PhotoView: View {
                     }
                     .disabled(!isEditable)
                     .popover(isPresented: $library.isHistoryShown) {
-                        HistorySidebar(library: library)
-                            .frame(idealWidth: 320, idealHeight: 480)
-                            .presentationCompactAdaptation(.popover)
+                        NavigationStack {
+                            HistorySidebar(library: library)
+                                .navigationTitle("History")
+                                .navigationBarTitleDisplayMode(.inline)
+                        }
+                        // As tall as its steps, up to most of the screen, where it scrolls.
+                        .frame(width: 320, height: min(CGFloat(HistorySidebar.rowCount(for: library)) * 52 + 100, 600))
+                        .presentationCompactAdaptation(.popover)
                     }
                 }
                 ToolbarItem {

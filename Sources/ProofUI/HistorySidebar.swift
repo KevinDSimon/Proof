@@ -17,19 +17,33 @@ public struct HistorySidebar: View {
         let steps = Array((history?.steps ?? []).enumerated()).reversed()
         List(selection: Binding(get: { history?.currentIndex },
                                 set: { if let index = $0 { library.goToHistoryStep(index) } })) {
-            Section("History") {
-                ForEach(steps, id: \.offset) { index, step in
-                    Text(step.label)
-                        .monospacedDigit()
-                        // Steps after the one shown are what Redo brings back, and a new change drops them.
-                        .foregroundStyle(index > history?.currentIndex ?? 0 ? .secondary : .primary)
-                        .tag(index)
-                }
-            }
+            #if os(macOS)
+            Section("History") { rows(steps, current: history?.currentIndex) }
+            #else
+            // In a popover on iOS, whose title already names it.
+            rows(steps, current: history?.currentIndex)
+            #endif
         }
-        // The same plain color as the folder sidebar.
+        #if os(macOS)
+        // The same plain color as the folder sidebar. On iOS the popover keeps its own glass.
         .scrollContentBackground(.hidden)
         .background(Color.interfaceBackground.ignoresSafeArea())
+        #endif
         .disabled(library.isCropping)
+    }
+
+    private func rows(_ steps: ReversedCollection<[(offset: Int, element: EditHistory.Step)]>, current: Int?) -> some View {
+        ForEach(steps, id: \.offset) { index, step in
+            Text(step.label)
+                .monospacedDigit()
+                // Steps after the one shown are what Redo brings back, and a new change drops them.
+                .foregroundStyle(index > current ?? 0 ? .secondary : .primary)
+                .tag(index)
+        }
+    }
+
+    /// How many rows the panel lists, so a popover can fit its height to them.
+    public static func rowCount(for library: Library) -> Int {
+        library.selectedEdit?.history.steps.count ?? 0
     }
 }
