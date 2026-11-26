@@ -90,6 +90,16 @@ struct CopiedSettingsTests {
         #expect(Set(grouped) == Set(SettingsItem.allCases).subtracting([.profile, .crop, .spotRemoval, .masks]))
     }
 
+    @Test("The sheet's groups list every card once, and with Profile every item once, so the Mac and iOS sheets offer the same")
+    func sheetGroupsCoverEveryItem() {
+        let cards = SettingsItem.sheetGroups.compactMap { $0 }
+        #expect(Set(cards) == Set(AdjustmentGroup.allCases))
+        #expect(cards.count == AdjustmentGroup.allCases.count)
+        let items = [SettingsItem.profile] + SettingsItem.sheetGroups.flatMap(SettingsItem.items(inSheetGroup:))
+        #expect(items.count == SettingsItem.allCases.count)
+        #expect(Set(items) == Set(SettingsItem.allCases))
+    }
+
     @Test("Transform, Crop, Spot Removal and Masks start unticked; every other item starts ticked")
     func defaultItems() {
         #expect(SettingsItem.defaultItems == Set(SettingsItem.allCases).subtracting([.transform, .crop, .spotRemoval, .masks]))

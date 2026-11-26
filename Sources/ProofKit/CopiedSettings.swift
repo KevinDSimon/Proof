@@ -45,6 +45,18 @@ public enum SettingsItem: String, CaseIterable, Codable, Hashable, Sendable {
     public static func items(in group: AdjustmentGroup) -> [SettingsItem] {
         allCases.filter { $0.group == group }
     }
+
+    /// The Copy Settings sheet's groups in the inspector's order, below Profile. `nil` holds Crop,
+    /// Spot Removal and Masks, tools rather than cards, beside Transform. The Mac lays them out in
+    /// columns and iOS in one list.
+    public static let sheetGroups: [AdjustmentGroup?] = [
+        .look, .whiteBalance, .basic, .curve, .selectiveColor, .detail, .lens, .transform, nil, .effects,
+    ]
+
+    /// The items of one of the sheet's groups: a card's, or the tools' for `nil`.
+    public static func items(inSheetGroup group: AdjustmentGroup?) -> [SettingsItem] {
+        group.map(items(in:)) ?? [.crop, .spotRemoval, .masks]
+    }
 }
 
 /// Adjustments copied from one photo, to paste onto others.

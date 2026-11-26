@@ -51,6 +51,17 @@ struct ContentView: View {
         } message: {
             Text(library.errorMessage ?? "")
         }
+        // Browse presents these; Edit presents Copy Settings itself, as the inspector's sheet may be up.
+        .sheet(isPresented: Binding(get: { library.isChoosingSettingsToCopy && !library.isEditing },
+                                    set: { if !$0 { library.isChoosingSettingsToCopy = false } })) {
+            CopySettingsSheet(library: library)
+        }
+        .sheet(isPresented: Binding(get: { library.infoSheetPhoto != nil },
+                                    set: { if !$0 { library.infoSheetPhoto = nil } })) {
+            if let photo = library.infoSheetPhoto {
+                PhotoInfoSheet(library: library, photo: photo)
+            }
+        }
         // Select ends on another row, and on opening a photo from the menu.
         .onChange(of: library.selection) { library.isSelectingPhotos = false }
         .onChange(of: library.isEditing) {
@@ -162,6 +173,11 @@ struct ContentView: View {
                     FlagPicker(library: library, photos: photos).pickerStyle(.inline)
                 }
                 .disabled(photos.isEmpty)
+                Spacer()
+                // Copy Settings starts from one photo, in its touch-and-hold menu; the paste goes
+                // to every photo selected.
+                Button("Paste Settings", systemImage: "doc.on.clipboard") { library.pasteSettings(to: photos) }
+                    .disabled(library.copiedSettings == nil || !photos.contains(where: \.isEditable))
             }
         } else if library.selection != nil, !library.isEditing {
             ToolbarItem {
@@ -302,9 +318,11 @@ private struct PhotoView: View {
             .onDisappear { sheetTop = nil }
             // Presented from the sheet, which is the top presentation while it is up.
             .sheet(isPresented: compactHistory(whileSheetIsUp: true)) { historySheet }
+            .sheet(isPresented: copySettings(whileSheetIsUp: true)) { CopySettingsSheet(library: library) }
         }
-        // While the inspector's sheet is down, History presents from here.
+        // While the inspector's sheet is down, History and Copy Settings present from here.
         .sheet(isPresented: compactHistory(whileSheetIsUp: false)) { historySheet }
+        .sheet(isPresented: copySettings(whileSheetIsUp: false)) { CopySettingsSheet(library: library) }
         .onChange(of: sizeClass) { if sizeClass != .compact { sheetTop = nil } }
         // A phone in landscape has room for the photo only above a small sheet.
         .onChange(of: verticalSizeClass, initial: true) {
@@ -429,6 +447,12 @@ private struct PhotoView: View {
     private func compactHistory(whileSheetIsUp: Bool) -> Binding<Bool> {
         Binding(get: { sizeClass == .compact && library.isHistoryShown && (sheetTop != nil) == whileSheetIsUp },
                 set: { library.isHistoryShown = $0 })
+    }
+
+    /// Copy Settings, from the filmstrip's menu, presents from the inspector's sheet while it is up.
+    private func copySettings(whileSheetIsUp: Bool) -> Binding<Bool> {
+        Binding(get: { library.isEditing && library.isChoosingSettingsToCopy && (sheetTop != nil) == whileSheetIsUp },
+                set: { if !$0 { library.isChoosingSettingsToCopy = false } })
     }
 
     /// The sheet's heights: small and medium, or only small in landscape on a phone.
