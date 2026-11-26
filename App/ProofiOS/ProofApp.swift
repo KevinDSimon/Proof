@@ -272,9 +272,12 @@ private struct PhotoView: View {
         .background(Color.interfaceBackground.ignoresSafeArea())
         .navigationTitle(library.windowTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(library.isCropping)
         .inspector(isPresented: $library.isInspectorShown) {
             Group {
-                if isEditable {
+                if library.isCropping {
+                    CropInspector(library: library, renderer: renderer)
+                } else if isEditable {
                     // Looks and the tools drawn on the photo come to iOS in #232 and #231.
                     AdjustmentsInspector(library: library, renderer: renderer, tools: [])
                 }
@@ -288,6 +291,8 @@ private struct PhotoView: View {
             .presentationDetents(sheetHeights, selection: $sheetHeight)
             .presentationBackgroundInteraction(.enabled)
             .presentationContentInteraction(.scrolls)
+            // The crop controls are only here, so the sheet stays up until Cancel or Done.
+            .interactiveDismissDisabled(library.isCropping)
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
                 if sizeClass == .compact { sheetTop = top }
             }
@@ -303,37 +308,60 @@ private struct PhotoView: View {
             if verticalSizeClass == .compact { sheetHeight = .inspectorSmall }
         }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarLeading) {
-                Button("Undo", systemImage: "arrow.uturn.backward") { library.undoEdit() }
-                    .disabled(!library.canUndoEdit)
-                Button("Redo", systemImage: "arrow.uturn.forward") { library.redoEdit() }
-                    .disabled(!library.canRedoEdit)
+            if library.isCropping {
+                // Cancel and Done stand in for the rest, so the tool is left only one of two ways.
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { library.cancelCropping() }
+                }
+                // Plain, not a confirming button: that takes the highlight as a fill.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { library.finishCropping() }
+                }
+            } else {
+                editToolbar
             }
-            ToolbarItem {
-                Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip",
-                       systemImage: "rectangle.bottomthird.inset.filled") {
-                    library.isFilmstripShown.toggle()
-                }
+        }
+    }
+
+    @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarLeading) {
+            Button("Undo", systemImage: "arrow.uturn.backward") { library.undoEdit() }
+                .disabled(!library.canUndoEdit)
+            Button("Redo", systemImage: "arrow.uturn.forward") { library.redoEdit() }
+                .disabled(!library.canRedoEdit)
+        }
+        ToolbarItem {
+            // The crop controls take the adjustments' place, so they come up with the tool.
+            Button("Crop", systemImage: "crop") {
+                library.startCropping()
+                library.isInspectorShown = true
             }
-            ToolbarItem {
-                Button(library.isHistoryShown ? "Hide History" : "Show History",
-                       systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
-                    library.isHistoryShown.toggle()
-                }
-                .disabled(!isEditable)
-                .popover(isPresented: Binding(get: { sizeClass == .regular && library.isHistoryShown },
-                                              set: { library.isHistoryShown = $0 })) {
-                    history
-                        // As tall as its steps, up to most of the screen, where it scrolls.
-                        .frame(width: 320, height: min(CGFloat(HistorySidebar.rowCount(for: library)) * 52 + 100, 600))
-                        .presentationCompactAdaptation(.popover)
-                }
+            .disabled(!isEditable || library.selectedEdit == nil)
+        }
+        ToolbarItem {
+            Button(library.isFilmstripShown ? "Hide Filmstrip" : "Show Filmstrip",
+                   systemImage: "rectangle.bottomthird.inset.filled") {
+                library.isFilmstripShown.toggle()
             }
-            ToolbarItem {
-                Button(library.isInspectorShown ? "Hide Adjustments" : "Show Adjustments",
-                       systemImage: "slider.horizontal.3") {
-                    library.isInspectorShown.toggle()
-                }
+        }
+        ToolbarItem {
+            Button(library.isHistoryShown ? "Hide History" : "Show History",
+                   systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                library.isHistoryShown.toggle()
+            }
+            .disabled(!isEditable)
+            .popover(isPresented: Binding(get: { sizeClass == .regular && library.isHistoryShown },
+                                          set: { library.isHistoryShown = $0 })) {
+                history
+                    // As tall as its steps, up to most of the screen, where it scrolls.
+                    .frame(width: 320, height: min(CGFloat(HistorySidebar.rowCount(for: library)) * 52 + 100, 600))
+                    .presentationCompactAdaptation(.popover)
+            }
+        }
+        ToolbarItem {
+            Button(library.isInspectorShown ? "Hide Adjustments" : "Show Adjustments",
+                   systemImage: "slider.horizontal.3") {
+                library.isInspectorShown.toggle()
             }
         }
     }
@@ -413,6 +441,7 @@ private struct EditCanvas: View {
 
     var body: some View {
         PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdrop: library.canvasColor,
+                    angle: library.isCropping ? library.selectedCrop.angle : 0,
                     viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailCache.shared,
                     actions: actions) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"
@@ -424,6 +453,12 @@ private struct EditCanvas: View {
             if isWaiting {
                 ProgressView()
                     .accessibilityLabel("Loading photo")
+            }
+        }
+        .overlay {
+            if library.isCropping, let frame = library.selectedCropFrame {
+                CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect,
+                           backdrop: library.canvasColor.color)
             }
         }
         .accessibilityElement()
@@ -441,11 +476,21 @@ private struct EditCanvas: View {
             library.zoom.reset()
             library.zoom.preview = nil
         }
+        // The crop tool shows the whole photo and takes every touch on it, so the canvas's
+        // zoom, swipes and hold for the original are off while it's open.
+        .onChange(of: library.isCropping, initial: true) { _, isCropping in
+            library.zoom.isEnabled = !isCropping
+            if isCropping { library.zoom.reset() }
+        }
     }
 
+    /// While cropping, the whole photo, turned and flipped: the canvas tilts it and the overlay
+    /// marks the rectangle, so a drag doesn't wait for a render.
     private var shownRecipe: EditRecipe {
-        let recipe = library.selectedEdit?.recipe ?? EditRecipe()
-        return library.browse.isShowingOriginal ? recipe.original : recipe
+        var recipe = library.selectedEdit?.recipe ?? EditRecipe()
+        if library.browse.isShowingOriginal { return recipe.original }
+        if library.isCropping { recipe.crop = recipe.crop?.turnedOnly }
+        return recipe
     }
 
     private var actions: PhotoCanvasActions {

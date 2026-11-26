@@ -12,6 +12,9 @@ struct PhotoCanvas: UIViewRepresentable {
     var recipe: EditRecipe
     /// The color of the canvas around the photo.
     var backdrop: CanvasColor
+    /// Degrees clockwise to tilt the photo around its center as it is drawn. The crop tool
+    /// straightens this way, without waiting for a render.
+    var angle: Double = 0
     /// Read by the view that makes the canvas, so a change of zoom redraws it; `zoom` takes the
     /// canvas's gestures and sizes.
     var viewport: Viewport
@@ -53,6 +56,7 @@ struct PhotoCanvas: UIViewRepresentable {
         context.coordinator.onHistogram = onHistogram
         context.coordinator.onWaiting = onWaiting
         context.coordinator.setBackdrop(backdrop)
+        context.coordinator.setAngle(angle)
         context.coordinator.setViewport(viewport)
         context.coordinator.show(url, recipe: recipe)
     }
