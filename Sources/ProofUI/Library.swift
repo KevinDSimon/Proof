@@ -218,6 +218,8 @@ public final class Library {
     private static let canvasColorKey = "canvasColor"
     /// The Info panel beside the grid in Browse (#151).
     public var isInfoShown = false
+    /// iPad and iPhone: the photo whose Info sheet is open, from its touch-and-hold menu (#233).
+    public var infoSheetPhoto: PhotoReference?
     /// iPad and iPhone: Select in the toolbar is on, so a tap adds or removes a photo instead of
     /// opening it. It starts and ends with nothing selected, as in Photos, except when it ends by
     /// opening a photo, which stays selected.
