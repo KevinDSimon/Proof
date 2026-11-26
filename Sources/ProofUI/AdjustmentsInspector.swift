@@ -546,6 +546,15 @@ public struct AdjustmentsInspector<Looks: View>: View {
                     .accessibilityLabel("Clear All Guides")
                 }
             }
+            // The guide tapped or clicked last, which touch has no Delete key for.
+            if library.isDrawingGuides, let index = library.selectedGuide, transform.guides.indices.contains(index) {
+                Button {
+                    library.removeGuide(at: index)
+                } label: {
+                    Text("Delete Guide").frame(maxWidth: .infinity)
+                }
+                .help("Remove the selected guide (Delete)")
+            }
         }
     }
 
