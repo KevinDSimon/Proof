@@ -99,6 +99,8 @@ struct PhoneEditor: View {
                 self.tool = nil
                 library.startSamplingWhiteBalance()
             }
+            // Each tool starts at its first segment.
+            .id(tool)
         }
     }
 
@@ -161,7 +163,7 @@ struct PhoneEditor: View {
         if library.isCropping {
             PhoneCropToolbar(library: library)
         } else if library.isSamplingWhiteBalance {
-            PhoneWhiteBalanceToolbar(library: library) { tool = .color }
+            PhoneWhiteBalanceToolbar(library: library) { open(.color) }
         } else if library.isRemovingSpots || library.isMasking {
             // Not reachable from the iPhone's interface until #288, but a keyboard's shortcuts
             // still open them, so they can be left.
@@ -233,6 +235,9 @@ struct PhoneEditor: View {
 
     private func open(_ tool: PhoneTool) {
         if tool.hasSheet {
+            // Color and Finish open taller, since their segments and top rows leave no room for
+            // a slider at the compact height. Landscape has only the compact one.
+            sheetHeight = tool.opensAtMediumHeight && verticalSizeClass != .compact ? .medium : .toolCompact
             self.tool = tool
         } else {
             library.startCropping()
@@ -246,13 +251,27 @@ struct PhoneEditor: View {
 }
 
 /// One tool's sheet: its sliders, or the LUT library for Looks, under the tool's name with Reset
-/// and Close, on the tool panel's gray.
+/// and Close, on the tool panel's gray. Color and Finish have segments, named for the Mac's
+/// cards, above their sliders, and Reset then resets the segment shown.
 private struct ToolSheet: View {
     let library: Library
     let renderer: RAWRenderer?
     let tool: PhoneTool
     let close: () -> Void
     let openEyedropper: () -> Void
+    @State private var section: PhoneToolSection?
+    /// The color range Selective Color shows.
+    @State private var range = ColorRange.red
+
+    init(library: Library, renderer: RAWRenderer?, tool: PhoneTool, close: @escaping () -> Void,
+         openEyedropper: @escaping () -> Void) {
+        self.library = library
+        self.renderer = renderer
+        self.tool = tool
+        self.close = close
+        self.openEyedropper = openEyedropper
+        _section = State(initialValue: tool.sections.first)
+    }
 
     var body: some View {
         NavigationStack {
@@ -260,11 +279,15 @@ private struct ToolSheet: View {
                 Group {
                     if tool == .looks {
                         LookSection(library: library, isCard: false)
-                    } else if tool == .color {
-                        // The presets and eyedropper above Temperature and Tint (#298).
+                    } else if let section {
                         VStack(alignment: .leading, spacing: 14) {
-                            PhoneWhiteBalanceRow(library: library, renderer: renderer, openEyedropper: openEyedropper)
-                            PhoneToolSliders(library: library, tool: tool)
+                            Picker("Section", selection: Binding(get: { section }, set: { self.section = $0 })) {
+                                ForEach(tool.sections) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .padding(.bottom, 4)
+                            sectionContent(section)
                         }
                     } else {
                         PhoneToolSliders(library: library, tool: tool)
@@ -296,14 +319,54 @@ private struct ToolSheet: View {
         .tint(.white)
     }
 
+    /// The segment's groups: a heading in the headline style over its controls and sliders, and a
+    /// line between groups, so what belongs together shows without indenting sliders.
+    @ViewBuilder private func sectionContent(_ section: PhoneToolSection) -> some View {
+        let recipe = library.selectedEdit?.recipe ?? EditRecipe()
+        let groups = section.groups(in: recipe, range: range)
+        ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+            if index > 0 { Divider() }
+            // The heading sits close to its controls; the line and the sheet's spacing set the
+            // groups apart.
+            VStack(alignment: .leading, spacing: 8) {
+                if let title = group.title {
+                    Text(title)
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                ForEach(group.controls, id: \.self) { control($0) }
+                if !group.sliders.isEmpty {
+                    PhoneToolSliders(library: library, adjustments: group.sliders)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func control(_ control: PhoneSheetControl) -> some View {
+        switch control {
+        case .blackAndWhite: PhoneBlackAndWhiteRow(library: library)
+        case .profile: PhoneProfileRow(library: library)
+        // The presets and eyedropper above Temperature and Tint (#298).
+        case .whiteBalance: PhoneWhiteBalanceRow(library: library, renderer: renderer, openEyedropper: openEyedropper)
+        case .colorRanges: PhoneColorRangePicker(library: library, selected: $range)
+        }
+    }
+
     private var canReset: Bool {
         guard let recipe = library.selectedEdit?.recipe else { return false }
-        return tool == .looks ? recipe.look != nil : tool.isChanged(in: recipe)
+        if tool == .looks { return recipe.look != nil }
+        return section?.isChanged(in: recipe) ?? tool.isChanged(in: recipe)
     }
 
     private func reset() {
-        library.changeEdit(label: "Reset \(tool.title)") { recipe in
-            if tool == .looks { recipe.look = nil } else { tool.reset(in: &recipe) }
+        library.changeEdit(label: "Reset \(section?.title ?? tool.title)") { recipe in
+            if tool == .looks {
+                recipe.look = nil
+            } else if let section {
+                section.reset(in: &recipe)
+            } else {
+                tool.reset(in: &recipe)
+            }
         }
     }
 }

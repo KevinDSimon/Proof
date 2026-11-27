@@ -5,16 +5,20 @@ import SwiftUI
 /// inspector's `AdjustmentSlider` with the Mac's steps and tracks. Each writes only its own value.
 public struct PhoneToolSliders: View {
     let library: Library
-    let tool: PhoneTool
+    let adjustments: [PhoneAdjustment]
 
     public init(library: Library, tool: PhoneTool) {
+        self.init(library: library, adjustments: tool.adjustments)
+    }
+
+    public init(library: Library, adjustments: [PhoneAdjustment]) {
         self.library = library
-        self.tool = tool
+        self.adjustments = adjustments
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ForEach(tool.adjustments) { adjustment in
+            ForEach(adjustments) { adjustment in
                 slider(adjustment)
             }
         }
@@ -27,7 +31,7 @@ public struct PhoneToolSliders: View {
         let position: ((Double) -> Double)? = isTemperature ? { WhiteBalance.sliderPosition(forTemperature: $0) } : nil
         let valueAtPosition: ((Double) -> Double)? = isTemperature ? { WhiteBalance.temperature(atSliderPosition: $0) } : nil
         return AdjustmentSlider(
-            title: adjustment.title, value: binding(for: adjustment),
+            title: adjustment.title, spokenTitle: adjustment.spokenTitle, value: binding(for: adjustment),
             range: adjustment.range, fineStep: style.fine, step: style.step, coarseStep: style.coarse,
             fractionDigits: style.digits, showsSign: style.showsSign, unit: style.unit, track: style.track,
             position: position, valueAtPosition: valueAtPosition,
@@ -35,6 +39,8 @@ public struct PhoneToolSliders: View {
             isAdjusting: { library.isAdjusting = $0 })
             // White balance and sharpness start from the camera's, read once the photo opens.
             .disabled(value(of: adjustment) == nil)
+            // Kept in view, dimmed, where it changes nothing as the edit stands.
+            .disabled(library.selectedEdit.map { adjustment.isInactive(in: $0.recipe) } ?? false)
     }
 
     private func value(of adjustment: PhoneAdjustment) -> Double? {
@@ -73,6 +79,12 @@ public struct PhoneToolSliders: View {
         case .tint: Style(track: AdjustmentSlider.tintTrack)
         case .saturation: Style(track: AdjustmentSlider.saturationTrack)
         case .vibrance: Style(track: AdjustmentSlider.vibranceTrack)
+        case .mixRed: Style(track: SelectiveColorCard.brightnessTrack(hue: 0))
+        case .mixGreen: Style(track: SelectiveColorCard.brightnessTrack(hue: 120))
+        case .mixBlue: Style(track: SelectiveColorCard.brightnessTrack(hue: 240))
+        case let .selectiveHue(range): Style(track: SelectiveColorCard.hueTrack(range))
+        case let .selectiveSaturation(range): Style(track: SelectiveColorCard.saturationTrack(range))
+        case let .selectiveBrightness(range): Style(track: SelectiveColorCard.brightnessTrack(range))
         case .grain: Style(showsSign: false)
         case .clarity: Style(track: AdjustmentSlider.clarityTrack)
         case .sharpness: Style(showsSign: false)
