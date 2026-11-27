@@ -19,6 +19,7 @@ public struct Filmstrip: View {
     /// The LUT library's generation the thumbnails were loaded at.
     @State private var lutGeneration = 0
     @FocusState private var isFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public static let height: CGFloat = 84
     private static let spacing: CGFloat = 4
@@ -38,7 +39,7 @@ public struct Filmstrip: View {
             .scrollIndicators(.never)
             .onChange(of: library.browse.selectedPhoto) { _, photo in
                 guard let photo else { return }
-                withAnimation { scroller.scrollTo(photo, anchor: .center) }
+                withAnimation(reduceMotion ? nil : .default) { scroller.scrollTo(photo, anchor: .center) }
             }
             .onAppear {
                 if let photo = library.browse.selectedPhoto { scroller.scrollTo(photo, anchor: .center) }
@@ -108,7 +109,8 @@ public struct Filmstrip: View {
         .help(photo.name)
         .accessibilityElement()
         .accessibilityLabel(RatingBadges.accessibilityLabel(name: photo.name, metadata: photo.photo.metadata,
-                                                                 isEdited: photo.photo.isEdited, stack: stack))
+                                                                 isEdited: photo.photo.isEdited, stack: stack,
+                                                                 isInCloud: photo.photo.isInCloud))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityValue(isCurrent && library.browse.hasMultipleSelection ? "Shown" : "")
         .accessibilityAction(named: isSelected ? "Remove from Selection" : "Add to Selection") {

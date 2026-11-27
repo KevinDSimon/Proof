@@ -186,6 +186,8 @@ private struct RangePicker: View {
                         }
                     .frame(maxWidth: .infinity)
                     .contentShape(.rect)
+                    // The swatches are 22 points tall, in a row across the card.
+                    .minimumTouchTarget()
                 }
                 .buttonStyle(.plain)
                 .help(range.title)

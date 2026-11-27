@@ -264,8 +264,8 @@ public struct FlagButtons: View {
 
 public extension Library {
     /// Opens or collapses the stack `photo` is in, with the photos it shows or hides sliding in
-    /// and out, so the stack is seen to open.
+    /// and out, so the stack is seen to open. With Reduce Motion they appear in place.
     func toggleStackAnimated(of photo: PhotoReference) {
-        withAnimation(.snappy(duration: 0.25)) { toggleStack(of: photo) }
+        withAnimation(reducesMotion ? nil : .snappy(duration: 0.25)) { toggleStack(of: photo) }
     }
 }

@@ -38,7 +38,8 @@ extension LibraryPlatform {
                                                    object: nil, queue: .main) { _ in
                 MainActor.assumeIsolated { handler(.willTerminate) }
             }
-        }
+        },
+        reducesMotion: { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     )
 }
 

@@ -56,6 +56,8 @@ public struct AdjustmentsInspector: View {
     /// Whether Transform's Aspect, Scale and Offset are shown; `nil` follows whether the photo
     /// uses them. Back to `nil` for each photo.
     @State private var showsMoreTransform: Bool?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(library: Library, renderer: RAWRenderer?, tools: OnPhotoTools) {
         self.library = library
@@ -475,10 +477,10 @@ public struct AdjustmentsInspector: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.snappy(duration: 0.2)) { showsMore.wrappedValue.toggle() }
+                        withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { showsMore.wrappedValue.toggle() }
                     }
             }
-            .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+            .inspectorLabelStyle()
         }
         .disabled(edit == nil)
         .onChange(of: library.browse.selectedPhoto) { showsMoreTransform = nil }
@@ -600,7 +602,7 @@ public struct AdjustmentsInspector: View {
     private func lensSwitch(_ title: String, isOn: Binding<Bool>, isBusy: Bool = false, help: String) -> some View {
         HStack {
             Text(title)
-                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                .inspectorLabelStyle()
                 .accessibilityHidden(true)
             Spacer()
             if isBusy {
@@ -622,8 +624,8 @@ public struct AdjustmentsInspector: View {
     private func lensRow(_ title: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
-                .fixedSize()
+                .inspectorLabelStyle()
+                .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: false)
             Spacer(minLength: 12)
             // Wraps rather than truncates: a lens name is often longer than the space beside its label.
             Text(value)

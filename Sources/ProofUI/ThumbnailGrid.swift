@@ -7,6 +7,8 @@ import SwiftUI
 /// the photo in Edit. Return is handled by the Photo menu.
 public struct ThumbnailGrid: View {
     @Bindable var library: Library
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The photos that pass the filter.
     let photos: [ListedPhoto]
     /// Every listed photo. Thumbnails are loaded for all of them so changing the filter
@@ -56,7 +58,14 @@ public struct ThumbnailGrid: View {
     @AppStorage("thumbnailSize") private var storedCellSize = Double(Self.sizes.standard)
     /// The cell size when the current pinch began.
     @State private var pinchStart: CGFloat?
-    private var cellSize: CGFloat { Self.sizes.clamped(storedCellSize) }
+    private var cellSize: CGFloat {
+        let size = Self.sizes.clamped(storedCellSize)
+        #if os(iOS)
+        // At the accessibility text sizes, two columns at most on iPhone, so the names have room.
+        if dynamicTypeSize.isAccessibilitySize { return max(size, 160) }
+        #endif
+        return size
+    }
 
     public var body: some View {
         ScrollViewReader { scroller in
@@ -112,7 +121,7 @@ public struct ThumbnailGrid: View {
                 guard viewWidth > 0 else { return }
                 let target = viewWidth + (shown ? -library.infoPanelWidth : library.infoPanelWidth)
                 slideTarget = target
-                withAnimation(.smooth(duration: 0.3)) { layoutWidth = target }
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) { layoutWidth = target }
             }
             // If the grid never reaches the width expected, as when the panel's width changed
             // while it was closed, it lays out for the width it has.
@@ -121,11 +130,11 @@ public struct ThumbnailGrid: View {
                 try? await Task.sleep(for: .milliseconds(600))
                 guard !Task.isCancelled, slideTarget != nil else { return }
                 slideTarget = nil
-                withAnimation(.smooth(duration: 0.25)) { layoutWidth = viewWidth }
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) { layoutWidth = viewWidth }
             }
             .onChange(of: library.browse.selectedPhoto) { _, photo in
                 guard let photo else { return }
-                withAnimation { scroller.scrollTo(photo) }
+                withAnimation(reduceMotion ? nil : .default) { scroller.scrollTo(photo) }
             }
             .onAppear {
                 guard let photo = library.browse.selectedPhoto else { return }
@@ -274,8 +283,11 @@ public struct ThumbnailGrid: View {
             Text(photo.name)
                 .font(.caption)
                 .foregroundStyle(isSelected ? .primary : .secondary)
-                .lineLimit(1)
+                // Two lines at the accessibility text sizes, up to the second of them, where a
+                // name still fits beside its neighbors.
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 .truncationMode(.middle)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 // Full width, so every card in a row is as wide as the cell.
                 .frame(maxWidth: .infinity)
                 .outlined()

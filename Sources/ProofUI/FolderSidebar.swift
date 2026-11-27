@@ -93,7 +93,9 @@ private struct LocationRow: View {
                 SidebarLabel(name: location.name)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Locate…") { library.requestFolder(.locate(location)) }
+                Button { library.requestFolder(.locate(location)) } label: {
+                    Text("Locate…").minimumTouchTarget()
+                }
                     .controlSize(.small)
                     #if os(iOS)
                     // Reads as a link and takes its own tap instead of selecting the row.

@@ -82,6 +82,7 @@ public struct HistogramView: View, Equatable {
 /// as in Lightroom. Each is left out when the photo doesn't record it.
 public struct CaptureSettingsLine: View {
     var settings: CaptureSettings?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(settings: CaptureSettings? = nil) {
         self.settings = settings
@@ -90,10 +91,23 @@ public struct CaptureSettingsLine: View {
     public var body: some View {
         let values = [settings?.formattedISO, settings?.formattedFocalLength,
                       settings?.formattedAperture, settings?.formattedShutterSpeed].compactMap { $0 }
-        HStack {
-            ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                if index > 0 { Spacer(minLength: 4) }
-                Text(value)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                // Two to a row at the accessibility text sizes, where four don't fit across.
+                Grid(alignment: .leading, horizontalSpacing: 16) {
+                    ForEach(Array(stride(from: 0, to: values.count, by: 2)), id: \.self) { start in
+                        GridRow {
+                            ForEach(values[start..<min(start + 2, values.count)], id: \.self) { Text($0) }
+                        }
+                    }
+                }
+            } else {
+                HStack {
+                    ForEach(Array(values.enumerated()), id: \.offset) { index, value in
+                        if index > 0 { Spacer(minLength: 4) }
+                        Text(value)
+                    }
+                }
             }
         }
         // The size of the control names in the cards.

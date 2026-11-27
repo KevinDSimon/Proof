@@ -290,6 +290,8 @@ public final class Library {
     private let platform: LibraryPlatform
     /// The touch drag the grid selects photos with (`LibraryPlatform.sidewaysDrag`).
     var sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? { platform.sidewaysDrag }
+    /// Whether Reduce Motion is on, for animations started outside a view's environment.
+    var reducesMotion: Bool { platform.reducesMotion() }
 
     public init(platform: LibraryPlatform) {
         self.platform = platform
