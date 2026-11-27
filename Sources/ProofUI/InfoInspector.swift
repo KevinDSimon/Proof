@@ -136,7 +136,7 @@ private struct PhotoInfoView: View {
         VStack(alignment: .leading, spacing: style == .cards ? InspectorCard<EmptyView>.spacing : 20) {
             section("File") {
                 row("Name", info?.fileName ?? photo.name)
-                row("Folder", info?.folderPath)
+                row("Folder", info.map { library.folderName(of: url.deletingLastPathComponent()) ?? $0.folderPath })
                 row("Size", info?.fileSize.map { Int64($0).formatted(.byteCount(style: .file)) })
                 row("Dimensions", info?.formattedDimensions)
                 row("Format", info?.format)

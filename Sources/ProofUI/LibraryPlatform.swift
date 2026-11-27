@@ -36,6 +36,9 @@ public struct LibraryPlatform: Sendable {
     /// iPhone: a tap in the grid selects a photo and shows its toolbar instead of opening it in
     /// Edit (#292). iPad opens the photo, as the Mac's double-click does.
     public var tapSelectsPhoto: @MainActor () -> Bool
+    /// iOS: names a folder for Info the way the Files app does (`FolderLocation`), as its path is
+    /// inside the app's storage (#274). `nil` shows the path, as the Mac does.
+    public var folderName: (@MainActor (URL) -> String)?
 
     public init(clickModifiers: @escaping @MainActor () -> EventModifiers,
                 beep: @escaping @MainActor () -> Void,
@@ -45,7 +48,8 @@ public struct LibraryPlatform: Sendable {
                 observe: @escaping @MainActor (_ handler: @escaping @MainActor (Event) -> Void) -> Void,
                 sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? = nil,
                 reducesMotion: @escaping @MainActor () -> Bool = { false },
-                tapSelectsPhoto: @escaping @MainActor () -> Bool = { false }) {
+                tapSelectsPhoto: @escaping @MainActor () -> Bool = { false },
+                folderName: (@MainActor (URL) -> String)? = nil) {
         self.clickModifiers = clickModifiers
         self.beep = beep
         self.revealFiles = revealFiles
@@ -55,6 +59,7 @@ public struct LibraryPlatform: Sendable {
         self.sidewaysDrag = sidewaysDrag
         self.reducesMotion = reducesMotion
         self.tapSelectsPhoto = tapSelectsPhoto
+        self.folderName = folderName
     }
 }
 

@@ -298,6 +298,8 @@ public final class Library {
     var reducesMotion: Bool { platform.reducesMotion() }
     /// iPhone: a tap in the grid selects a photo rather than opening it (#292).
     public var tapSelectsPhoto: Bool { platform.tapSelectsPhoto() }
+    /// The folder's name for Info where the system names it rather than by path (#274).
+    func folderName(of folder: URL) -> String? { platform.folderName?(folder) }
 
     public init(platform: LibraryPlatform) {
         self.platform = platform
