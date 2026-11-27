@@ -309,6 +309,20 @@ private struct ToolSheet: View {
                     Button("Reset") { reset() }
                         .disabled(!canReset)
                 }
+                if tool.hasAuto {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Auto") {
+                            guard let renderer else { return }
+                            // The sheet has no card switches, so Auto turns Basic on, as a slider does.
+                            if !library.isOn(.basic) { library.setOn(.basic, true) }
+                            Task { await library.autoTone(with: renderer) }
+                        }
+                        .disabled(renderer == nil || library.selectedEdit == nil || library.isAutoAdjusting)
+                        .accessibilityLabel("Auto Tone")
+                        .accessibilityHint("Sets Exposure, Contrast, Highlights, Shadows, Whites and Blacks from the photo")
+                    }
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(role: .close, action: close)
                 }

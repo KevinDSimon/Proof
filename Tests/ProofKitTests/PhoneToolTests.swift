@@ -110,6 +110,13 @@ struct PhoneToolTests {
         #expect(PhoneAdjustment.selectiveBrightness(.aqua).group == .selectiveColor)
     }
 
+    @Test("Light has Auto in its top bar, and keeps the compact height")
+    func lightAuto() {
+        #expect(PhoneTool.allCases.filter(\.hasAuto) == [.light])
+        #expect(!PhoneTool.light.opensAtMediumHeight)
+        #expect(PhoneTool.light.sections.isEmpty)
+    }
+
     @Test("Finish has Detail and Effects segments with every slider, each in its amount's group")
     func finishSegments() {
         #expect(PhoneTool.finish.sections == [.detail, .effects])

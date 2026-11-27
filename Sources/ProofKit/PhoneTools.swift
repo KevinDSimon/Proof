@@ -50,6 +50,10 @@ public enum PhoneTool: String, CaseIterable, Identifiable, Sendable {
     /// Whether the tool opens a sheet.
     public var hasSheet: Bool { self != .crop }
 
+    /// Whether the sheet's top bar has Auto, which sets the tool's sliders from the photo, as the
+    /// Mac's Basic card does for its Tone sliders.
+    public var hasAuto: Bool { self == .light }
+
     /// Whether the sheet opens at the medium height rather than the compact one: the segments and
     /// rows above the sliders leave no room for one at the compact height.
     public var opensAtMediumHeight: Bool { !sections.isEmpty }
