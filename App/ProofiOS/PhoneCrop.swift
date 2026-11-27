@@ -3,7 +3,7 @@ import ProofUI
 import SwiftUI
 
 /// Crop on iPhone (#287): a mode of the editor's canvas rather than a sheet. The touch crop from
-/// #229 is on the photo; Straighten sits below it where the filmstrip was; Rotate, Flip, the aspect
+/// #229 is on the photo; Straighten sits below it; Rotate, Flip, the aspect
 /// ratio and Reset take the bottom toolbar's place; Cancel and Done take the navigation bar's.
 /// iPad keeps `CropInspector` in its inspector.
 struct PhoneCropToolbar: ToolbarContent {

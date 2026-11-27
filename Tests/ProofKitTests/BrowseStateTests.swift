@@ -139,6 +139,26 @@ struct BrowseStateTests {
         #expect(state.selectedPhoto == ref(6))
     }
 
+    @Test("The iPhone viewer stays open as a swipe or a filmstrip tap moves to another photo, and shows the edit again after the editor's Compare")
+    func phoneViewerMoves() {
+        var state = BrowseState(selectedPhoto: ref(2))
+        state.edit()
+        // A swipe to the left on the photo.
+        state.move(.right, in: photos, columns: photos.count)
+        #expect(state.selectedPhoto == ref(3))
+        #expect(state.mode == .editing)
+        // A tap on a thumbnail.
+        state.selectedPhoto = ref(6)
+        #expect(state.selectedPhoto == ref(6))
+        #expect(state.mode == .editing)
+
+        state.toggleOriginal()
+        #expect(state.isShowingOriginal)
+        state.showEdited()
+        #expect(!state.isShowingOriginal)
+        #expect(state.mode == .editing)
+    }
+
     @Test("Photos with the same name in different folders are told apart")
     func sameNameInTwoFolders() {
         let other = FileReference(locationID: folder.locationID, relativePath: ["Other"])
