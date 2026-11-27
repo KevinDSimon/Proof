@@ -163,3 +163,46 @@ extension PhoneTool {
         adjustments.contains { $0.isChanged(in: recipe) }
     }
 }
+
+/// White balance in the iPhone Color sheet (#298): the preset menu above Temperature and Tint,
+/// and the eyedropper mode that sets them from a spot on the photo.
+public enum PhoneWhiteBalance {
+    /// The presets the menu lists, in the Mac's order. Custom isn't chosen, so it is listed only
+    /// while it is what the sliders show, as on the Mac.
+    public static func menu(showing current: WhiteBalancePreset) -> [WhiteBalancePreset] {
+        WhiteBalancePreset.allCases.filter { $0 != .custom || current == .custom }
+    }
+}
+
+/// The iPhone's eyedropper mode, from opening to Done or Cancel. Each spot sampled sets
+/// Temperature and Tint, which the menu shows as Custom, and Cancel returns to the white
+/// balance from when the mode opened. Only the white balance is written, so the rest of the
+/// recipe is left as it is.
+public struct WhiteBalanceSampling: Equatable, Sendable {
+    private let preset: WhiteBalancePreset
+    private let temperature: Double?
+    private let tint: Double?
+    private let wasSwitchedOff: Bool
+
+    public init(from recipe: EditRecipe) {
+        preset = recipe.basic.whiteBalance
+        temperature = recipe.basic.temperature
+        tint = recipe.basic.tint
+        wasSwitchedOff = recipe.switchedOff.contains(.whiteBalance)
+    }
+
+    /// Sets the white balance the eyedropper found, switching the card on so it shows.
+    public func sample(_ found: WhiteBalance, into recipe: inout EditRecipe) {
+        recipe.switchedOff.remove(.whiteBalance)
+        recipe.basic.setTemperature(found.temperature)
+        recipe.basic.setTint(found.tint)
+    }
+
+    /// Cancel: the white balance, its preset and its card's switch as they were.
+    public func restore(in recipe: inout EditRecipe) {
+        recipe.basic.whiteBalance = preset
+        recipe.basic.temperature = temperature
+        recipe.basic.tint = tint
+        if wasSwitchedOff { recipe.switchedOff.insert(.whiteBalance) } else { recipe.switchedOff.remove(.whiteBalance) }
+    }
+}

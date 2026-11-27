@@ -606,6 +606,9 @@ struct EditCanvas: View {
                 SpotOverlay(library: library, renderer: renderer, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
             } else if library.isMasking, let size = library.selectedEdit?.size {
                 MaskOverlay(library: library, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
+            } else if library.isSamplingWhiteBalance {
+                // iPhone's eyedropper mode (#298), which keeps the loupe until Done or Cancel.
+                PhoneWhiteBalancePicker(library: library, renderer: renderer)
             } else if library.isPickingWhiteBalance {
                 WhiteBalancePicker(library: library, renderer: renderer)
             } else if library.isDrawingGuides, let size = library.selectedEdit?.size {
