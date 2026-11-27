@@ -58,12 +58,14 @@ public struct AdjustmentSlider: View {
     @State private var resetsOnRelease = false
     @State private var doublePress = DoublePress<Bool>(interval: DoubleClickCheck.touch.interval)
     @State private var valueAtPress: Double?
+    /// Wide enough for the longest value, such as "-100" or "50000", at the person's text size.
+    @ScaledMetric(relativeTo: .body) private var fieldWidth: CGFloat = 56
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(title)
-                    .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                    .inspectorLabelStyle()
                     .onTapGesture(count: 2, perform: reset)
                     .help("Double-click to reset")
                 Spacer()
@@ -72,7 +74,7 @@ public struct AdjustmentSlider: View {
                     .multilineTextAlignment(.trailing)
                     .monospacedDigit()
                     .textFieldStyle(.plain)
-                    .frame(width: 56)
+                    .frame(width: fieldWidth)
                     .focused($isEditingText)
                     .onSubmit(commitText)
                     .onChange(of: isEditingText) { if !isEditingText { commitText() } }
@@ -83,7 +85,8 @@ public struct AdjustmentSlider: View {
                         return .handled
                     }
                     .help("Up and Down arrows step by \(formatted(step)). Shift steps by \(formatted(coarseStep)), Option by \(formatted(fineStep)).")
-                    .accessibilityLabel(spokenTitle ?? title)
+                    // Apart from the slider's own name, which VoiceOver reads next.
+                    .accessibilityLabel("\(spokenTitle ?? title) value")
             }
             Slider(value: Binding(get: { position?(value) ?? normalized(value) },
                                   set: { set(valueAtPosition?($0) ?? denormalized($0)) }),
@@ -115,7 +118,18 @@ public struct AdjustmentSlider: View {
                 .controlSize(.small)
                 .tint(track.isEmpty ? .sliderFill : .clear)
                 .background(alignment: .center) { trackBackground }
+                // One element in place of the system slider's, so a swipe up or down moves it by
+                // a step that suits the adjustment rather than a tenth of the slider (#237).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spokenTitle ?? title)
                 .accessibilityValue("\(formatted(value)) \(unit)")
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: swipe(up: true)
+                    case .decrement: swipe(up: false)
+                    @unknown default: break
+                    }
+                }
                 .accessibilityAction(named: "Reset", reset)
         }
         .contextMenu { Button("Reset \(spokenTitle ?? title)", action: reset) }
@@ -153,6 +167,11 @@ public struct AdjustmentSlider: View {
         // value it already has; setting it would add an undo step and turn As Shot into Custom.
         if formatted(rounded) != formatted(value) { value = rounded }
         text = formatted(value)
+    }
+
+    private func swipe(up: Bool) {
+        set(AccessibilityMetrics.sliderValue(afterSwipe: up, from: value, in: range, step: step,
+                                             position: position, valueAtPosition: valueAtPosition))
     }
 
     private func commitText() {

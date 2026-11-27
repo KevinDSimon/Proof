@@ -298,6 +298,13 @@ private extension Color {
 }
 
 private extension PresentationDetent {
-    /// A tool sheet's compact height: its title and the first two sliders.
-    static let toolCompact = PresentationDetent.height(212)
+    /// A tool sheet's compact height: its title and the first two sliders, taller at larger text
+    /// sizes so the sliders still show.
+    static let toolCompact = PresentationDetent.custom(ToolCompactDetent.self)
+}
+
+private struct ToolCompactDetent: CustomPresentationDetent {
+    static func height(in context: Context) -> CGFloat? {
+        PresentationDetent.scaledHeight(212, in: context)
+    }
 }

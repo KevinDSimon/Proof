@@ -100,6 +100,7 @@ public struct MasksInspector: View {
                 library.changeLayer(at: index) { $0.isEnabled.toggle() }
             } label: {
                 Image(systemName: layer.isEnabled ? "eye" : "eye.slash")
+                    .minimumTouchTarget()
             }
             .buttonStyle(.borderless)
             .foregroundStyle(isSelected ? Color.black : Color.secondary)

@@ -27,6 +27,7 @@ extension LibraryPlatform {
                 MainActor.assumeIsolated { handler(.willTerminate) }
             }
         },
-        sidewaysDrag: { view, actions in AnyView(view.gesture(SidewaysDrag(actions: actions))) }
+        sidewaysDrag: { view, actions in AnyView(view.gesture(SidewaysDrag(actions: actions))) },
+        reducesMotion: { UIAccessibility.isReduceMotionEnabled }
     )
 }

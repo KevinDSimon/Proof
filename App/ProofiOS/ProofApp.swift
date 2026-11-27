@@ -287,6 +287,7 @@ private struct PhotoView: View {
     let renderer: RAWRenderer?
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sheetHeight = PresentationDetent.inspectorSmall
     /// The top of the inspector's sheet, in global coordinates, while it is up.
     @State private var sheetTop: CGFloat?
@@ -300,7 +301,8 @@ private struct PhotoView: View {
                 .background(library.canvasColor.color)
             if library.isFilmstripShown {
                 Filmstrip(library: library, photos: library.shownPhotos)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    // With Reduce Motion it fades rather than sliding up.
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         // The photo and filmstrip fit above the sheet, so it never covers them.
@@ -326,6 +328,7 @@ private struct PhotoView: View {
             // Wider than the Mac's: iOS switches are larger, and the longest header, "Lens
             // Corrections" beside Reset and its switch, needs the room.
             .inspectorColumnWidth(min: 360, ideal: 380, max: 460)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
             // In compact width the inspector is a sheet. These apply to it only there.
             .environment(\.isInspectorSheet, sizeClass == .compact)
             .presentationBackground(Color.sheetBackground)
@@ -620,6 +623,13 @@ struct EditCanvas: View {
 }
 
 private extension PresentationDetent {
-    /// The inspector sheet's small height on iPhone: the histogram and the start of the next card.
-    static let inspectorSmall = PresentationDetent.height(220)
+    /// The inspector sheet's small height on iPhone: the histogram and the start of the next card,
+    /// taller at larger text sizes.
+    static let inspectorSmall = PresentationDetent.custom(InspectorSmallDetent.self)
+}
+
+private struct InspectorSmallDetent: CustomPresentationDetent {
+    static func height(in context: Context) -> CGFloat? {
+        PresentationDetent.scaledHeight(220, in: context)
+    }
 }

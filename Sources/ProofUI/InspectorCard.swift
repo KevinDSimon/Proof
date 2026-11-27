@@ -28,6 +28,8 @@ public struct InspectorCard<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isInspectorSheet) private var isInspectorSheet
     @Environment(\.foldedCards) private var foldedCards
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(title: String? = nil, isOn: Binding<Bool>? = nil, canReset: Bool = false, reset: (() -> Void)? = nil,
                 @ViewBuilder content: @escaping () -> Content) {
@@ -46,7 +48,7 @@ public struct InspectorCard<Content: View>: View {
                 let isExpanded = Binding(
                     get: { foldedCards.wrappedValue.isExpanded(title, isOn: isOn?.wrappedValue ?? true) },
                     set: { expanded in
-                        withAnimation(.snappy(duration: 0.2)) {
+                        withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) {
                             foldedCards.wrappedValue.setFolded(title, !expanded)
                             if expanded { isOn?.wrappedValue = true }
                         }
@@ -77,51 +79,73 @@ public struct InspectorCard<Content: View>: View {
     /// `fold`, when given, runs on a click anywhere in the row but Reset and the switch, so the
     /// title and the space beside it fold the card as well as the small arrow does.
     private func header(_ title: String, fold: (() -> Void)? = nil) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.headline)
-                // One line, ahead of the buttons, so "White Balance" doesn't wrap beside Reset.
-                .lineLimit(1)
-                .layoutPriority(1)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            if let reset {
-                // A small bordered button, so it reads as a control beside the title and the switch.
-                Button("Reset", action: reset)
-                    #if os(macOS)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.small)
-                    #else
-                    // iOS's disabled bordered button is a near-black fill with unreadable text on
-                    // the card's gray; Reset is disabled on most cards, so it must stay legible.
-                    .buttonStyle(ResetButtonStyle())
-                    #endif
-                    .fixedSize()
-                    .disabled(!canReset)
-                    .accessibilityLabel("Reset \(title)")
-            }
-            if let isOn {
-                Toggle(title, isOn: Binding(get: { isOn.wrappedValue },
-                                            set: { value in
-                                                withAnimation(.snappy(duration: 0.2)) {
-                                                    isOn.wrappedValue = value
-                                                    // Turning a card on opens it, so its controls show.
-                                                    if value { foldedCards?.wrappedValue.setFolded(title, false) }
-                                                }
-                                            }))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    // Without a tint the switch is white either way, and on and off are hard
-                    // to tell apart.
-                    .tint(.highlight)
-                    .labelsHidden()
-                    .help(isOn.wrappedValue ? "Turn off to see the photo without these adjustments" : "Turn on")
-                    .accessibilityLabel(title)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                // At the accessibility text sizes the title takes its own line, with Reset and the
+                // switch under it, since the three don't fit across the card.
+                VStack(alignment: .leading, spacing: 8) {
+                    headerTitle(title)
+                    HStack(spacing: 8) {
+                        Spacer()
+                        headerControls(title)
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    headerTitle(title)
+                        // One line, ahead of the buttons, so "White Balance" doesn't wrap beside Reset.
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                    Spacer()
+                    headerControls(title)
+                }
             }
         }
         .contentShape(Rectangle())
         .onTapGesture { fold?() }
+    }
+
+    private func headerTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private func headerControls(_ title: String) -> some View {
+        if let reset {
+            // A small bordered button, so it reads as a control beside the title and the switch.
+            Button("Reset", action: reset)
+                #if os(macOS)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                #else
+                // iOS's disabled bordered button is a near-black fill with unreadable text on
+                // the card's gray; Reset is disabled on most cards, so it must stay legible.
+                .buttonStyle(ResetButtonStyle())
+                #endif
+                .fixedSize()
+                .disabled(!canReset)
+                .accessibilityLabel("Reset \(title)")
+        }
+        if let isOn {
+            Toggle(title, isOn: Binding(get: { isOn.wrappedValue },
+                                        set: { value in
+                                            withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) {
+                                                isOn.wrappedValue = value
+                                                // Turning a card on opens it, so its controls show.
+                                                if value { foldedCards?.wrappedValue.setFolded(title, false) }
+                                            }
+                                        }))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                // Without a tint the switch is white either way, and on and off are hard
+                // to tell apart.
+                .tint(.highlight)
+                .labelsHidden()
+                .help(isOn.wrappedValue ? "Turn off to see the photo without these adjustments" : "Turn on")
+                .accessibilityLabel(title)
+        }
     }
 
     /// The card's gray, a step lighter than the canvas in the dark appearance and darker in the light.
@@ -154,7 +178,7 @@ public struct InspectorField<Content: View, Status: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text(title)
-                    .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                    .inspectorLabelStyle()
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
                 status()
@@ -225,6 +249,8 @@ private struct ResetButtonStyle: ButtonStyle {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(Capsule().fill(Color.white.opacity(configuration.isPressed ? 0.24 : 0.12)))
+            // About 30 points tall beside the card's title; taps reach it from 44.
+            .minimumTouchTarget()
     }
 }
 #endif

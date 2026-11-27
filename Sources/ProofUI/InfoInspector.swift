@@ -76,6 +76,7 @@ public struct PhotoInfoSheet: View {
 /// The Info card below the histogram in Edit: the same details, collapsed until opened.
 public struct InfoCard: View {
     let library: Library
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(library: Library) {
         self.library = library
@@ -97,7 +98,7 @@ public struct InfoCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(.snappy(duration: 0.2)) { library.isInfoCardExpanded.toggle() }
+                            withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { library.isInfoCardExpanded.toggle() }
                         }
                 }
             }
@@ -209,7 +210,7 @@ private struct PhotoInfoView: View {
     private func row(_ name: String, _ value: String?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(name)
-                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
+                .inspectorLabelStyle()
                 .fixedSize()
             Spacer(minLength: 0)
             // Long values such as a folder path or lens name wrap rather than being cut off.

@@ -30,6 +30,9 @@ public struct LibraryPlatform: Sendable {
     /// drags up and down to the scroll view around it. SwiftUI's own drag gestures stop a scroll
     /// view from scrolling, and telling the two apart needs UIKit. `nil` where there's no touch.
     public var sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)?
+    /// Whether the system's Reduce Motion setting is on. Views read it from their environment;
+    /// this is for the library's own animations, such as opening a stack from a menu.
+    public var reducesMotion: @MainActor () -> Bool
 
     public init(clickModifiers: @escaping @MainActor () -> EventModifiers,
                 beep: @escaping @MainActor () -> Void,
@@ -37,7 +40,8 @@ public struct LibraryPlatform: Sendable {
                 openFolder: @escaping @MainActor (URL) -> Void,
                 copyString: @escaping @MainActor (String) -> Void,
                 observe: @escaping @MainActor (_ handler: @escaping @MainActor (Event) -> Void) -> Void,
-                sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? = nil) {
+                sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? = nil,
+                reducesMotion: @escaping @MainActor () -> Bool = { false }) {
         self.clickModifiers = clickModifiers
         self.beep = beep
         self.revealFiles = revealFiles
@@ -45,6 +49,7 @@ public struct LibraryPlatform: Sendable {
         self.copyString = copyString
         self.observe = observe
         self.sidewaysDrag = sidewaysDrag
+        self.reducesMotion = reducesMotion
     }
 }
 

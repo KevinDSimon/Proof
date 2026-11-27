@@ -6,6 +6,7 @@ import SwiftUI
 /// otherwise the name of the one profile it has.
 public struct ProfileRow: View {
     let library: Library
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(library: Library) {
         self.library = library
@@ -14,10 +15,13 @@ public struct ProfileRow: View {
     public var body: some View {
         let edit = library.selectedEdit
         let profiles = edit?.profiles
-        HStack {
+        // At the accessibility text sizes the pop-up goes under its name, where it has the card's width.
+        let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading))
+                                                          : AnyLayout(HStackLayout())
+        layout {
             Text("Profile")
-                .foregroundStyle(InspectorCard<EmptyView>.labelColor)
-            Spacer()
+                .inspectorLabelStyle()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
             if let edit, let profiles, profiles.offersChoice {
                 Picker("Profile", selection: Binding(
                     get: { edit.recipe.profile },
@@ -26,7 +30,7 @@ public struct ProfileRow: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
-                .fixedSize()
+                .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: dynamicTypeSize.isAccessibilitySize)
                 .help("The color profile that sets the photo's starting colors")
             } else if let edit, let profiles {
                 Text(profiles.label(for: edit.recipe.profile))
