@@ -334,9 +334,13 @@ private struct ToolSheet: View {
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
                 }
-                ForEach(group.controls, id: \.self) { control($0) }
-                if !group.sliders.isEmpty {
-                    PhoneToolSliders(library: library, adjustments: group.sliders)
+                // Switches and menus keep the sliders' spacing, so a group of rows reads as evenly
+                // as a group of sliders.
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(group.controls, id: \.self) { control($0) }
+                    if !group.sliders.isEmpty {
+                        PhoneToolSliders(library: library, adjustments: group.sliders)
+                    }
                 }
             }
         }

@@ -10,6 +10,10 @@ struct PhoneLensSwitches: View {
     let renderer: RAWRenderer?
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 14) { switches }
+    }
+
+    @ViewBuilder private var switches: some View {
         let edit = library.selectedEdit
         let corrections = edit?.recipe.lens ?? LensCorrections()
         if let lens = edit?.cameraLens {
