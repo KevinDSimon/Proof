@@ -44,8 +44,6 @@ struct PhoneEditor: View {
             // No filmstrip (#286), so the photo has the room.
             if library.isCropping {
                 PhoneStraightenSlider(library: library)
-            } else if library.isSamplingWhiteBalance {
-                PhoneWhiteBalanceReadout(library: library)
             }
         }
         // The photo fits above the sheet, so it never covers it.

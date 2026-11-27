@@ -154,31 +154,3 @@ struct PhoneWhiteBalanceToolbar: ToolbarContent {
         }
     }
 }
-
-/// Below the photo in the eyedropper mode, in Straighten's place in Crop: what to do, and the
-/// Temperature and Tint the spot under the loupe sets.
-struct PhoneWhiteBalanceReadout: View {
-    let library: Library
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(values)
-                .monospacedDigit()
-            Text("Drag the loupe or tap something neutral gray")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var values: String {
-        guard let edit = library.selectedEdit, let asShot = edit.asShot else { return " " }
-        let shown = edit.recipe.basic.whiteBalance(asShot: asShot)
-        let tint = shown.tint.rounded()
-        let tintText = tint > 0 ? "+\(Int(tint))" : tint < 0 ? "−\(Int(-tint))" : "0"
-        return "Temperature \(Int(shown.temperature.rounded())) K   Tint \(tintText)"
-    }
-}
