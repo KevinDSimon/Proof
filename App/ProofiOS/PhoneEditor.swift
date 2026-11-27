@@ -33,7 +33,9 @@ struct PhoneEditor: View {
                             .frame(width: 120)
                             .padding(10)
                             .background(Color.toolPanel, in: .rect(cornerRadius: 14))
-                            .padding(12)
+                            // 12 points inside the photo's 16-point margin, so it stays clear of the
+                            // photo's edge while zoomed.
+                            .padding(28)
                             .transition(.opacity)
                     }
                 }
@@ -259,9 +261,13 @@ private struct ToolSheet: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 12)
                 .padding(.bottom, 16)
                 .disabled(library.selectedEdit == nil)
             }
+            // The system's soft edge under the title bar, so sliders fade out beneath it as
+            // they scroll rather than meeting it at a hard line.
+            .scrollEdgeEffectStyle(.soft, for: .top)
             .background(Color.toolPanel.ignoresSafeArea())
             .navigationTitle(tool.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -301,5 +307,5 @@ private extension Color {
 
 private extension PresentationDetent {
     /// A tool sheet's compact height: its title and the first two sliders.
-    static let toolCompact = PresentationDetent.height(200)
+    static let toolCompact = PresentationDetent.height(212)
 }
