@@ -8,14 +8,17 @@ import SwiftUI
 /// slider tracks, it shows the photo's colors, so it is an exception to the inspector's gray.
 public struct HistogramView: View, Equatable {
     var histogram: Histogram?
+    /// 84 points in the inspector; the iPhone's floating histogram is smaller.
+    var height: CGFloat = 84
     @Environment(\.colorScheme) private var colorScheme
 
     public nonisolated static func == (lhs: HistogramView, rhs: HistogramView) -> Bool {
-        lhs.histogram == rhs.histogram
+        lhs.histogram == rhs.histogram && lhs.height == rhs.height
     }
 
-    public init(histogram: Histogram? = nil) {
+    public init(histogram: Histogram? = nil, height: CGFloat = 84) {
         self.histogram = histogram
+        self.height = height
     }
 
     public var body: some View {
@@ -33,7 +36,7 @@ public struct HistogramView: View, Equatable {
                 context.stroke(area, with: .color(color), lineWidth: 1.25)
             }
         }
-        .frame(height: 84)
+        .frame(height: height)
         .clipped()
         .accessibilityElement()
         .accessibilityLabel("Histogram")

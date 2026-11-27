@@ -1,7 +1,7 @@
 # 0048. An iPad and iPhone app
 
 Date: 2026-11-25
-Status: Accepted. Its rule that new features land on every platform is superseded by [0051](0051-mobile-workflow.md).
+Status: Accepted. Its rule that new features land on every platform is superseded by [0051](0051-mobile-workflow.md), and its Edit on iPhone by [0054](0054-iphone-editor.md).
 
 ## Context
 Issue #218. The roadmap named an iPad and iPhone app under Later. `ProofKit` was kept free of AppKit, UIKit and SwiftUI so that app could reuse it, `Package.swift` already lists iOS 27, and `FileAccess` takes a `BookmarkSystem` for folders picked in the Files app. The app should open one or many folders from Files, offer every adjustment the Mac app has, and follow Apple's guidelines for iPadOS and iOS in navigation, layout, controls and gestures.
