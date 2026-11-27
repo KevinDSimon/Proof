@@ -292,6 +292,8 @@ public final class Library {
     var sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? { platform.sidewaysDrag }
     /// Whether Reduce Motion is on, for animations started outside a view's environment.
     var reducesMotion: Bool { platform.reducesMotion() }
+    /// iPhone: a tap in the grid selects a photo rather than opening it (#292).
+    public var tapSelectsPhoto: Bool { platform.tapSelectsPhoto() }
 
     public init(platform: LibraryPlatform) {
         self.platform = platform

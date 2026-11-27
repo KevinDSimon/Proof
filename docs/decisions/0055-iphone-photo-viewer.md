@@ -1,7 +1,7 @@
 # 0055. The iPhone photo viewer: a persistent filmstrip and a native toolbar
 
 Date: 2026-11-26
-Status: Accepted. Changes how 0054's editor is reached on iPhone.
+Status: Superseded by #292 (see "Reaching the editor" in 0054). The viewer is removed; a tap in the grid selects the photo and shows its toolbar.
 
 ## Context
 Issue #286. Until now a tap in the iPhone grid opened the photo straight into `PhoneEditor` (decision 0054), with the filmstrip under the photo and five editing tools in the bottom toolbar. Decision 0051 makes the phone a place to browse, cull, rate and share as much as to edit, and Apple Photos shows the shape for that: a photo viewer with a filmstrip and a few actions, and Edit as a separate step.

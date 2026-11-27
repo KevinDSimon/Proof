@@ -141,10 +141,10 @@ struct ContentView: View {
             // Select All takes the back button's place while selecting, as in Files.
             .navigationBarBackButtonHidden(library.isSelectingPhotos)
             .navigationDestination(isPresented: isEditing) {
-                // iPhone opens the photo in a viewer whose Edit pushes its own editor of a few tools
-                // (decisions 0055 and 0054); iPad keeps the inspector.
-                if UIDevice.current.userInterfaceIdiom == .phone {
-                    PhoneViewer(library: library, renderer: renderer)
+                // iPhone has its own editor of a few tools, opened from the selected photo's toolbar
+                // (decision 0054, #292); iPad keeps the inspector.
+                if library.tapSelectsPhoto {
+                    PhoneEditor(library: library, renderer: renderer)
                 } else {
                     PhotoView(library: library, renderer: renderer)
                 }
@@ -153,7 +153,8 @@ struct ContentView: View {
 
     /// Browse has one More menu, with Select and the filter, so the bar stays clear on iPhone.
     /// While selecting, the bar has Select All, the filter and Done, and a bottom toolbar rates and
-    /// flags the selected photos, as in Notes.
+    /// flags the selected photos, as in Notes. On iPhone a photo selected by a tap gets a bottom
+    /// toolbar of its own (#292).
     @ToolbarContentBuilder private var browseToolbar: some ToolbarContent {
         if library.isSelectingPhotos {
             let allSelected = library.browse.selectedPhotos.count == library.shownPhotos.count
@@ -217,6 +218,41 @@ struct ContentView: View {
                 .accessibilityLabel("More")
                 .accessibilityValue(library.filter.filtersOnDescription)
             }
+            if library.tapSelectsPhoto, let photo = library.browse.selectedPhoto {
+                selectedPhotoToolbar(photo)
+            }
+        }
+    }
+
+    /// iPhone: the photo a tap selected, with Share, Rating, Info and Edit, each its own Liquid Glass
+    /// button (#292). Share leads, as in Photos and Select, and Edit ends the bar; the flexible
+    /// spacers keep the buttons apart rather than one grouped control.
+    @ToolbarContentBuilder private func selectedPhotoToolbar(_ photo: PhotoReference) -> some ToolbarContent {
+        // JPEG and HEIC photos aren't edited until #239; they can still be rated and get Info.
+        let isEditable = photo.isEditable
+        let rating = library.selectedPhotoMetadata?.rating ?? 0
+        ToolbarItem(placement: .bottomBar) {
+            Button("Share", systemImage: "square.and.arrow.up") { library.requestExport(of: [photo]) }
+                .disabled(!isEditable || library.exports.isVisible)
+        }
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            Menu {
+                // Written to the photo's XMP sidecar, as the touch-and-hold menu's Rating is.
+                RatingPicker(library: library, photos: [photo]).pickerStyle(.inline)
+            } label: {
+                Label("Rating", systemImage: rating > 0 ? "star.fill" : "star")
+            }
+            .accessibilityValue(RatingBadges.title(ofRating: rating))
+        }
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            Button("Info", systemImage: "info.circle") { library.infoSheetPhoto = photo }
+        }
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            Button("Edit", systemImage: "slider.horizontal.3") { library.browse.edit() }
+                .disabled(!isEditable)
         }
     }
 

@@ -139,24 +139,39 @@ struct BrowseStateTests {
         #expect(state.selectedPhoto == ref(6))
     }
 
-    @Test("The iPhone viewer stays open as a swipe or a filmstrip tap moves to another photo, and shows the edit again after the editor's Compare")
-    func phoneViewerMoves() {
-        var state = BrowseState(selectedPhoto: ref(2))
-        state.edit()
-        // A swipe to the left on the photo.
-        state.move(.right, in: photos, columns: photos.count)
-        #expect(state.selectedPhoto == ref(3))
-        #expect(state.mode == .editing)
-        // A tap on a thumbnail.
-        state.selectedPhoto = ref(6)
-        #expect(state.selectedPhoto == ref(6))
-        #expect(state.mode == .editing)
+    @Test("A tap in the iPhone grid selects one photo, a second tap deselects it, and Back from Edit keeps it selected")
+    func phoneTapToSelect() {
+        var state = BrowseState()
+        state.tapToSelect(ref(2))
+        #expect(state.selectedPhoto == ref(2))
+        #expect(state.selectedPhotos == [ref(2)])
+        #expect(state.mode == .browsing)
 
-        state.toggleOriginal()
-        #expect(state.isShowingOriginal)
-        state.showEdited()
-        #expect(!state.isShowingOriginal)
+        // Another photo replaces it rather than adding to it.
+        state.tapToSelect(ref(5))
+        #expect(state.selectedPhotos == [ref(5)])
+
+        // Edit from the toolbar, then Back.
+        state.edit()
         #expect(state.mode == .editing)
+        state.toggleOriginal()
+        state.finishEditing()
+        #expect(state.mode == .browsing)
+        #expect(state.selectedPhoto == ref(5))
+        #expect(!state.isShowingOriginal)
+
+        state.tapToSelect(ref(5))
+        #expect(state.selectedPhoto == nil)
+        #expect(state.selectedPhotos.isEmpty)
+    }
+
+    @Test("A tap on one of several selected photos selects only it rather than deselecting it")
+    func phoneTapInMultipleSelection() {
+        var state = BrowseState(selectedPhoto: ref(2))
+        state.toggle(ref(3), in: photos)
+        #expect(state.selectedPhotos.count == 2)
+        state.tapToSelect(ref(2))
+        #expect(state.selectedPhotos == [ref(2)])
     }
 
     @Test("Photos with the same name in different folders are told apart")

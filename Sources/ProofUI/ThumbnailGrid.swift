@@ -43,14 +43,19 @@ public struct ThumbnailGrid: View {
     private static let spacing: CGFloat = 12
     private static let margin: CGFloat = 20
     #else
-    /// A tap opens the photo, so there's no current photo to mark, except while Select is on or
-    /// after the arrow keys have moved it on iPad (#235).
-    private var marksSelection: Bool { library.isSelectingPhotos || library.isSelectionFromKeyboard }
+    /// On iPad a tap opens the photo, so there's no current photo to mark, except while Select is
+    /// on or after the arrow keys have moved it (#235). On iPhone a tap selects the photo, which
+    /// is marked while its toolbar shows (#292).
+    private var marksSelection: Bool {
+        library.isSelectingPhotos || library.isSelectionFromKeyboard || library.tapSelectsPhoto
+    }
     private static let sizes = ThumbnailSize.touch
     private static let spacing: CGFloat = 8
     private static let margin: CGFloat = 16
     /// Where each thumbnail is in the grid, to find the one under a finger dragging across them.
     @State private var cellFrames: [PhotoReference: CGRect] = [:]
+    /// The same frames on screen, to tell a tap on a photo from one beside it.
+    @State private var cellGlobalFrames: [PhotoReference: CGRect] = [:]
     private static let gridSpace = "ThumbnailGrid"
     #endif
 
@@ -105,6 +110,15 @@ public struct ThumbnailGrid: View {
                     }
                     .onEnded { _ in pinchStart = nil }
             )
+            #if os(iOS)
+            // iPhone: a tap between or below the photos deselects, hiding the toolbar (#292). A
+            // cell's own tap fires too, so a tap on a photo is left to it.
+            .onTapGesture(coordinateSpace: .global) { point in
+                guard library.tapSelectsPhoto, !library.isSelectingPhotos, library.browse.selectedPhoto != nil,
+                      !cellGlobalFrames.values.contains(where: { $0.contains(point) }) else { return }
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { library.deselectAll() }
+            }
+            #endif
             // The grid's width comes from the window, never from the photos inside it.
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
@@ -307,10 +321,15 @@ public struct ThumbnailGrid: View {
             library.browse.edit()
         })
         #else
-        // A tap opens the photo, as in Photos, or while Select is on adds or removes it.
+        // A tap opens the photo on iPad, as in Photos, and selects it on iPhone, where the toolbar's
+        // Edit opens it. While Select is on it adds or removes the photo.
         .onTapGesture {
             if library.isSelectingPhotos {
                 library.browse.toggle(photo.id, in: photos)
+            } else if library.tapSelectsPhoto {
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) {
+                    library.browse.tapToSelect(photo.id)
+                }
             } else {
                 library.isSelectionFromKeyboard = false
                 library.browse.selectedPhoto = photo.id
@@ -321,7 +340,11 @@ public struct ThumbnailGrid: View {
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.gridSpace)) } action: { frame in
             cellFrames[photo.id] = frame
         }
-        .onDisappear { cellFrames[photo.id] = nil }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { cellGlobalFrames[photo.id] = $0 }
+        .onDisappear {
+            cellFrames[photo.id] = nil
+            cellGlobalFrames[photo.id] = nil
+        }
         #endif
         .help(library.selection?.isAcrossFolders == true ? "\(photo.name) in \(library.path(of: photo.folder))" : photo.name)
         .accessibilityElement()
