@@ -5,8 +5,8 @@ import SwiftUI
 /// Edit on iPhone (decision 0054): the photo with five tools in the bottom toolbar. Looks, Light,
 /// Color and Finish each open a sheet of a few sliders with a compact and a medium height, and the
 /// photo resizes to stay whole above it. Crop turns the canvas into a crop mode (`PhoneCropToolbar`).
-/// Undo, History, Copy and
-/// Paste, Compare, the histogram and Reset are in the More menu. iPad keeps `PhotoView`.
+/// Undo, History, Copy and Paste, Compare, the histogram and Reset are in the More menu. It is
+/// pushed from `PhoneViewer`'s Edit, and Back returns there. iPad keeps `PhotoView`.
 struct PhoneEditor: View {
     @Bindable var library: Library
     let renderer: RAWRenderer?
@@ -40,11 +40,9 @@ struct PhoneEditor: View {
                             .transition(.opacity)
                     }
                 }
+            // The filmstrip is the viewer's (#286), so the photo has the room here.
             if library.isCropping {
                 PhoneStraightenSlider(library: library)
-            } else if sheetTop == nil {
-                // The filmstrip makes way for a sheet, so the photo keeps the room.
-                Filmstrip(library: library, photos: library.shownPhotos)
             }
         }
         // The photo fits above the sheet, so it never covers it.

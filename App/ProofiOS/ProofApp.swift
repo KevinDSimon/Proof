@@ -141,9 +141,10 @@ struct ContentView: View {
             // Select All takes the back button's place while selecting, as in Files.
             .navigationBarBackButtonHidden(library.isSelectingPhotos)
             .navigationDestination(isPresented: isEditing) {
-                // iPhone has its own editor of a few tools (decision 0054); iPad keeps the inspector.
+                // iPhone opens the photo in a viewer whose Edit pushes its own editor of a few tools
+                // (decisions 0055 and 0054); iPad keeps the inspector.
                 if UIDevice.current.userInterfaceIdiom == .phone {
-                    PhoneEditor(library: library, renderer: renderer)
+                    PhoneViewer(library: library, renderer: renderer)
                 } else {
                     PhotoView(library: library, renderer: renderer)
                 }
@@ -515,7 +516,7 @@ struct EditPhoto: View {
             if library.browse.selectedPhoto?.isEditable == false {
                 // Reached from the filmstrip; Edit doesn't open them until #239.
                 ContentUnavailableView("Can't Edit This Photo Yet", systemImage: "photo",
-                                       description: Text("Proof edits RAW photos. JPEG and HEIC photos can be rated and flagged in Browse."))
+                                       description: Text("Proof edits RAW photos. JPEG and HEIC photos can be rated and flagged."))
             } else if library.isSelectedPhotoInCloud {
                 CloudPhotoPreview(url: url, backdrop: library.canvasColor.color)
                     .padding()
