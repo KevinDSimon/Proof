@@ -4,7 +4,8 @@ import SwiftUI
 
 /// Edit on iPhone (decision 0054): the photo with five tools in the bottom toolbar. Looks, Light,
 /// Color and Finish each open a sheet of a few sliders with a compact and a medium height, and the
-/// photo resizes to stay whole above it. Crop opens the touch crop tool. Undo, History, Copy and
+/// photo resizes to stay whole above it. Crop turns the canvas into a crop mode (`PhoneCropToolbar`).
+/// Undo, History, Copy and
 /// Paste, Compare, the histogram and Reset are in the More menu. iPad keeps `PhotoView`.
 struct PhoneEditor: View {
     @Bindable var library: Library
@@ -27,7 +28,7 @@ struct PhoneEditor: View {
                 // A small floating panel, shown only while it is turned on in More, so it may sit
                 // over the corner of the canvas as a temporary tool does.
                 .overlay(alignment: .topLeading) {
-                    if isHistogramShown {
+                    if isHistogramShown && !library.isCropping {
                         HistogramView(histogram: library.selectedHistogram, height: 48)
                             .equatable()
                             .frame(width: 120)
@@ -39,8 +40,10 @@ struct PhoneEditor: View {
                             .transition(.opacity)
                     }
                 }
-            // The filmstrip makes way for a sheet, so the photo keeps the room.
-            if sheetTop == nil {
+            if library.isCropping {
+                PhoneStraightenSlider(library: library)
+            } else if sheetTop == nil {
+                // The filmstrip makes way for a sheet, so the photo keeps the room.
                 Filmstrip(library: library, photos: library.shownPhotos)
             }
         }
@@ -49,10 +52,10 @@ struct PhoneEditor: View {
         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { photoAreaBottom = $0 }
         .animation(.snappy(duration: 0.25), value: isHistogramShown)
         .background(Color.interfaceBackground.ignoresSafeArea())
-        .navigationTitle(library.windowTitle)
-        .navigationSubtitle(library.browse.isShowingOriginal ? "Original" : "")
+        .navigationTitle(library.isCropping ? "Crop" : library.windowTitle)
+        .navigationSubtitle(library.browse.isShowingOriginal && !library.isCropping ? "Original" : "")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isInTool)
+        .navigationBarBackButtonHidden(isInTool || library.isCropping)
         .sheet(isPresented: isSheetUp) {
             sheet
                 // Opaque rather than glass. The tool sheets are a step lighter than the canvas; the
@@ -84,26 +87,23 @@ struct PhoneEditor: View {
     // MARK: Sheets
 
     @ViewBuilder private var sheet: some View {
-        if library.isCropping || library.isRemovingSpots || library.isMasking {
-            // The touch tools keep the controls they had in the iPhone inspector sheet (#228).
-            Group {
-                if library.isCropping {
-                    CropInspector(library: library, renderer: renderer)
-                } else if library.isRemovingSpots {
-                    SpotRemovalInspector(library: library)
-                } else {
-                    MasksInspector(library: library, renderer: renderer)
-                }
+        if isInTool {
+            // Spot removal and masks keep the controls they had in the iPhone inspector sheet (#228).
+            if library.isRemovingSpots {
+                SpotRemovalInspector(library: library)
+            } else {
+                MasksInspector(library: library, renderer: renderer)
             }
         } else if let tool {
             ToolSheet(library: library, tool: tool) { self.tool = nil }
         }
     }
 
-    private var isInTool: Bool { library.isCropping || library.isRemovingSpots || library.isMasking }
+    /// A touch tool whose controls are in a sheet. Crop has its controls around the photo instead.
+    private var isInTool: Bool { library.isRemovingSpots || library.isMasking }
 
     private var isSheetUp: Binding<Bool> {
-        Binding(get: { tool != nil || isInTool },
+        Binding(get: { (tool != nil && !library.isCropping) || isInTool },
                 set: { if !$0 { tool = nil } })
     }
 
@@ -153,13 +153,7 @@ struct PhoneEditor: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if library.isCropping {
-            // Cancel and Done stand in for the rest, so the tool is left only one of two ways.
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel") { library.cancelCropping() }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { library.finishCropping() }
-            }
+            PhoneCropToolbar(library: library)
         } else if library.isRemovingSpots || library.isMasking {
             // Not reachable from the iPhone's interface until #288, but a keyboard's shortcuts
             // still open them, so they can be left.

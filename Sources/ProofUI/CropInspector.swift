@@ -126,26 +126,12 @@ public struct CropInspector: View {
 
     /// The menu item for the locked ratio, in either orientation.
     private var shownChoice: AspectChoice {
-        guard let aspect = crop.aspect else { return .freeform }
-        if choseCustom { return .custom }
-        if let original = library.originalAspect, aspect.matches(original) || aspect.matches(original.swapped) {
-            return .original
-        }
-        return AspectChoice.allCases.first { $0.ratio.map { aspect.matches($0) || aspect.matches($0.swapped) } ?? false } ?? .custom
+        AspectChoice.shown(for: crop.aspect, original: library.originalAspect, choseCustom: choseCustom)
     }
 
     private func choose(_ choice: AspectChoice) {
         choseCustom = choice == .custom
-        let portrait = library.selectedCropFrame.map { $0.size.height > $0.size.width } ?? false
-        switch choice {
-        case .freeform: library.setCropAspect(nil)
-        case .original: library.setCropAspect(library.originalAspect)
-        case .custom:
-            // Starts from the rectangle's own shape, rounded to something that can be typed.
-            let shape = crop.aspect ?? library.selectedCropFrame.map { AspectRatio($0.size.width, $0.size.height) }
-            if let shape { library.setCropAspect(AspectRatio((shape.value * 100).rounded() / 100, 1)) }
-        default: library.setCropAspect(choice.ratio?.oriented(portrait: portrait))
-        }
+        library.setCropAspect(choice)
     }
 
     private func ratioField(_ title: String, text: Binding<String>) -> some View {
@@ -188,35 +174,5 @@ public struct CropInspector: View {
                 .frame(maxWidth: .infinity)
         }
         .help(help)
-    }
-}
-
-/// The aspect ratio menu, in its order.
-enum AspectChoice: CaseIterable {
-    case freeform, original, square, fourFive, fiveSeven, threeTwo, sixteenNine, custom
-
-    var title: String {
-        switch self {
-        case .freeform: "Freeform"
-        case .original: "Original"
-        case .square: "1:1"
-        case .fourFive: "4:5"
-        case .fiveSeven: "5:7"
-        case .threeTwo: "3:2"
-        case .sixteenNine: "16:9"
-        case .custom: "Custom"
-        }
-    }
-
-    /// The preset's shape, `nil` for those that depend on the photo or the person.
-    var ratio: AspectRatio? {
-        switch self {
-        case .square: AspectRatio(1, 1)
-        case .fourFive: AspectRatio(4, 5)
-        case .fiveSeven: AspectRatio(5, 7)
-        case .threeTwo: AspectRatio(3, 2)
-        case .sixteenNine: AspectRatio(16, 9)
-        case .freeform, .original, .custom: nil
-        }
     }
 }

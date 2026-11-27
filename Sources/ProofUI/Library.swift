@@ -1692,6 +1692,21 @@ public final class Library {
         }
     }
 
+    /// Locks the rectangle to a menu choice. A preset keeps the rectangle's orientation, so 4:5
+    /// on a portrait crop stays portrait. Custom keeps the current shape, for its fields to change.
+    public func setCropAspect(_ choice: AspectChoice) {
+        let portrait = selectedCropFrame.map { $0.size.height > $0.size.width } ?? false
+        switch choice {
+        case .freeform: setCropAspect(nil)
+        case .original: setCropAspect(originalAspect)
+        case .custom:
+            // Starts from the rectangle's own shape, rounded to something that can be typed.
+            let shape = selectedCrop.aspect ?? selectedCropFrame.map { AspectRatio($0.size.width, $0.size.height) }
+            if let shape { setCropAspect(AspectRatio((shape.value * 100).rounded() / 100, 1)) }
+        default: setCropAspect(choice.ratio?.oriented(portrait: portrait))
+        }
+    }
+
     /// Switches the rectangle between landscape and portrait. Freeform stays freeform.
     public func swapCropOrientation() {
         guard let current = selectedCropFrame else { return }
