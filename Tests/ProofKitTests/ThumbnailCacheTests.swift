@@ -247,6 +247,77 @@ struct ThumbnailCacheTests {
         #expect(widths == ["A.DNG": 100, "B.DNG": 512])
         #expect(renderer.count == 1)
     }
+
+    // MARK: Size limit
+
+    /// The size of one stored thumbnail of a photo made by `makePhoto`, which all have the same
+    /// pixels and so the same JPEG.
+    func thumbnailBytes() throws -> Int {
+        let probe = ThumbnailCache(directory: root.appendingPathComponent("Probe"))
+        #expect(probe.thumbnail(for: try makePhoto("Probe.png")) != nil)
+        let file = try #require(FileManager.default.enumerator(at: probe.directory, includingPropertiesForKeys: nil)?
+            .allObjects.compactMap { $0 as? URL }.first { $0.pathExtension == "jpg" })
+        return try #require(try file.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+    }
+
+    func storedBytes(in cache: ThumbnailCache) -> Int {
+        let enumerator = FileManager.default.enumerator(at: cache.directory, includingPropertiesForKeys: [.fileSizeKey])
+        return (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "jpg" }
+            .reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+    }
+
+    @Test("The cache stays under its size limit as thumbnails are stored")
+    func staysUnderLimit() throws {
+        let bytes = try thumbnailBytes()
+        let cache = ThumbnailCache(directory: root.appendingPathComponent("Limited"), maxBytes: bytes * 7 / 2)
+        for index in 0..<8 {
+            #expect(cache.thumbnail(for: try makePhoto("IMG_\(index).png")) != nil)
+            #expect(storedBytes(in: cache) <= cache.maxBytes)
+        }
+        // Trimming goes to 90% of the limit, so three thumbnails remain after each trim.
+        #expect(storedBytes(in: cache) >= bytes * 3)
+    }
+
+    @Test("The thumbnails read least recently are removed first")
+    func removesLeastRecentlyRead() throws {
+        let bytes = try thumbnailBytes()
+        let cache = ThumbnailCache(directory: root.appendingPathComponent("Limited"), maxBytes: bytes * 7 / 2)
+        let a = try makePhoto("A.png"), b = try makePhoto("B.png"), c = try makePhoto("C.png")
+        for photo in [a, b, c] { #expect(cache.thumbnail(for: photo) != nil) }
+        // Stored in the order A, B, C, an hour apart, so A is the oldest.
+        for (hours, photo) in [(3.0, a), (2, b), (1, c)] {
+            let file = try #require(cache.entry(for: photo, showing: .asShot)).file
+            try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -hours * 3600)],
+                                                  ofItemAtPath: file.path)
+        }
+
+        // Reading A makes B the least recently read, so a fourth thumbnail removes B.
+        #expect(cache.cachedThumbnail(for: a) != nil)
+        #expect(cache.thumbnail(for: try makePhoto("D.png")) != nil)
+        #expect(cache.cachedThumbnail(for: b) == nil)
+        #expect(cache.cachedThumbnail(for: a) != nil)
+        #expect(cache.cachedThumbnail(for: c) != nil)
+    }
+
+    @Test("A cache that is already too large is trimmed when the next thumbnail is stored")
+    func trimsExistingCacheOnFirstStore() throws {
+        let bytes = try thumbnailBytes()
+        let directory = root.appendingPathComponent("Shared")
+        let unlimited = ThumbnailCache(directory: directory)
+        for index in 0..<6 { #expect(unlimited.thumbnail(for: try makePhoto("IMG_\(index).png")) != nil) }
+
+        let limited = ThumbnailCache(directory: directory, maxBytes: bytes * 7 / 2)
+        #expect(limited.thumbnail(for: try makePhoto("New.png")) != nil)
+        #expect(storedBytes(in: limited) <= limited.maxBytes)
+        #expect(limited.cachedThumbnail(for: root.appendingPathComponent("New.png")) != nil)
+    }
+
+    #if os(macOS)
+    @Test("On the Mac the cache stays in Application Support")
+    func macDirectory() {
+        #expect(ThumbnailCache.defaultDirectory == URL.applicationSupportDirectory.appendingPathComponent("Proof/Thumbnails"))
+    }
+    #endif
 }
 
 /// Times thumbnails for a whole folder, for issue #7. Runs only when `PROOF_SAMPLE_FOLDER` names a

@@ -2,11 +2,13 @@ import CoreGraphics
 import CryptoKit
 import Foundation
 import ImageIO
+import os
 import UniformTypeIdentifiers
 
 /// Small previews of photos, kept on local disk so a folder on a network share shows its
 /// thumbnails without reading the share again. The cache is disposable: deleting the directory
-/// only means thumbnails are made again.
+/// only means thumbnails are made again. It keeps to a size limit by removing the thumbnails read
+/// least recently (decision 0057).
 ///
 /// A thumbnail is made from the embedded JPEG preview that cameras and DNG converters store in a
 /// RAW file, so the RAW data itself isn't decoded. Only a file with no embedded preview is decoded
@@ -26,7 +28,29 @@ public final class ThumbnailCache: Sendable {
     /// Long edge of a stored thumbnail, in pixels: sharp in a Retina grid cell, small on disk.
     public static let maxPixelSize = 512
 
+    /// Where the cache is kept unless told otherwise. On iPad and iPhone it is in Caches, which iOS
+    /// doesn't back up and can clear when space runs low; on the Mac, in Application Support.
+    public static var defaultDirectory: URL {
+        #if os(iOS)
+        .cachesDirectory.appendingPathComponent("Proof/Thumbnails")
+        #else
+        .applicationSupportDirectory.appendingPathComponent("Proof/Thumbnails")
+        #endif
+    }
+
+    /// The default size limit, in bytes. A thumbnail is usually 50 KB to 300 KB, so this keeps
+    /// several thousand on iOS and tens of thousands on the Mac.
+    public static var defaultMaxBytes: Int {
+        #if os(iOS)
+        500_000_000
+        #else
+        2_000_000_000
+        #endif
+    }
+
     public let directory: URL
+    /// When the stored thumbnails add up to more than this, the least recently read are removed.
+    public let maxBytes: Int
     private let maxConcurrentReads: Int
     private let renderEdit: RenderEdit?
     private let lutVersion: LUTVersion?
@@ -40,11 +64,14 @@ public final class ThumbnailCache: Sendable {
     /// whose LUT is missing is left out, as the canvas leaves it out.
     /// A file in iCloud that isn't downloaded is never opened, since that would download it
     /// (decision 0050): its thumbnail is `cloudThumbnail`'s, unstored.
-    public init(directory: URL = .applicationSupportDirectory.appendingPathComponent("Proof/Thumbnails"),
+    /// When the cache grows past `maxBytes`, the thumbnails read least recently are removed until
+    /// it is back under 90% of the limit.
+    public init(directory: URL = ThumbnailCache.defaultDirectory, maxBytes: Int = ThumbnailCache.defaultMaxBytes,
                 maxConcurrentReads: Int = 4, renderEdit: RenderEdit? = nil, lutVersion: LUTVersion? = nil,
                 isInCloud: @escaping IsInCloud = { !CloudDownload.isDownloaded($0) },
                 cloudThumbnail: @escaping CloudThumbnail = CloudDownload.systemThumbnail(of:maxPixelSize:)) {
         self.directory = directory
+        self.maxBytes = maxBytes
         self.maxConcurrentReads = maxConcurrentReads
         self.renderEdit = renderEdit
         self.lutVersion = lutVersion
@@ -59,7 +86,7 @@ public final class ThumbnailCache: Sendable {
         if isInCloud(url) { return await cloudThumbnail(url, Self.maxPixelSize) }
         let shown = shown(edit, of: url)
         guard let entry = entry(for: url, showing: shown) else { return nil }
-        if let image = Self.readImage(at: entry.file, embeddedOnly: false) { return image }
+        if let image = readStored(entry) { return image }
         return await makeThumbnail(of: url, showing: shown, storingAs: entry)
     }
 
@@ -69,7 +96,7 @@ public final class ThumbnailCache: Sendable {
     /// the file can't be read as an image. Blocks on file I/O, so call it off the main thread.
     public func thumbnail(for url: URL) -> CGImage? {
         guard !isInCloud(url), let entry = entry(for: url, showing: .asShot) else { return nil }
-        if let image = Self.readImage(at: entry.file, embeddedOnly: false) { return image }
+        if let image = readStored(entry) { return image }
         guard let image = Self.makeThumbnail(of: url) else { return nil }
         if EditRecipe(asShot: CameraSettings(contentsOf: url)).isNeutral { store(image, as: entry) }
         return image
@@ -79,7 +106,7 @@ public final class ThumbnailCache: Sendable {
     /// Never reads more of `url` than its size and modification date.
     public func cachedThumbnail(for url: URL) -> CGImage? {
         guard let entry = entry(for: url, showing: .asShot) else { return nil }
-        return Self.readImage(at: entry.file, embeddedOnly: false)
+        return readStored(entry)
     }
 
     /// The cached thumbnail of `url` showing `edit`, or `nil` if none is stored for the file as it
@@ -88,7 +115,7 @@ public final class ThumbnailCache: Sendable {
     /// so it is quick enough to show while the photo itself is rendered.
     public func cachedThumbnail(for url: URL, edit: EditRecipe?) -> CGImage? {
         guard !isInCloud(url), let entry = entry(for: url, showing: shown(edit, of: url)) else { return nil }
-        return Self.readImage(at: entry.file, embeddedOnly: false)
+        return readStored(entry)
     }
 
     /// Thumbnails for `urls`. Cached thumbnails arrive first, then the rest as they are made, a few
@@ -119,7 +146,7 @@ public final class ThumbnailCache: Sendable {
                             let edit = edited.contains(url) ? (try? Sidecar.read(for: url))??.recipe ?? EditRecipe() : nil
                             let shown = self.shown(edit, of: url)
                             let entry = self.entry(for: url, showing: shown)
-                            return (url, shown, entry, entry.flatMap { Self.readImage(at: $0.file, embeddedOnly: false) })
+                            return (url, shown, entry, entry.flatMap { self.readStored($0) })
                         }
                     }
                     // Checking the cache costs one metadata lookup per file, which on a share is
@@ -202,7 +229,82 @@ public final class ThumbnailCache: Sendable {
         let fileManager = FileManager.default
         try? fileManager.removeItem(at: entry.folder)
         try? fileManager.createDirectory(at: entry.folder, withIntermediateDirectories: true)
-        try? (data as Data).write(to: entry.file, options: .atomic)
+        guard (try? (data as Data).write(to: entry.file, options: .atomic)) != nil else { return }
+        noteStored(bytes: data.length)
+    }
+
+    /// A stored thumbnail, marked as just read. The file's modification date records when it was
+    /// last read, which is the order thumbnails are removed in; the access date isn't reliable,
+    /// since APFS doesn't update it on every read.
+    private func readStored(_ entry: Entry) -> CGImage? {
+        guard let image = Self.readImage(at: entry.file, embeddedOnly: false) else { return nil }
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: entry.file.path)
+        return image
+    }
+
+    // MARK: Size limit
+
+    private struct Usage {
+        /// An estimate of the bytes stored, or `nil` until the directory has been measured.
+        var bytes: Int?
+        var trimming = false
+        /// Bytes stored while a trim measured the directory, which it may not have counted.
+        var storedWhileTrimming = 0
+    }
+
+    private let usage = OSAllocatedUnfairLock(initialState: Usage())
+
+    /// Adds a stored thumbnail to the estimate and trims the cache when it passes the limit. The
+    /// first store after launch measures the directory. A replaced thumbnail's bytes stay in the
+    /// estimate, which errs high, so a trim measures the directory again before removing anything.
+    private func noteStored(bytes: Int) {
+        let shouldTrim = usage.withLock { usage -> Bool in
+            guard !usage.trimming else {
+                usage.storedWhileTrimming += bytes
+                return false
+            }
+            if let known = usage.bytes {
+                usage.bytes = known + bytes
+                guard known + bytes > maxBytes else { return false }
+            }
+            usage.trimming = true
+            return true
+        }
+        if shouldTrim { trim() }
+    }
+
+    /// Measures the cache and, if it is over the limit, removes the photos' folders whose
+    /// thumbnails were read least recently until it is under 90% of the limit, so it isn't trimmed
+    /// again on the next store.
+    private func trim() {
+        let fileManager = FileManager.default
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        var folders: [(url: URL, bytes: Int, used: Date)] = []
+        let contents = (try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for folder in contents {
+            var bytes = 0
+            var used = Date.distantPast
+            for file in (try? fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(keys))) ?? [] {
+                guard let values = try? file.resourceValues(forKeys: keys) else { continue }
+                bytes += values.fileSize ?? 0
+                used = max(used, values.contentModificationDate ?? .distantPast)
+            }
+            folders.append((folder, bytes, used))
+        }
+        var total = folders.reduce(0) { $0 + $1.bytes }
+        if total > maxBytes {
+            let target = maxBytes / 10 * 9
+            for folder in folders.sorted(by: { $0.used < $1.used }) where total > target {
+                guard (try? fileManager.removeItem(at: folder.url)) != nil else { continue }
+                total -= folder.bytes
+            }
+        }
+        let measured = total
+        usage.withLock { usage in
+            usage.bytes = measured + usage.storedWhileTrimming
+            usage.storedWhileTrimming = 0
+            usage.trimming = false
+        }
     }
 
     private static let editEncoder: JSONEncoder = {
