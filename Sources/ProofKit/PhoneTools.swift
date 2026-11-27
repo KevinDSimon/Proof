@@ -100,8 +100,9 @@ public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
             [PhoneSheetGroup("Presence", sliders: [.texture, .clarity, .dehaze]),
              PhoneSheetGroup("Sharpening", sliders: [.sharpness]),
              PhoneSheetGroup("Noise Reduction", sliders: [.noiseReduction, .noiseReductionDetail, .colorNoiseReduction]),
-             PhoneSheetGroup("Lens Corrections", controls: [.lensSwitches],
-                             sliders: [.distortion, .lensVignetting, .lensVignettingMidpoint])]
+             // Two switches, as in Lightroom on iPhone. The manual distortion and lens vignetting
+             // sliders stay on the Mac; the vignette is in Effects.
+             PhoneSheetGroup("Lens Corrections", controls: [.lensSwitches])]
         case .effects:
             [PhoneSheetGroup("Grain", sliders: [.grain, .grainSize, .grainRoughness]),
              PhoneSheetGroup("Halation", sliders: [.halation, .halationSize]),
@@ -166,7 +167,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
     case selectiveHue(ColorRange), selectiveSaturation(ColorRange), selectiveBrightness(ColorRange)
     case texture, clarity, dehaze
     case sharpness, noiseReduction, noiseReductionDetail, colorNoiseReduction
-    case distortion, lensVignetting, lensVignettingMidpoint
     case grain, grainSize, grainRoughness, halation, halationSize, bloom, bloomSize
     case vignette, vignetteMidpoint, vignetteRoundness, vignetteFeather
 
@@ -201,9 +201,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .noiseReduction: "Luminance"
         case .noiseReductionDetail: "Detail"
         case .colorNoiseReduction: "Color"
-        case .distortion: "Distortion"
-        case .lensVignetting: "Vignetting"
-        case .lensVignettingMidpoint: "Vignetting Midpoint"
         case .vignetteMidpoint: "Midpoint"
         case .grainSize, .halationSize, .bloomSize: "Size"
         case .grainRoughness: "Roughness"
@@ -226,8 +223,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .noiseReduction: "Luminance Noise Reduction"
         case .noiseReductionDetail: "Noise Reduction Detail"
         case .colorNoiseReduction: "Color Noise Reduction"
-        case .lensVignetting: "Lens Vignetting"
-        case .lensVignettingMidpoint: "Lens Vignetting Midpoint"
         case .grainSize: "Grain Size"
         case .grainRoughness: "Grain Roughness"
         case .halationSize: "Halation Size"
@@ -244,7 +239,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
     public var refines: PhoneAdjustment? {
         switch self {
         case .noiseReductionDetail, .colorNoiseReduction: .noiseReduction
-        case .lensVignettingMidpoint: .lensVignetting
         case .grainSize, .grainRoughness: .grain
         case .halationSize: .halation
         case .bloomSize: .bloom
@@ -260,7 +254,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .temperature, .tint: .whiteBalance
         case .selectiveHue, .selectiveSaturation, .selectiveBrightness: .selectiveColor
         case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: .detail
-        case .distortion, .lensVignetting, .lensVignettingMidpoint: .lens
         case .grain, .grainSize, .grainRoughness, .halation, .halationSize, .bloom, .bloomSize,
              .vignette, .vignetteMidpoint, .vignetteRoundness, .vignetteFeather: .effects
         default: .basic
@@ -275,9 +268,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .mixRed, .mixGreen, .mixBlue: BlackAndWhite.range
         case .selectiveHue, .selectiveSaturation, .selectiveBrightness: ColorRangeAdjustment.range
         case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: DetailAdjustments.range
-        case .distortion: LensCorrections.distortionRange
-        case .lensVignetting: LensVignetting.amountRange
-        case .lensVignettingMidpoint: LensVignetting.midpointRange
         case .grain: GrainAdjustments.amountRange
         case .grainSize: GrainAdjustments.sizeRange
         case .grainRoughness: GrainAdjustments.roughnessRange
@@ -290,10 +280,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         default: -100...100
         }
     }
-
-    /// Whether moving the slider changes the photo's geometry, so the canvas shows a grid while
-    /// it moves, as on the Mac.
-    public var changesGeometry: Bool { self == .distortion }
 
     /// Whether the slider is dimmed because it changes nothing as the recipe stands: in black
     /// and white only a range's Brightness changes the gray, and a fine-tuning slider does
@@ -334,9 +320,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .noiseReduction: camera.map { recipe.detail.shown(camera: $0).noiseReduction ?? 0 }
         case .noiseReductionDetail: camera.map { recipe.detail.shown(camera: $0).noiseReductionDetail ?? 0 }
         case .colorNoiseReduction: camera.map { recipe.detail.shown(camera: $0).colorNoiseReduction ?? 0 }
-        case .distortion: recipe.lens.distortion ?? 0
-        case .lensVignetting: (recipe.lens.vignetting ?? LensVignetting()).amount
-        case .lensVignettingMidpoint: (recipe.lens.vignetting ?? LensVignetting()).midpoint
         case .grain: recipe.grain.amount
         case .grainSize: recipe.grain.size
         case .grainRoughness: recipe.grain.roughness
@@ -376,10 +359,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .noiseReduction: recipe.detail.noiseReduction = value
         case .noiseReductionDetail: recipe.detail.noiseReductionDetail = value
         case .colorNoiseReduction: recipe.detail.colorNoiseReduction = value
-        // Back to `nil` at the defaults, as the Mac's card writes them, so the edit stays neutral.
-        case .distortion: recipe.lens.distortion = value == 0 ? nil : value
-        case .lensVignetting: Self.setVignetting(&recipe.lens) { $0.amount = value }
-        case .lensVignettingMidpoint: Self.setVignetting(&recipe.lens) { $0.midpoint = value }
         case .grain: recipe.grain.amount = value
         case .grainSize: recipe.grain.size = value
         case .grainRoughness: recipe.grain.roughness = value
@@ -392,12 +371,6 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .vignetteRoundness: recipe.vignette.roundness = value
         case .vignetteFeather: recipe.vignette.feather = value
         }
-    }
-
-    private static func setVignetting(_ lens: inout LensCorrections, _ change: (inout LensVignetting) -> Void) {
-        var vignetting = lens.vignetting ?? LensVignetting()
-        change(&vignetting)
-        lens.vignetting = vignetting == LensVignetting() ? nil : vignetting
     }
 
     /// Back to the default: the camera's white balance, sharpening and noise reduction, or a new

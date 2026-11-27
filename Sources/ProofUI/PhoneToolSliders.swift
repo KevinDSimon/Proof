@@ -36,10 +36,7 @@ public struct PhoneToolSliders: View {
             fractionDigits: style.digits, showsSign: style.showsSign, unit: style.unit, track: style.track,
             position: position, valueAtPosition: valueAtPosition,
             reset: { library.changeEdit { adjustment.reset(in: &$0) } },
-            isAdjusting: { adjusting in
-                library.isAdjusting = adjusting
-                if adjustment.changesGeometry { library.isAdjustingGeometry = adjusting }
-            })
+            isAdjusting: { library.isAdjusting = $0 })
             // White balance and sharpness start from the camera's, read once the photo opens.
             .disabled(value(of: adjustment) == nil)
             // Kept in view, dimmed, where it changes nothing as the edit stands.
@@ -92,12 +89,9 @@ public struct PhoneToolSliders: View {
         case .clarity: Style(track: AdjustmentSlider.clarityTrack)
         case .dehaze: Style(track: AdjustmentSlider.dehazeTrack)
         case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: Style(showsSign: false)
-        case .distortion: Style()
-        case .lensVignetting: Style(track: AdjustmentSlider.vignetteAmountTrack)
         case .vignette: Style(track: AdjustmentSlider.vignetteAmountTrack)
         case .vignetteRoundness: Style()
-        case .grain, .grainSize, .grainRoughness, .halation, .halationSize, .bloom, .bloomSize,
-             .lensVignettingMidpoint, .vignetteMidpoint, .vignetteFeather: Style(showsSign: false)
+        case .grain, .grainSize, .grainRoughness, .halation, .halationSize, .bloom, .bloomSize, .vignetteMidpoint, .vignetteFeather: Style(showsSign: false)
         }
     }
 }

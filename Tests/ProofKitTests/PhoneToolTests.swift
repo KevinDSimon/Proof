@@ -29,6 +29,8 @@ struct PhoneToolTests {
         recipe.blackAndWhite.isOn = true
         recipe.look = Look(lut: "Film/Warm.cube", strength: 0.6)
         recipe.lens.profile = false
+        recipe.lens.distortion = 10
+        recipe.lens.vignetting = LensVignetting(amount: -15, midpoint: 40)
         recipe.transform.vertical = 12
         recipe.crop = Crop(x: 0.1, y: 0.1, width: 0.8, height: 0.8, angle: 2)
         recipe.switchedOff = [.curve]
@@ -116,8 +118,7 @@ struct PhoneToolTests {
         let detail = PhoneToolSection.detail.groups(in: recipe, range: .red)
         #expect(detail.map(\.title) == ["Presence", "Sharpening", "Noise Reduction", "Lens Corrections"])
         #expect(detail.map { $0.sliders.map(\.title) }
-                == [["Texture", "Clarity", "Dehaze"], ["Amount"], ["Luminance", "Detail", "Color"],
-                    ["Distortion", "Vignetting", "Vignetting Midpoint"]])
+                == [["Texture", "Clarity", "Dehaze"], ["Amount"], ["Luminance", "Detail", "Color"], []])
         #expect(detail.last?.controls == [.lensSwitches])
         let effects = PhoneToolSection.effects.groups(in: recipe, range: .red)
         #expect(effects.map(\.title) == ["Grain", "Halation", "Bloom", "Vignette"])
@@ -128,8 +129,6 @@ struct PhoneToolTests {
         #expect(PhoneToolSection.detail.adjustments == detail.flatMap(\.sliders))
         #expect(PhoneAdjustment.colorNoiseReduction.refines == .noiseReduction)
         #expect(PhoneAdjustment.grain.refines == nil)
-        #expect(PhoneAdjustment.distortion.changesGeometry)
-        #expect(PhoneAdjustment.distortion.group == .lens)
         #expect(PhoneAdjustment.halationSize.group == .effects)
         #expect(PhoneAdjustment.dehaze.group == .basic)
         #expect(PhoneAdjustment.noiseReduction.group == .detail)
@@ -140,7 +139,6 @@ struct PhoneToolTests {
         var recipe = EditRecipe()
         #expect(PhoneAdjustment.grainSize.isInactive(in: recipe, camera: nil))
         #expect(PhoneAdjustment.vignetteFeather.isInactive(in: recipe, camera: nil))
-        #expect(PhoneAdjustment.lensVignettingMidpoint.isInactive(in: recipe, camera: nil))
         PhoneAdjustment.grain.set(30, in: &recipe)
         PhoneAdjustment.vignette.set(-20, in: &recipe)
         #expect(!PhoneAdjustment.grainSize.isInactive(in: recipe, camera: nil))
@@ -153,26 +151,23 @@ struct PhoneToolTests {
         #expect(!PhoneAdjustment.colorNoiseReduction.isInactive(in: recipe, camera: quiet))
     }
 
-    @Test("Lens corrections and effects reset to a new recipe's values and stay neutral")
+    @Test("Detail and Effects reset to a new recipe's values, keeping the Mac's manual lens corrections")
     func finishResets() {
         var recipe = EditRecipe()
-        PhoneAdjustment.lensVignettingMidpoint.set(70, in: &recipe)
-        PhoneAdjustment.distortion.set(15, in: &recipe)
+        // Manual distortion and lens vignetting are set on the Mac only.
+        recipe.lens.distortion = 15
+        recipe.lens.vignetting = LensVignetting(amount: 20, midpoint: 70)
         PhoneAdjustment.bloomSize.set(80, in: &recipe)
         PhoneAdjustment.noiseReduction.set(60, in: &recipe)
-        #expect(recipe.lens.vignetting?.midpoint == 70)
         #expect(PhoneToolSection.detail.isChanged(in: recipe))
         #expect(PhoneToolSection.effects.isChanged(in: recipe))
         PhoneToolSection.detail.reset(in: &recipe)
-        #expect(recipe.lens == LensCorrections())
         #expect(recipe.detail == DetailAdjustments())
         #expect(recipe.bloom.size == 80)
         PhoneToolSection.effects.reset(in: &recipe)
-        #expect(recipe == EditRecipe())
-        // Setting a value back to its default leaves the lens corrections neutral.
-        PhoneAdjustment.distortion.set(0, in: &recipe)
-        PhoneAdjustment.lensVignettingMidpoint.set(50, in: &recipe)
-        #expect(recipe.lens.distortion == nil && recipe.lens.vignetting == nil)
+        #expect(recipe.bloom.size == EditRecipe().bloom.size)
+        #expect(recipe.lens.distortion == 15)
+        #expect(recipe.lens.vignetting == LensVignetting(amount: 20, midpoint: 70))
     }
 
     @Test("Color has Basic and Selective Color segments and opens at the medium height")
