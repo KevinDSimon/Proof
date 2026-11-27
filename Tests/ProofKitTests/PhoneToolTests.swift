@@ -116,4 +116,59 @@ struct PhoneToolTests {
         #expect(PhoneAdjustment.vignette.group == .effects)
         #expect(PhoneAdjustment.clarity.group == .basic)
     }
+
+    @Test("The white balance menu lists Custom only once a slider has moved")
+    func whiteBalanceMenu() {
+        let presets: [WhiteBalancePreset] = [.asShot, .auto, .daylight, .cloudy, .shade, .tungsten, .fluorescent, .flash]
+        #expect(PhoneWhiteBalance.menu(showing: .asShot) == presets)
+        var recipe = EditRecipe()
+        recipe.basic.choose(.tungsten)
+        #expect(recipe.basic.whiteBalance == .tungsten)
+        #expect(PhoneWhiteBalance.menu(showing: recipe.basic.whiteBalance) == presets)
+        PhoneAdjustment.temperature.set(3000, in: &recipe)
+        #expect(recipe.basic.whiteBalance == .custom)
+        #expect(PhoneWhiteBalance.menu(showing: recipe.basic.whiteBalance) == presets + [.custom])
+        // Choosing a preset again leaves Custom out of the menu.
+        recipe.basic.choose(.daylight)
+        #expect(PhoneWhiteBalance.menu(showing: recipe.basic.whiteBalance) == presets)
+    }
+
+    @Test("A sampled spot sets Temperature and Tint as Custom, and switches White Balance on")
+    func sampleWhiteBalance() {
+        var recipe = macEdit
+        recipe.basic.choose(.cloudy)
+        recipe.switchedOff.insert(.whiteBalance)
+        let sampling = WhiteBalanceSampling(from: recipe)
+        sampling.sample(WhiteBalance(temperature: 4200, tint: 12), into: &recipe)
+        #expect(recipe.basic.whiteBalance == .custom)
+        #expect(recipe.basic.temperature == 4200)
+        #expect(recipe.basic.tint == 12)
+        #expect(recipe.switchedOff == [.curve])
+        // Out of range values are kept to the sliders' ranges.
+        sampling.sample(WhiteBalance(temperature: 90000, tint: -400), into: &recipe)
+        #expect(recipe.basic.temperature == WhiteBalance.temperatureRange.upperBound)
+        #expect(recipe.basic.tint == WhiteBalance.tintRange.lowerBound)
+    }
+
+    @Test("Cancel returns to the white balance from when the eyedropper opened, leaving the rest")
+    func cancelSampling() {
+        var start = macEdit
+        start.basic.choose(.shade)
+        start.switchedOff.insert(.whiteBalance)
+        var recipe = start
+        let sampling = WhiteBalanceSampling(from: recipe)
+        sampling.sample(WhiteBalance(temperature: 3900, tint: -8), into: &recipe)
+        sampling.sample(WhiteBalance(temperature: 5100, tint: 4), into: &recipe)
+        sampling.restore(in: &recipe)
+        #expect(recipe == start)
+
+        // As Shot comes back with the camera's values, not the last sample's.
+        var asShot = macEdit
+        let fromAsShot = WhiteBalanceSampling(from: asShot)
+        fromAsShot.sample(WhiteBalance(temperature: 6100, tint: 20), into: &asShot)
+        fromAsShot.restore(in: &asShot)
+        #expect(asShot == macEdit)
+        #expect(asShot.basic.whiteBalance == .asShot)
+        #expect(asShot.basic.temperature == nil && asShot.basic.tint == nil)
+    }
 }

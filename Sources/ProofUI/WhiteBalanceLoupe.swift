@@ -43,13 +43,26 @@ public struct WhiteBalanceSampler {
 
     /// Sets the white balance that makes the patch at `location` neutral gray.
     public func pick(at location: CGPoint) {
-        guard !library.isAutoAdjusting, let (point, frame) = photoPoint(at: location) else { return }
+        guard !library.isAutoAdjusting, let patch = patch(at: location) else { return }
+        let library = library, renderer = renderer
+        Task { await library.pickWhiteBalance(in: patch, with: renderer) }
+    }
+
+    /// Sets Temperature and Tint from the patch at `location` while the iPhone's eyedropper mode
+    /// is open (#298), without closing it. A sample asked for while one is measured waits for it.
+    public func sample(at location: CGPoint) {
+        guard let patch = patch(at: location) else { return }
+        let library = library, renderer = renderer
+        Task { await library.sampleWhiteBalance(in: patch, with: renderer) }
+    }
+
+    /// The patch measured at `location`, from 0 to 1 on each axis of the photo; `nil` off it.
+    private func patch(at location: CGPoint) -> CGRect? {
+        guard let (point, frame) = photoPoint(at: location) else { return nil }
         let photo = library.zoom.photoSize
         let width = max(Self.patchPixels / frame.width, Self.minimumPatchPhotoPixels / photo.width)
         let height = max(Self.patchPixels / frame.height, Self.minimumPatchPhotoPixels / photo.height)
-        let patch = CGRect(x: point.x - width / 2, y: point.y - height / 2, width: width, height: height)
-        let library = library, renderer = renderer
-        Task { await library.pickWhiteBalance(in: patch, with: renderer) }
+        return CGRect(x: point.x - width / 2, y: point.y - height / 2, width: width, height: height)
     }
 }
 

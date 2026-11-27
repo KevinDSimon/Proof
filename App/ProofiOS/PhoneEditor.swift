@@ -44,6 +44,8 @@ struct PhoneEditor: View {
             // No filmstrip (#286), so the photo has the room.
             if library.isCropping {
                 PhoneStraightenSlider(library: library)
+            } else if library.isSamplingWhiteBalance {
+                PhoneWhiteBalanceReadout(library: library)
             }
         }
         // The photo fits above the sheet, so it never covers it.
@@ -51,10 +53,10 @@ struct PhoneEditor: View {
         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { photoAreaBottom = $0 }
         .animation(.snappy(duration: 0.25), value: isHistogramShown)
         .background(Color.interfaceBackground.ignoresSafeArea())
-        .navigationTitle(library.isCropping ? "Crop" : library.windowTitle)
-        .navigationSubtitle(library.browse.isShowingOriginal && !library.isCropping ? "Original" : "")
+        .navigationTitle(library.isCropping ? "Crop" : library.isSamplingWhiteBalance ? "White Balance" : library.windowTitle)
+        .navigationSubtitle(library.browse.isShowingOriginal && !isInCanvasMode ? "Original" : "")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isInTool || library.isCropping)
+        .navigationBarBackButtonHidden(isInTool || isInCanvasMode)
         .sheet(isPresented: isSheetUp) {
             sheet
                 // Opaque rather than glass. The tool sheets are a step lighter than the canvas; the
@@ -94,15 +96,22 @@ struct PhoneEditor: View {
                 MasksInspector(library: library, renderer: renderer)
             }
         } else if let tool {
-            ToolSheet(library: library, tool: tool) { self.tool = nil }
+            ToolSheet(library: library, renderer: renderer, tool: tool, close: { self.tool = nil }) {
+                // The sheet lowers while the eyedropper is on the photo, and comes back after.
+                self.tool = nil
+                library.startSamplingWhiteBalance()
+            }
         }
     }
 
     /// A touch tool whose controls are in a sheet. Crop has its controls around the photo instead.
     private var isInTool: Bool { library.isRemovingSpots || library.isMasking }
 
+    /// Crop and the white balance eyedropper are modes of the canvas, with their own bars.
+    private var isInCanvasMode: Bool { library.isCropping || library.isSamplingWhiteBalance }
+
     private var isSheetUp: Binding<Bool> {
-        Binding(get: { (tool != nil && !library.isCropping) || isInTool },
+        Binding(get: { (tool != nil && !isInCanvasMode) || isInTool },
                 set: { if !$0 { tool = nil } })
     }
 
@@ -153,6 +162,8 @@ struct PhoneEditor: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if library.isCropping {
             PhoneCropToolbar(library: library)
+        } else if library.isSamplingWhiteBalance {
+            PhoneWhiteBalanceToolbar(library: library) { tool = .color }
         } else if library.isRemovingSpots || library.isMasking {
             // Not reachable from the iPhone's interface until #288, but a keyboard's shortcuts
             // still open them, so they can be left.
@@ -240,8 +251,10 @@ struct PhoneEditor: View {
 /// and Close, on the tool panel's gray.
 private struct ToolSheet: View {
     let library: Library
+    let renderer: RAWRenderer?
     let tool: PhoneTool
     let close: () -> Void
+    let openEyedropper: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -249,6 +262,12 @@ private struct ToolSheet: View {
                 Group {
                     if tool == .looks {
                         LookSection(library: library, isCard: false)
+                    } else if tool == .color {
+                        // The presets and eyedropper above Temperature and Tint (#298).
+                        VStack(alignment: .leading, spacing: 14) {
+                            PhoneWhiteBalanceRow(library: library, renderer: renderer, openEyedropper: openEyedropper)
+                            PhoneToolSliders(library: library, tool: tool)
+                        }
                     } else {
                         PhoneToolSliders(library: library, tool: tool)
                     }

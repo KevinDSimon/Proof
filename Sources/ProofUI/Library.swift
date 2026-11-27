@@ -116,6 +116,10 @@ public final class Library {
             }
             // Leaving the photo any way but Done or Cancel keeps the crop.
             if isCropping, let previous = oldValue.selectedPhoto { endCropping(of: previous) }
+            if isSamplingWhiteBalance, let previous = oldValue.selectedPhoto {
+                endSamplingWhiteBalance()
+                commitEdit(of: previous)
+            }
             isPickingWhiteBalance = false
             isDrawingGuides = false
             finishRemovingSpots()
@@ -878,7 +882,8 @@ public final class Library {
     /// the edit, and the crop tool and eyedropper, show the edited photo again, so a change is
     /// never made out of sight.
     public func toggleOriginal() {
-        guard isEditing, !isCropping, !isPickingWhiteBalance, !isRemovingSpots, !isMasking, selectedEdit != nil else { return }
+        guard isEditing, !isCropping, !isPickingWhiteBalance, !isSamplingWhiteBalance, !isRemovingSpots, !isMasking,
+              selectedEdit != nil else { return }
         browse.toggleOriginal()
     }
 
@@ -1466,6 +1471,100 @@ public final class Library {
             setOn(.whiteBalance, true)
             isPickingWhiteBalance = false
         }
+    }
+
+    /// The iPhone's eyedropper mode (#298): a loupe stays on the photo and Temperature and Tint
+    /// follow the spot under it, until Done keeps them or Cancel returns to the white balance from
+    /// when it opened. The iPad and Mac pick with one tap or click instead (`isPickingWhiteBalance`).
+    public private(set) var isSamplingWhiteBalance = false
+    private var whiteBalanceSampling: (photo: PhotoReference, sampling: WhiteBalanceSampling)?
+    /// The latest patch asked for while another was being measured. Only it is measured next, so
+    /// a drag's samples don't queue up behind each other.
+    @ObservationIgnored private var pendingWhiteBalanceSample: (patch: CGRect, renderer: RAWRenderer)?
+    /// Done was pressed while a spot was being measured: the mode has closed, and the white
+    /// balance is kept once the spot last asked for has been measured, so a quick tap and Done
+    /// keep that spot.
+    @ObservationIgnored private var keepsWhiteBalanceWhenMeasured = false
+
+    public func startSamplingWhiteBalance() {
+        guard isEditing, !isCropping, !isSamplingWhiteBalance, !keepsWhiteBalanceWhenMeasured, let photo = browse.selectedPhoto,
+              let edit = edits[photo], edit.asShot != nil else { return }
+        commitTask?.cancel()
+        commitEdit(of: photo)
+        showEdited()
+        isPickingWhiteBalance = false
+        isDrawingGuides = false
+        finishRemovingSpots()
+        finishMasking()
+        whiteBalanceSampling = (photo, WhiteBalanceSampling(from: edit.recipe))
+        isSamplingWhiteBalance = true
+    }
+
+    /// Sets Temperature and Tint so `patch` of the selected photo is neutral gray, as the
+    /// eyedropper's pick does, but keeps the mode open and makes no undo step until Done. A patch
+    /// too dark to tell its color leaves the last sample's white balance.
+    public func sampleWhiteBalance(in patch: CGRect, with renderer: RAWRenderer) async {
+        guard isSamplingWhiteBalance else { return }
+        guard !isAutoAdjusting else {
+            pendingWhiteBalanceSample = (patch, renderer)
+            return
+        }
+        var next: (patch: CGRect, renderer: RAWRenderer)? = (patch, renderer)
+        while let sample = next, isSamplingWhiteBalance || keepsWhiteBalanceWhenMeasured {
+            await measureWhiteBalanceSample(in: sample.patch, with: sample.renderer)
+            next = pendingWhiteBalanceSample
+            pendingWhiteBalanceSample = nil
+        }
+        if keepsWhiteBalanceWhenMeasured, let photo = whiteBalanceSampling?.photo {
+            endSamplingWhiteBalance()
+            commitEdit(of: photo)
+        }
+    }
+
+    private func measureWhiteBalanceSample(in patch: CGRect, with renderer: RAWRenderer) async {
+        guard let (photo, sampling) = whiteBalanceSampling, browse.selectedPhoto == photo,
+              let url = selectedPhotoURL, let recipe = edits[photo]?.recipe else { return }
+        isAutoAdjusting = true
+        defer { isAutoAdjusting = false }
+        let found: WhiteBalance?
+        do {
+            try await renderer.open(url)
+            found = try await renderer.whiteBalance(neutralIn: patch, recipe: recipe)
+        } catch {
+            errorMessage = "Auto couldn't measure the white balance of this photo. (\(error))"
+            return
+        }
+        // Done or Cancel may have closed the mode while it measured.
+        guard let found, isSamplingWhiteBalance || keepsWhiteBalanceWhenMeasured, whiteBalanceSampling?.photo == photo, edits[photo] != nil else { return }
+        closedGroups.remove(.whiteBalance)
+        sampling.sample(found, into: &edits[photo]!.recipe)
+    }
+
+    /// Done: keeps the sampled white balance as one undo step.
+    public func finishSamplingWhiteBalance() {
+        guard isSamplingWhiteBalance, let photo = whiteBalanceSampling?.photo else { return }
+        if isAutoAdjusting {
+            isSamplingWhiteBalance = false
+            keepsWhiteBalanceWhenMeasured = true
+            return
+        }
+        endSamplingWhiteBalance()
+        commitEdit(of: photo)
+    }
+
+    /// Cancel: the white balance from when the mode opened.
+    public func cancelSamplingWhiteBalance() {
+        guard isSamplingWhiteBalance, let (photo, sampling) = whiteBalanceSampling else { return }
+        if edits[photo] != nil { sampling.restore(in: &edits[photo]!.recipe) }
+        endSamplingWhiteBalance()
+        commitEdit(of: photo)
+    }
+
+    private func endSamplingWhiteBalance() {
+        isSamplingWhiteBalance = false
+        keepsWhiteBalanceWhenMeasured = false
+        whiteBalanceSampling = nil
+        pendingWhiteBalanceSample = nil
     }
 
     /// Sets the selected photo's six Tone sliders to the values Auto estimates.
