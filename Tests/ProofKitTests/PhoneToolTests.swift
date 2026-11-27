@@ -12,7 +12,7 @@ struct PhoneToolTests {
     func sheetSliders() {
         #expect(PhoneTool.looks.adjustments.isEmpty)
         #expect(PhoneTool.light.adjustments == [.exposure, .contrast, .highlights, .shadows, .whites, .blacks])
-        #expect(PhoneTool.color.adjustments == [.temperature, .tint, .saturation, .vibrance])
+        #expect(PhoneTool.color.adjustments == PhoneToolSection.basic.adjustments + PhoneToolSection.selectiveColor.adjustments)
         #expect(PhoneTool.finish.adjustments == [.grain, .clarity, .sharpness, .vignette])
         #expect(PhoneTool.crop.adjustments.isEmpty)
         // Every slider belongs to exactly one tool.
@@ -115,6 +115,71 @@ struct PhoneToolTests {
         #expect(PhoneAdjustment.grain.group == .effects)
         #expect(PhoneAdjustment.vignette.group == .effects)
         #expect(PhoneAdjustment.clarity.group == .basic)
+        #expect(PhoneAdjustment.mixRed.group == .basic)
+        #expect(PhoneAdjustment.selectiveBrightness(.aqua).group == .selectiveColor)
+    }
+
+    @Test("Color has Basic and Selective Color segments and opens at the medium height")
+    func colorSegments() {
+        #expect(PhoneTool.color.sections == [.basic, .selectiveColor])
+        #expect(PhoneTool.color.sections.map(\.title) == ["Basic", "Selective Color"])
+        #expect(PhoneTool.color.opensAtMediumHeight)
+        #expect(!PhoneTool.light.opensAtMediumHeight)
+        #expect(!PhoneTool.looks.opensAtMediumHeight)
+        #expect(PhoneTool.light.sections.isEmpty)
+    }
+
+    @Test("With Black & White on, the mix takes the place of Saturation and Vibrance")
+    func blackAndWhiteMix() {
+        var recipe = EditRecipe()
+        #expect(PhoneToolSection.basic.sliders(in: recipe, range: .red) == [.temperature, .tint, .saturation, .vibrance])
+        recipe.blackAndWhite.isOn = true
+        #expect(PhoneToolSection.basic.sliders(in: recipe, range: .red) == [.temperature, .tint, .mixRed, .mixGreen, .mixBlue])
+        PhoneAdjustment.mixGreen.set(-40, in: &recipe)
+        #expect(recipe.blackAndWhite.green == -40)
+        #expect(recipe.blackAndWhite.red == 0 && recipe.blackAndWhite.blue == 0)
+    }
+
+    @Test("Selective Color shows the chosen range, and in black and white dims its Hue and Saturation")
+    func selectiveColor() {
+        var recipe = EditRecipe()
+        #expect(PhoneToolSection.selectiveColor.sliders(in: recipe, range: .blue)
+                == [.selectiveHue(.blue), .selectiveSaturation(.blue), .selectiveBrightness(.blue)])
+        PhoneAdjustment.selectiveSaturation(.blue).set(30, in: &recipe)
+        #expect(recipe.selectiveColor[.blue].saturation == 30)
+        #expect(recipe.selectiveColor[.aqua].isNeutral)
+        #expect(PhoneAdjustment.selectiveHue(.blue).spokenTitle == "Blue Hue")
+        #expect(PhoneToolSection.selectiveColor.sliders(in: recipe, range: .blue).allSatisfy { !$0.isInactive(in: recipe) })
+        recipe.blackAndWhite.isOn = true
+        #expect(PhoneAdjustment.selectiveHue(.blue).isInactive(in: recipe))
+        #expect(PhoneAdjustment.selectiveSaturation(.blue).isInactive(in: recipe))
+        #expect(!PhoneAdjustment.selectiveBrightness(.blue).isInactive(in: recipe))
+    }
+
+    @Test("Reset in a segment resets only that segment, and keeps the Black & White switch and profile")
+    func sectionReset() {
+        var recipe = EditRecipe(profile: .apple)
+        recipe.blackAndWhite.isOn = true
+        PhoneAdjustment.mixRed.set(20, in: &recipe)
+        PhoneAdjustment.temperature.set(4000, in: &recipe)
+        PhoneAdjustment.selectiveBrightness(.orange).set(-25, in: &recipe)
+        #expect(PhoneToolSection.basic.isChanged(in: recipe))
+        #expect(PhoneToolSection.selectiveColor.isChanged(in: recipe))
+
+        var basicReset = recipe
+        PhoneToolSection.basic.reset(in: &basicReset)
+        #expect(!PhoneToolSection.basic.isChanged(in: basicReset))
+        #expect(basicReset.blackAndWhite.isOn)
+        #expect(basicReset.blackAndWhite.red == 0)
+        #expect(basicReset.basic.whiteBalance == .asShot)
+        #expect(basicReset.profile == .apple)
+        #expect(basicReset.selectiveColor == recipe.selectiveColor)
+
+        var selectiveReset = recipe
+        PhoneToolSection.selectiveColor.reset(in: &selectiveReset)
+        #expect(selectiveReset.selectiveColor.isNeutral)
+        #expect(selectiveReset.blackAndWhite == recipe.blackAndWhite)
+        #expect(selectiveReset.basic == recipe.basic)
     }
 
     @Test("The white balance menu lists Custom only once a slider has moved")
