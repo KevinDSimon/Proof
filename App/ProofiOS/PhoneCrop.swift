@@ -3,11 +3,14 @@ import ProofUI
 import SwiftUI
 
 /// Crop on iPhone (#287): a mode of the editor's canvas rather than a sheet. The touch crop from
-/// #229 is on the photo; Straighten sits below it; Rotate, Flip, the aspect
-/// ratio and Reset take the bottom toolbar's place; Cancel and Done take the navigation bar's.
+/// #229 is on the photo; Straighten sits below it; Rotate, Flip, the aspect ratio, Perspective and
+/// Reset take the bottom toolbar's place; Cancel and Done take the navigation bar's. Perspective
+/// (#302) swaps Straighten for the Transform sliders, and back. Done and Cancel cover both.
 /// iPad keeps `CropInspector` in its inspector.
 struct PhoneCropToolbar: ToolbarContent {
     let library: Library
+    /// Whether the Transform sliders show below the photo in place of Straighten.
+    @Binding var isPerspective: Bool
 
     var body: some ToolbarContent {
         // Cancel and Done stand in for the rest, so the mode is left only one of two ways.
@@ -34,9 +37,25 @@ struct PhoneCropToolbar: ToolbarContent {
         ToolbarItem(placement: .bottomBar) { aspectMenu }
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) {
+            // Names what a tap shows next, as a button that swaps two views does.
+            Button(isPerspective ? "Straighten" : "Perspective",
+                   systemImage: isPerspective ? "level" : "perspective") {
+                isPerspective.toggle()
+            }
+            .disabled(!isReady)
+            .accessibilityHint(isPerspective ? "Shows Straighten below the photo"
+                                             : "Shows the perspective sliders below the photo")
+        }
+        ToolbarSpacer(.flexible, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            // Resets what is shown: the crop and its turns, or the perspective sliders.
             Button("Reset", systemImage: "arrow.counterclockwise") {
-                library.resetCropRectangle()
-                library.resetCropTurn()
+                if isPerspective {
+                    library.changeEdit(label: "Reset Perspective") { PhoneTool.crop.reset(in: &$0) }
+                } else {
+                    library.resetCropRectangle()
+                    library.resetCropTurn()
+                }
             }
             .disabled(!isReady || !canReset)
         }
@@ -83,7 +102,8 @@ struct PhoneCropToolbar: ToolbarContent {
     }
 
     private var canReset: Bool {
-        library.canResetCropRectangle || crop.rotation != 0 || crop.flipHorizontal || crop.flipVertical
+        if isPerspective { return library.selectedEdit.map { PhoneTool.crop.isChanged(in: $0.recipe) } ?? false }
+        return library.canResetCropRectangle || crop.rotation != 0 || crop.flipHorizontal || crop.flipVertical
     }
 
     /// The photo's size comes from the file, read when it opens.
@@ -108,6 +128,27 @@ struct PhoneStraightenSlider: View {
             })
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+        .disabled(library.turnedPhotoSize == nil)
+    }
+}
+
+/// The Transform sliders below the photo while cropping, in Straighten's place, when Perspective is
+/// on (#302): Vertical, Horizontal, Rotate, Aspect, Scale and the offsets, set by hand. They scroll
+/// in a short panel, so the photo keeps most of the screen.
+struct PhonePerspectiveSliders: View {
+    let library: Library
+
+    var body: some View {
+        ScrollView {
+            PhoneToolSliders(library: library, adjustments: PhoneTool.crop.adjustments)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+        }
+        // About two and a half sliders, so the next one shows there is more.
+        .frame(height: 190)
+        // A scroll view draws on under the bars; the toolbar's buttons sit just below, so the
+        // sliders stop at the panel's edge.
+        .clipped()
         .disabled(library.turnedPhotoSize == nil)
     }
 }
