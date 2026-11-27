@@ -557,8 +557,10 @@ struct EditCanvas: View {
         }
         .overlay {
             if library.isCropping, let frame = library.selectedCropFrame {
+                // iPhone's crop mode keeps the thirds grid up, as Photos does (#287).
                 CropOverlay(library: library, frame: frame, aspect: library.selectedCrop.aspect,
-                           backdrop: library.canvasColor.color)
+                           backdrop: library.canvasColor.color,
+                           showsThirds: UIDevice.current.userInterfaceIdiom == .phone)
             } else if library.isRemovingSpots, let size = library.selectedEdit?.size {
                 SpotOverlay(library: library, renderer: renderer, zoom: library.zoom, crop: shownRecipe.crop, photoSize: size)
             } else if library.isMasking, let size = library.selectedEdit?.size {

@@ -2,7 +2,8 @@ import ProofKit
 import SwiftUI
 
 /// The crop rectangle drawn over the photo while the crop tool is open: the area outside it
-/// faded toward the canvas, a border with handles, and a grid while something is being dragged.
+/// faded toward the canvas, a border with handles, and a grid while something is being dragged,
+/// or a thirds grid at all times where `showsThirds` is set.
 /// It lays out the same way `RAWRenderer.draw` does: the turned photo fitted to the view as if
 /// upright, then tilted around its center by the straighten angle.
 public struct CropOverlay: View {
@@ -11,17 +12,21 @@ public struct CropOverlay: View {
     let aspect: AspectRatio?
     /// The canvas color, which the photo outside the rectangle fades toward.
     let backdrop: Color
+    /// Draws the thirds grid between drags too, as iPhone's crop mode does (#287). The Mac and
+    /// iPad show it only while the rectangle is being dragged.
+    let showsThirds: Bool
     /// The Mac's pointer outside each corner; macOS has no rotate cursor of its own.
     @Environment(\.rotatePointer) private var rotatePointer
 
     /// The rectangle when the current drag started; `nil` between drags.
     @State private var dragStart: CropFrame?
 
-    public init(library: Library, frame: CropFrame, aspect: AspectRatio?, backdrop: Color) {
+    public init(library: Library, frame: CropFrame, aspect: AspectRatio?, backdrop: Color, showsThirds: Bool = false) {
         self.library = library
         self.frame = frame
         self.aspect = aspect
         self.backdrop = backdrop
+        self.showsThirds = showsThirds
     }
 
     public var body: some View {
@@ -248,7 +253,7 @@ public struct CropOverlay: View {
         var shadowed = context
         shadowed.addFilter(.shadow(color: .black.opacity(0.45), radius: 1))
 
-        let divisions = library.isStraightening || levelDrag != nil ? 8 : dragStart != nil ? 3 : 0
+        let divisions = library.isStraightening || levelDrag != nil ? 8 : dragStart != nil || showsThirds ? 3 : 0
         if divisions > 0 {
             var grid = Path()
             for index in 1..<divisions {
