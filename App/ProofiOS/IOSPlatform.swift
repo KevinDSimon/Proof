@@ -1,3 +1,4 @@
+import ProofKit
 import ProofUI
 import SwiftUI
 import UIKit
@@ -29,6 +30,10 @@ extension LibraryPlatform {
         },
         sidewaysDrag: { view, actions in AnyView(view.gesture(SidewaysDrag(actions: actions))) },
         reducesMotion: { UIAccessibility.isReduceMotionEnabled },
-        tapSelectsPhoto: { UIDevice.current.userInterfaceIdiom == .phone }
+        tapSelectsPhoto: { UIDevice.current.userInterfaceIdiom == .phone },
+        folderName: { url in
+            FolderLocation.filesName(of: url, deviceName: UIDevice.current.userInterfaceIdiom == .pad
+                                     ? "On My iPad" : "On My iPhone")
+        }
     )
 }
