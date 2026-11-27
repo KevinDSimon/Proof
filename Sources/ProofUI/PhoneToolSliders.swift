@@ -36,7 +36,10 @@ public struct PhoneToolSliders: View {
             fractionDigits: style.digits, showsSign: style.showsSign, unit: style.unit, track: style.track,
             position: position, valueAtPosition: valueAtPosition,
             reset: { library.changeEdit { adjustment.reset(in: &$0) } },
-            isAdjusting: { library.isAdjusting = $0 })
+            isAdjusting: { adjusting in
+                library.isAdjusting = adjusting
+                if adjustment.changesGeometry { library.isAdjustingGeometry = adjusting }
+            })
             // White balance and sharpness start from the camera's, read once the photo opens.
             .disabled(value(of: adjustment) == nil)
             // Kept in view, dimmed, where it changes nothing as the edit stands.
@@ -91,6 +94,9 @@ public struct PhoneToolSliders: View {
         case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: Style(showsSign: false)
         case .vignette: Style(track: AdjustmentSlider.vignetteAmountTrack)
         case .vignetteRoundness: Style()
+        case .transformRotate: Style(fine: 0.1, step: 0.1, coarse: 1, digits: 1, unit: "degrees")
+        case .transformScale: Style(showsSign: false, unit: "percent")
+        case .transformVertical, .transformHorizontal, .transformAspect, .transformXOffset, .transformYOffset: Style()
         case .grain, .grainSize, .grainRoughness, .halation, .halationSize, .bloom, .bloomSize, .vignetteMidpoint, .vignetteFeather: Style(showsSign: false)
         }
     }

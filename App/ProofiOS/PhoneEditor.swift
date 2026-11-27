@@ -20,6 +20,8 @@ struct PhoneEditor: View {
     /// The bottom of the space the photo is laid out in, in global coordinates.
     @State private var photoAreaBottom: CGFloat = 0
     @State private var isHistogramShown = false
+    /// While cropping, whether the Transform sliders show in place of Straighten.
+    @State private var isPerspective = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +45,11 @@ struct PhoneEditor: View {
                 }
             // No filmstrip (#286), so the photo has the room.
             if library.isCropping {
-                PhoneStraightenSlider(library: library)
+                if isPerspective {
+                    PhonePerspectiveSliders(library: library)
+                } else {
+                    PhoneStraightenSlider(library: library)
+                }
             }
         }
         // The photo fits above the sheet, so it never covers it.
@@ -79,7 +85,11 @@ struct PhoneEditor: View {
         .onChange(of: verticalSizeClass, initial: true) {
             if verticalSizeClass == .compact { sheetHeight = .toolCompact }
         }
-        .onChange(of: library.isCropping) { if library.isCropping { tool = nil } }
+        .onChange(of: library.isCropping) {
+            if library.isCropping { tool = nil }
+            // Crop opens on Straighten each time.
+            isPerspective = false
+        }
         .toolbar { toolbar }
     }
 
@@ -161,7 +171,7 @@ struct PhoneEditor: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if library.isCropping {
-            PhoneCropToolbar(library: library)
+            PhoneCropToolbar(library: library, isPerspective: $isPerspective)
         } else if library.isSamplingWhiteBalance {
             PhoneWhiteBalanceToolbar(library: library) { open(.color) }
         } else if library.isRemovingSpots || library.isMasking {

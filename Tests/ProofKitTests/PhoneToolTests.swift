@@ -1,3 +1,4 @@
+import CoreGraphics
 import Testing
 @testable import ProofKit
 
@@ -14,7 +15,8 @@ struct PhoneToolTests {
         #expect(PhoneTool.light.adjustments == [.exposure, .contrast, .highlights, .shadows, .whites, .blacks])
         #expect(PhoneTool.color.adjustments == PhoneToolSection.basic.adjustments + PhoneToolSection.selectiveColor.adjustments)
         #expect(PhoneTool.finish.adjustments == PhoneToolSection.detail.adjustments + PhoneToolSection.effects.adjustments)
-        #expect(PhoneTool.crop.adjustments.isEmpty)
+        #expect(PhoneTool.crop.adjustments.map(\.title)
+                == ["Vertical", "Horizontal", "Rotate", "Aspect", "Scale", "X Offset", "Y Offset"])
         // Every slider belongs to exactly one tool.
         let all = PhoneTool.allCases.flatMap(\.adjustments)
         #expect(all.count == PhoneAdjustment.allCases.count)
@@ -31,7 +33,10 @@ struct PhoneToolTests {
         recipe.lens.profile = false
         recipe.lens.distortion = 10
         recipe.lens.vignetting = LensVignetting(amount: -15, midpoint: 40)
-        recipe.transform.vertical = 12
+        // Upright, its guides and Constrain Crop are set on the Mac only.
+        recipe.transform.upright = .guided
+        recipe.transform.guides = [GuideLine(start: CGPoint(x: 0.2, y: 0.1), end: CGPoint(x: 0.25, y: 0.9))]
+        recipe.transform.constrainCrop = false
         recipe.crop = Crop(x: 0.1, y: 0.1, width: 0.8, height: 0.8, angle: 2)
         recipe.switchedOff = [.curve]
         return recipe
@@ -50,7 +55,9 @@ struct PhoneToolTests {
         #expect(recipe.blackAndWhite == original.blackAndWhite)
         #expect(recipe.look == original.look)
         #expect(recipe.lens.profile == false)
-        #expect(recipe.transform == original.transform)
+        #expect(recipe.transform.upright == .guided)
+        #expect(recipe.transform.guides == original.transform.guides)
+        #expect(!recipe.transform.constrainCrop)
         #expect(recipe.crop == original.crop)
         #expect(recipe.spots == original.spots)
         #expect(recipe.layers == original.layers)
@@ -115,6 +122,23 @@ struct PhoneToolTests {
         #expect(PhoneTool.allCases.filter(\.hasAuto) == [.light])
         #expect(!PhoneTool.light.opensAtMediumHeight)
         #expect(PhoneTool.light.sections.isEmpty)
+    }
+
+    @Test("Perspective's Transform sliders write only the transform, and reset to a new recipe's values")
+    func perspective() {
+        var recipe = EditRecipe()
+        #expect(PhoneTool.crop.adjustments.allSatisfy { $0.group == .transform && $0.changesGeometry })
+        #expect(PhoneAdjustment.transformScale.spokenTitle == "Transform Scale")
+        PhoneAdjustment.transformVertical.set(-30, in: &recipe)
+        PhoneAdjustment.transformScale.set(120, in: &recipe)
+        PhoneAdjustment.transformRotate.set(2.5, in: &recipe)
+        #expect(recipe.transform.vertical == -30 && recipe.transform.scale == 120 && recipe.transform.rotate == 2.5)
+        #expect(recipe.crop == nil)
+        #expect(PhoneTool.crop.isChanged(in: recipe))
+        PhoneTool.crop.reset(in: &recipe)
+        #expect(recipe.transform == PerspectiveTransform())
+        #expect(recipe == EditRecipe())
+        #expect(!PhoneTool.crop.isChanged(in: recipe))
     }
 
     @Test("Finish has Detail and Effects segments with every slider, each in its amount's group")

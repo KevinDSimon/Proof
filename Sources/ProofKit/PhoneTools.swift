@@ -38,10 +38,14 @@ public enum PhoneTool: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// Every slider the tool's sheet can show, in order. A tool with segments shows them one
-    /// segment at a time. Looks shows the LUT library instead, and Crop has no sheet.
+    /// segment at a time. Looks shows the LUT library instead. Crop has no sheet: its sliders are
+    /// the Transform ones Perspective shows below the photo in place of Straighten.
     public var adjustments: [PhoneAdjustment] {
         switch self {
-        case .looks, .crop: []
+        case .looks: []
+        case .crop:
+            [.transformVertical, .transformHorizontal, .transformRotate, .transformAspect, .transformScale,
+             .transformXOffset, .transformYOffset]
         case .light: [.exposure, .contrast, .highlights, .shadows, .whites, .blacks]
         case .color, .finish: sections.flatMap(\.adjustments)
         }
@@ -173,9 +177,12 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
     case sharpness, noiseReduction, noiseReductionDetail, colorNoiseReduction
     case grain, grainSize, grainRoughness, halation, halationSize, bloom, bloomSize
     case vignette, vignetteMidpoint, vignetteRoundness, vignetteFeather
+    /// Transform's sliders, set by hand. Upright and its guides stay on the Mac.
+    case transformVertical, transformHorizontal, transformRotate, transformAspect, transformScale
+    case transformXOffset, transformYOffset
 
     public static let allCases: [PhoneAdjustment] =
-        PhoneTool.light.adjustments + PhoneToolSection.allCases.flatMap(\.adjustments)
+        PhoneTool.light.adjustments + PhoneToolSection.allCases.flatMap(\.adjustments) + PhoneTool.crop.adjustments
 
     public var id: Self { self }
 
@@ -208,6 +215,13 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .vignetteMidpoint: "Midpoint"
         case .grainSize, .halationSize, .bloomSize: "Size"
         case .grainRoughness: "Roughness"
+        case .transformVertical: "Vertical"
+        case .transformHorizontal: "Horizontal"
+        case .transformRotate: "Rotate"
+        case .transformAspect: "Aspect"
+        case .transformScale: "Scale"
+        case .transformXOffset: "X Offset"
+        case .transformYOffset: "Y Offset"
         case .vignetteRoundness: "Roundness"
         case .vignetteFeather: "Feather"
         }
@@ -234,6 +248,8 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .vignetteMidpoint: "Vignette Midpoint"
         case .vignetteRoundness: "Vignette Roundness"
         case .vignetteFeather: "Vignette Feather"
+        case .transformVertical, .transformHorizontal, .transformRotate, .transformAspect, .transformScale,
+             .transformXOffset, .transformYOffset: "Transform \(title)"
         default: title
         }
     }
@@ -260,6 +276,8 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: .detail
         case .grain, .grainSize, .grainRoughness, .halation, .halationSize, .bloom, .bloomSize,
              .vignette, .vignetteMidpoint, .vignetteRoundness, .vignetteFeather: .effects
+        case .transformVertical, .transformHorizontal, .transformRotate, .transformAspect, .transformScale,
+             .transformXOffset, .transformYOffset: .transform
         default: .basic
         }
     }
@@ -281,9 +299,18 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .vignetteMidpoint: VignetteAdjustments.midpointRange
         case .vignetteRoundness: VignetteAdjustments.roundnessRange
         case .vignetteFeather: VignetteAdjustments.featherRange
+        case .transformVertical, .transformHorizontal: PerspectiveTransform.tiltRange
+        case .transformRotate: PerspectiveTransform.rotateRange
+        case .transformAspect: PerspectiveTransform.aspectRange
+        case .transformScale: PerspectiveTransform.scaleRange
+        case .transformXOffset, .transformYOffset: PerspectiveTransform.offsetRange
         default: -100...100
         }
     }
+
+    /// Whether moving the slider changes the photo's geometry, so the canvas shows a grid while
+    /// it moves, as on the Mac.
+    public var changesGeometry: Bool { group == .transform }
 
     /// Whether the slider is dimmed because it changes nothing as the recipe stands: in black
     /// and white only a range's Brightness changes the gray, and a fine-tuning slider does
@@ -335,6 +362,13 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .vignetteMidpoint: recipe.vignette.midpoint
         case .vignetteRoundness: recipe.vignette.roundness
         case .vignetteFeather: recipe.vignette.feather
+        case .transformVertical: recipe.transform.vertical
+        case .transformHorizontal: recipe.transform.horizontal
+        case .transformRotate: recipe.transform.rotate
+        case .transformAspect: recipe.transform.aspect
+        case .transformScale: recipe.transform.scale
+        case .transformXOffset: recipe.transform.xOffset
+        case .transformYOffset: recipe.transform.yOffset
         }
     }
 
@@ -374,6 +408,13 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .vignetteMidpoint: recipe.vignette.midpoint = value
         case .vignetteRoundness: recipe.vignette.roundness = value
         case .vignetteFeather: recipe.vignette.feather = value
+        case .transformVertical: recipe.transform.vertical = value
+        case .transformHorizontal: recipe.transform.horizontal = value
+        case .transformRotate: recipe.transform.rotate = value
+        case .transformAspect: recipe.transform.aspect = value
+        case .transformScale: recipe.transform.scale = value
+        case .transformXOffset: recipe.transform.xOffset = value
+        case .transformYOffset: recipe.transform.yOffset = value
         }
     }
 
