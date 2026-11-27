@@ -12,3 +12,5 @@ xcuserdata/
 *.CR3
 *.NEF
 *.RAF
+# Local notes for agent sessions; never committed.
+HANDOFF.md
