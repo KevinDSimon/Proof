@@ -54,34 +54,36 @@ struct PhoneProfileRow: View {
             }
         }
         // Keeps its height while the profiles are read, so the groups below don't move.
-        .frame(minHeight: 44)
+        .frame(minHeight: 34)
     }
 }
 
-/// A full-width menu's label: its value, centered, with the system's up-and-down chevron.
+/// A full-width menu's label, laid out as the Looks sheet's folder menu (`PopUpMenu`): its
+/// value at the leading edge and the system's up-and-down chevron at the trailing edge, inside
+/// the button.
 struct PhoneMenuLabel: View {
     let title: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack {
             Text(title)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            Spacer(minLength: 4)
             Image(systemName: "chevron.up.chevron.down")
                 .imageScale(.small)
-                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity)
     }
 }
 
 extension View {
-    /// A menu in a tool sheet: a full-width bordered capsule, so its value sits centered under the
-    /// group's heading rather than at the far end of a row from its name.
+    /// A menu in a tool sheet: a full-width bordered button at the system size, as the Looks
+    /// sheet's folder menu is, so its value sits in the button under the group's heading rather
+    /// than at the far end of a row from its name.
     func phoneMenuStyle() -> some View {
         buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .controlSize(.large)
             .frame(maxWidth: .infinity)
     }
 }

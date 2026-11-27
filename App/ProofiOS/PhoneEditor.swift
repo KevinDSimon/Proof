@@ -325,18 +325,19 @@ private struct ToolSheet: View {
         let recipe = library.selectedEdit?.recipe ?? EditRecipe()
         let groups = section.groups(in: recipe, range: range)
         ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
-            if index > 0 {
-                Divider()
-                    .padding(.vertical, 6)
-            }
-            if let title = group.title {
-                Text(title)
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            ForEach(group.controls, id: \.self) { control($0) }
-            if !group.sliders.isEmpty {
-                PhoneToolSliders(library: library, adjustments: group.sliders)
+            if index > 0 { Divider() }
+            // The heading sits close to its controls; the line and the sheet's spacing set the
+            // groups apart.
+            VStack(alignment: .leading, spacing: 8) {
+                if let title = group.title {
+                    Text(title)
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                ForEach(group.controls, id: \.self) { control($0) }
+                if !group.sliders.isEmpty {
+                    PhoneToolSliders(library: library, adjustments: group.sliders)
+                }
             }
         }
     }
