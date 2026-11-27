@@ -349,6 +349,7 @@ private struct ToolSheet: View {
         // The presets and eyedropper above Temperature and Tint (#298).
         case .whiteBalance: PhoneWhiteBalanceRow(library: library, renderer: renderer, openEyedropper: openEyedropper)
         case .colorRanges: PhoneColorRangePicker(library: library, selected: $range)
+        case .lensSwitches: PhoneLensSwitches(library: library, renderer: renderer)
         }
     }
 

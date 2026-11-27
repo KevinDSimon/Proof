@@ -13,7 +13,7 @@ struct PhoneToolTests {
         #expect(PhoneTool.looks.adjustments.isEmpty)
         #expect(PhoneTool.light.adjustments == [.exposure, .contrast, .highlights, .shadows, .whites, .blacks])
         #expect(PhoneTool.color.adjustments == PhoneToolSection.basic.adjustments + PhoneToolSection.selectiveColor.adjustments)
-        #expect(PhoneTool.finish.adjustments == [.grain, .clarity, .sharpness, .vignette])
+        #expect(PhoneTool.finish.adjustments == PhoneToolSection.detail.adjustments + PhoneToolSection.effects.adjustments)
         #expect(PhoneTool.crop.adjustments.isEmpty)
         // Every slider belongs to exactly one tool.
         let all = PhoneTool.allCases.flatMap(\.adjustments)
@@ -24,17 +24,11 @@ struct PhoneToolTests {
     /// A recipe with something in every part iPhone has no control for.
     private var macEdit: EditRecipe {
         var recipe = EditRecipe()
-        recipe.basic.texture = 20
-        recipe.basic.dehaze = 15
+        recipe.profile = .apple
         recipe.curve.rgb = [CurvePoint(0, 0.1), CurvePoint(1, 0.9)]
         recipe.blackAndWhite.isOn = true
-        recipe.detail.noiseReduction = 40
         recipe.look = Look(lut: "Film/Warm.cube", strength: 0.6)
-        recipe.vignette.midpoint = 30
-        recipe.grain.size = 70
-        recipe.halation.amount = 25
-        recipe.bloom.amount = 10
-        recipe.lens.distortion = 10
+        recipe.lens.profile = false
         recipe.transform.vertical = 12
         recipe.crop = Crop(x: 0.1, y: 0.1, width: 0.8, height: 0.8, angle: 2)
         recipe.switchedOff = [.curve]
@@ -49,22 +43,17 @@ struct PhoneToolTests {
             adjustment.set(adjustment.range.upperBound, in: &recipe)
         }
         for tool in PhoneTool.allCases { tool.reset(in: &recipe) }
+        #expect(recipe.profile == .apple)
         #expect(recipe.curve == original.curve)
         #expect(recipe.blackAndWhite == original.blackAndWhite)
-        #expect(recipe.detail.noiseReduction == 40)
         #expect(recipe.look == original.look)
-        #expect(recipe.vignette.midpoint == 30)
-        #expect(recipe.grain.size == 70)
-        #expect(recipe.halation == original.halation)
-        #expect(recipe.bloom == original.bloom)
-        #expect(recipe.lens == original.lens)
+        #expect(recipe.lens.profile == false)
         #expect(recipe.transform == original.transform)
         #expect(recipe.crop == original.crop)
         #expect(recipe.spots == original.spots)
         #expect(recipe.layers == original.layers)
         #expect(recipe.switchedOff == original.switchedOff)
-        #expect(recipe.basic.texture == 20)
-        #expect(recipe.basic.dehaze == 15)
+        #expect(recipe == original)
     }
 
     @Test("Each slider writes only its own value")
@@ -119,6 +108,73 @@ struct PhoneToolTests {
         #expect(PhoneAdjustment.selectiveBrightness(.aqua).group == .selectiveColor)
     }
 
+    @Test("Finish has Detail and Effects segments with every slider, each in its amount's group")
+    func finishSegments() {
+        #expect(PhoneTool.finish.sections == [.detail, .effects])
+        #expect(PhoneTool.finish.opensAtMediumHeight)
+        let recipe = EditRecipe()
+        let detail = PhoneToolSection.detail.groups(in: recipe, range: .red)
+        #expect(detail.map(\.title) == ["Presence", "Sharpening", "Noise Reduction", "Lens Corrections"])
+        #expect(detail.map { $0.sliders.map(\.title) }
+                == [["Texture", "Clarity", "Dehaze"], ["Amount"], ["Luminance", "Detail", "Color"],
+                    ["Distortion", "Vignetting", "Vignetting Midpoint"]])
+        #expect(detail.last?.controls == [.lensSwitches])
+        let effects = PhoneToolSection.effects.groups(in: recipe, range: .red)
+        #expect(effects.map(\.title) == ["Grain", "Halation", "Bloom", "Vignette"])
+        #expect(effects.flatMap(\.sliders).map(\.spokenTitle)
+                == ["Grain Amount", "Grain Size", "Grain Roughness", "Halation Amount", "Halation Size",
+                    "Bloom Amount", "Bloom Size", "Vignette Amount", "Vignette Midpoint", "Vignette Roundness",
+                    "Vignette Feather"])
+        #expect(PhoneToolSection.detail.adjustments == detail.flatMap(\.sliders))
+        #expect(PhoneAdjustment.colorNoiseReduction.refines == .noiseReduction)
+        #expect(PhoneAdjustment.grain.refines == nil)
+        #expect(PhoneAdjustment.distortion.changesGeometry)
+        #expect(PhoneAdjustment.distortion.group == .lens)
+        #expect(PhoneAdjustment.halationSize.group == .effects)
+        #expect(PhoneAdjustment.dehaze.group == .basic)
+        #expect(PhoneAdjustment.noiseReduction.group == .detail)
+    }
+
+    @Test("A fine-tuning slider is dimmed until its amount is set, except color noise reduction")
+    func fineTuningNeedsAmount() {
+        var recipe = EditRecipe()
+        #expect(PhoneAdjustment.grainSize.isInactive(in: recipe, camera: nil))
+        #expect(PhoneAdjustment.vignetteFeather.isInactive(in: recipe, camera: nil))
+        #expect(PhoneAdjustment.lensVignettingMidpoint.isInactive(in: recipe, camera: nil))
+        PhoneAdjustment.grain.set(30, in: &recipe)
+        PhoneAdjustment.vignette.set(-20, in: &recipe)
+        #expect(!PhoneAdjustment.grainSize.isInactive(in: recipe, camera: nil))
+        #expect(!PhoneAdjustment.vignetteFeather.isInactive(in: recipe, camera: nil))
+        #expect(PhoneAdjustment.halationSize.isInactive(in: recipe, camera: nil))
+        // Noise reduction starts at the camera's amount, so Detail follows it.
+        let quiet = CameraDetail(sharpness: 0.5, luminanceNoiseReduction: 0, detail: 0.5, colorNoiseReduction: 0.3)
+        #expect(PhoneAdjustment.noiseReductionDetail.isInactive(in: recipe, camera: quiet))
+        #expect(!PhoneAdjustment.noiseReductionDetail.isInactive(in: recipe, camera: Self.camera))
+        #expect(!PhoneAdjustment.colorNoiseReduction.isInactive(in: recipe, camera: quiet))
+    }
+
+    @Test("Lens corrections and effects reset to a new recipe's values and stay neutral")
+    func finishResets() {
+        var recipe = EditRecipe()
+        PhoneAdjustment.lensVignettingMidpoint.set(70, in: &recipe)
+        PhoneAdjustment.distortion.set(15, in: &recipe)
+        PhoneAdjustment.bloomSize.set(80, in: &recipe)
+        PhoneAdjustment.noiseReduction.set(60, in: &recipe)
+        #expect(recipe.lens.vignetting?.midpoint == 70)
+        #expect(PhoneToolSection.detail.isChanged(in: recipe))
+        #expect(PhoneToolSection.effects.isChanged(in: recipe))
+        PhoneToolSection.detail.reset(in: &recipe)
+        #expect(recipe.lens == LensCorrections())
+        #expect(recipe.detail == DetailAdjustments())
+        #expect(recipe.bloom.size == 80)
+        PhoneToolSection.effects.reset(in: &recipe)
+        #expect(recipe == EditRecipe())
+        // Setting a value back to its default leaves the lens corrections neutral.
+        PhoneAdjustment.distortion.set(0, in: &recipe)
+        PhoneAdjustment.lensVignettingMidpoint.set(50, in: &recipe)
+        #expect(recipe.lens.distortion == nil && recipe.lens.vignetting == nil)
+    }
+
     @Test("Color has Basic and Selective Color segments and opens at the medium height")
     func colorSegments() {
         #expect(PhoneTool.color.sections == [.basic, .selectiveColor])
@@ -162,11 +218,11 @@ struct PhoneToolTests {
         #expect(recipe.selectiveColor[.blue].saturation == 30)
         #expect(recipe.selectiveColor[.aqua].isNeutral)
         #expect(PhoneAdjustment.selectiveHue(.blue).spokenTitle == "Blue Hue")
-        #expect(PhoneToolSection.selectiveColor.sliders(in: recipe, range: .blue).allSatisfy { !$0.isInactive(in: recipe) })
+        #expect(PhoneToolSection.selectiveColor.sliders(in: recipe, range: .blue).allSatisfy { !$0.isInactive(in: recipe, camera: nil) })
         recipe.blackAndWhite.isOn = true
-        #expect(PhoneAdjustment.selectiveHue(.blue).isInactive(in: recipe))
-        #expect(PhoneAdjustment.selectiveSaturation(.blue).isInactive(in: recipe))
-        #expect(!PhoneAdjustment.selectiveBrightness(.blue).isInactive(in: recipe))
+        #expect(PhoneAdjustment.selectiveHue(.blue).isInactive(in: recipe, camera: nil))
+        #expect(PhoneAdjustment.selectiveSaturation(.blue).isInactive(in: recipe, camera: nil))
+        #expect(!PhoneAdjustment.selectiveBrightness(.blue).isInactive(in: recipe, camera: nil))
     }
 
     @Test("Reset in a segment resets only that segment, and keeps the Black & White switch and profile")
