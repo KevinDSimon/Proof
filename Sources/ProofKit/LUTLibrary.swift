@@ -28,6 +28,27 @@ public struct LUTImportError: Error, LocalizedError, Equatable {
     }
 }
 
+/// Why a LUT or folder in the library wasn't renamed or removed.
+public enum LUTLibraryError: Error, LocalizedError, Equatable {
+    /// The new name is empty, starts with a period or holds a "/".
+    case invalidName
+    /// Another LUT or folder beside it already has the new name.
+    case nameTaken(String)
+    /// The library has no LUT or folder at the path.
+    case notFound
+    /// The file system refused the change.
+    case failed
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidName: "A name can’t be empty, start with a period or contain “/”."
+        case .nameTaken(let name): "There’s already a look or folder named “\(name)”."
+        case .notFound: "The look or folder is no longer in the library."
+        case .failed: "The library couldn’t be changed."
+        }
+    }
+}
+
 /// The person's LUTs: `.cube` files in a folder of Proof's own, in folders of their own if they
 /// were imported that way. `look.lut` names one by its path in the library, such as
 /// "Portra/400.cube". Proof ships with none; every LUT is imported. Imported files are copies, so
@@ -178,6 +199,64 @@ public actor LUTLibrary {
         return name
     }
 
+    /// Renames the LUT or folder at `path` to `newName`, keeping it in the folder it is in, and
+    /// returns its new path. A LUT keeps its `.cube` extension whether or not `newName` has it.
+    /// Edits that name the old path no longer find it, as when a LUT is renamed in the Finder.
+    public func rename(_ path: String, to newName: String) throws(LUTLibraryError) -> String {
+        let components = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard Self.isInside(components) else { throw .notFound }
+        let source = url(of: components)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDirectory) else { throw .notFound }
+        var name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !isDirectory.boolValue, (name as NSString).pathExtension.lowercased() != Self.fileExtension {
+            name += "." + Self.fileExtension
+        }
+        guard Self.isInside([name]), name != "." + Self.fileExtension else { throw .invalidName }
+        let renamed = (components.dropLast() + [name]).joined(separator: "/")
+        guard renamed != path else { return path }
+        let target = source.deletingLastPathComponent().appendingPathComponent(name)
+        // A change of case alone is the same file on a case-insensitive volume.
+        if FileManager.default.fileExists(atPath: target.path), name.lowercased() != components.last?.lowercased() {
+            throw .nameTaken(isDirectory.boolValue ? name : (name as NSString).deletingPathExtension)
+        }
+        do {
+            try FileManager.default.moveItem(at: source, to: target)
+        } catch {
+            throw .failed
+        }
+        forget(below: path)
+        return renamed
+    }
+
+    /// Deletes the LUT or folder at `path` from the library: Proof's copy, never the file it was
+    /// imported from. Edits that name it are shown without it, as when it is removed in the Finder.
+    public func remove(_ path: String) throws(LUTLibraryError) {
+        let components = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard Self.isInside(components) else { throw .notFound }
+        let item = url(of: components)
+        guard FileManager.default.fileExists(atPath: item.path) else { throw .notFound }
+        do {
+            try FileManager.default.removeItem(at: item)
+        } catch {
+            throw .failed
+        }
+        forget(below: path)
+    }
+
+    private nonisolated func url(of components: [String]) -> URL {
+        components.reduce(directory) { $0.appendingPathComponent($1) }
+    }
+
+    /// Lets go of the prepared LUT at `path` and those in the folder at `path`, so edits that name
+    /// them stop finding them.
+    private func forget(below path: String) {
+        let isGone = { (name: String) in name == path || name.hasPrefix(path + "/") }
+        for name in prepared.keys where isGone(name) { prepared[name] = nil }
+        for name in preparing.keys where isGone(name) { preparing[name] = nil }
+        recentlyUsed.removeAll(where: isGone)
+    }
+
     /// The file's contents, read through a file coordinator. In iCloud Drive a file picked in Files
     /// or found in a picked folder may not be on the device yet, and coordinating downloads it first.
     static func coordinatedData(at url: URL) -> Data? {
@@ -215,6 +294,8 @@ public actor LUTLibrary {
         }
         preparing[name] = task
         let lut = await task.value
+        // Not kept when the LUT was renamed or removed while it was read, or another caller kept it.
+        guard preparing[name] == task else { return lut }
         finish(lut, as: name)
         return lut
     }

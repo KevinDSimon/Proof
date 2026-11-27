@@ -8,6 +8,8 @@ struct PhotoCanvas: NSViewRepresentable {
     let url: URL
     let renderer: RAWRenderer
     var recipe: EditRecipe
+    /// Changes when the LUT library does, so a look renamed or removed there renders again.
+    var lutGeneration = 0
     /// The color of the canvas around the photo.
     var backdrop: CanvasColor
     /// Degrees clockwise to tilt the photo around its center as it is drawn. The crop tool
@@ -54,7 +56,7 @@ struct PhotoCanvas: NSViewRepresentable {
         context.coordinator.setAngle(angle)
         context.coordinator.setViewport(viewport)
         view.hidesPanPointer = zoom.hidesPanPointer
-        context.coordinator.show(url, recipe: recipe)
+        context.coordinator.show(url, recipe: recipe, lutGeneration: lutGeneration)
     }
 }
 

@@ -6,13 +6,19 @@ import UniformTypeIdentifiers
 /// folders, and the shown folder's LUTs as a grid of small previews of the photo through each.
 /// The arrow keys move through the grid, choosing as they go. The pop-up also adds `.cube` files
 /// and folders, from an Open panel on the Mac and the Files picker on iPad and iPhone, and on the
-/// Mac opens the library in the Finder; files can be dropped on the grid too. Reset removes the
-/// look, so there is no None row. The iPhone's Looks sheet shows the same controls without the
+/// Mac opens the library in the Finder; files can be dropped on the grid too. On iPad and iPhone,
+/// where Files doesn't show the library, a tile's touch-and-hold menu and the pop-up rename and
+/// remove looks and folders instead. Reset removes the look, so there is no None row. The iPhone's Looks sheet shows the same controls without the
 /// card, since the sheet has the title and no switch (decision 0054).
 public struct LookSection: View {
     let library: Library
     let isCard: Bool
     @State private var isImporting = false
+    /// The look or folder being renamed or about to be removed, and the name typed for it.
+    @State private var renaming: LibraryItem?
+    @State private var newName = ""
+    @State private var removing: LibraryItem?
+    @State private var changeError: String?
     @FocusState private var isGridFocused: Bool
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
@@ -41,6 +47,8 @@ public struct LookSection: View {
             case .failure(let error): library.errorMessage = error.localizedDescription
             }
         }
+        .modifier(ManageItems(renaming: $renaming, newName: $newName, removing: $removing, changeError: $changeError,
+                              rename: rename, remove: remove))
         .onAppear {
             looks.reload()
             showChosenLook()
@@ -105,7 +113,14 @@ public struct LookSection: View {
         [.action("Add Looks…") { isImporting = true },
          .action("Reveal in Finder") { looks.revealInFinder() }]
         #else
-        [.action("Add Looks…") { isImporting = true }]
+        var items: [PopUpMenu.Item] = [.action("Add Looks…") { isImporting = true }]
+        if !looks.shownFolder.isEmpty {
+            let folder = LibraryItem(path: looks.shownFolder, isFolder: true)
+            items += [.separator,
+                      .action("Rename “\(folder.title)”…") { startRenaming(folder) },
+                      .action("Remove “\(folder.title)”…") { removing = folder }]
+        }
+        return items
         #endif
     }
 
@@ -170,6 +185,7 @@ public struct LookSection: View {
 
     private func tile(_ path: String) -> some View {
         let isSelected = look?.lut == path
+        let item = LibraryItem(path: path, isFolder: false)
         return preview(of: path)
             .selectionOutline(isSelected, padding: 4)
             .contentShape(Rectangle())
@@ -182,6 +198,28 @@ public struct LookSection: View {
             .accessibilityLabel(Self.title(of: path))
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { choose(path) }
+            #if !os(macOS)
+            .contextMenu {
+                Button("Rename…", systemImage: "pencil") { startRenaming(item) }
+                Button("Remove…", systemImage: "trash", role: .destructive) { removing = item }
+            }
+            .accessibilityAction(named: "Rename") { startRenaming(item) }
+            .accessibilityAction(named: "Remove") { removing = item }
+            #endif
+    }
+
+    private func startRenaming(_ item: LibraryItem) {
+        newName = item.title
+        renaming = item
+    }
+
+    private func rename(_ item: LibraryItem) {
+        let name = newName
+        Task { changeError = await looks.rename(item.path, to: name) }
+    }
+
+    private func remove(_ item: LibraryItem) {
+        Task { changeError = await looks.remove(item.path) }
     }
 
     /// Chooses the look `offset` tiles from the chosen one, staying put at either end.
@@ -245,6 +283,57 @@ public struct LookSection: View {
         var recipe: EditRecipe
     }
 
+    /// A look or folder in the library, as the rename alert and remove dialog name it.
+    struct LibraryItem: Equatable {
+        var path: String
+        var isFolder: Bool
+
+        var title: String { isFolder ? (path as NSString).lastPathComponent : LookSection.title(of: path) }
+    }
+
+    /// The alert that renames a look or folder, the dialog that confirms removing one, and the
+    /// alert that says why either failed. They are the section's own, not `Library.errorMessage`,
+    /// so on iPhone they show over the Looks sheet.
+    private struct ManageItems: ViewModifier {
+        @Binding var renaming: LibraryItem?
+        @Binding var newName: String
+        @Binding var removing: LibraryItem?
+        @Binding var changeError: String?
+        let rename: (LibraryItem) -> Void
+        let remove: (LibraryItem) -> Void
+
+        func body(content: Content) -> some View {
+            content
+                .alert(renaming?.isFolder == true ? "Rename Folder" : "Rename Look",
+                       isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
+                       presenting: renaming) { item in
+                    TextField("Name", text: $newName)
+                    Button("Cancel", role: .cancel) {}
+                    Button("Rename") { rename(item) }
+                        .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                } message: { item in
+                    Text(item.isFolder ? "Photos that use looks in this folder will show them as missing."
+                                       : "Photos that use this look will show it as missing.")
+                }
+                .confirmationDialog(removing.map { "Remove “\($0.title)”?" } ?? "",
+                                    isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                                    titleVisibility: .visible, presenting: removing) { item in
+                    Button(item.isFolder ? "Remove Folder" : "Remove Look", role: .destructive) { remove(item) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { item in
+                    Text(item.isFolder
+                         ? "Proof’s copies of the looks in this folder are deleted. The files you added them from aren’t changed. Photos that use them are shown without them."
+                         : "Proof’s copy of this look is deleted. The file you added it from isn’t changed. Photos that use it are shown without it.")
+                }
+                .alert("Couldn’t Change Looks",
+                       isPresented: Binding(get: { changeError != nil }, set: { if !$0 { changeError = nil } })) {
+                    Button("OK") {}
+                } message: {
+                    Text(changeError ?? "")
+                }
+        }
+    }
+
     private func importItems(_ urls: [URL]) {
         Task {
             if let message = await looks.importItems(urls) { library.errorMessage = message }
@@ -257,7 +346,7 @@ public struct LookSection: View {
     }
 
     /// A LUT's name as shown: the last part of its path, without `.cube`.
-    private static func title(of path: String) -> String {
+    private nonisolated static func title(of path: String) -> String {
         ((path as NSString).lastPathComponent as NSString).deletingPathExtension
     }
 }
