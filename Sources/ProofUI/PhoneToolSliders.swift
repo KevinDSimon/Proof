@@ -40,7 +40,7 @@ public struct PhoneToolSliders: View {
             // White balance and sharpness start from the camera's, read once the photo opens.
             .disabled(value(of: adjustment) == nil)
             // Kept in view, dimmed, where it changes nothing as the edit stands.
-            .disabled(library.selectedEdit.map { adjustment.isInactive(in: $0.recipe) } ?? false)
+            .disabled(library.selectedEdit.map { adjustment.isInactive(in: $0.recipe, camera: $0.cameraDetail) } ?? false)
     }
 
     private func value(of adjustment: PhoneAdjustment) -> Double? {
@@ -85,10 +85,13 @@ public struct PhoneToolSliders: View {
         case let .selectiveHue(range): Style(track: SelectiveColorCard.hueTrack(range))
         case let .selectiveSaturation(range): Style(track: SelectiveColorCard.saturationTrack(range))
         case let .selectiveBrightness(range): Style(track: SelectiveColorCard.brightnessTrack(range))
-        case .grain: Style(showsSign: false)
+        case .texture: Style(track: AdjustmentSlider.textureTrack)
         case .clarity: Style(track: AdjustmentSlider.clarityTrack)
-        case .sharpness: Style(showsSign: false)
+        case .dehaze: Style(track: AdjustmentSlider.dehazeTrack)
+        case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: Style(showsSign: false)
         case .vignette: Style(track: AdjustmentSlider.vignetteAmountTrack)
+        case .vignetteRoundness: Style()
+        case .grain, .grainSize, .grainRoughness, .halation, .halationSize, .bloom, .bloomSize, .vignetteMidpoint, .vignetteFeather: Style(showsSign: false)
         }
     }
 }

@@ -32,6 +32,7 @@ public enum PhoneTool: String, CaseIterable, Identifiable, Sendable {
     public var sections: [PhoneToolSection] {
         switch self {
         case .color: [.basic, .selectiveColor]
+        case .finish: [.detail, .effects]
         default: []
         }
     }
@@ -42,8 +43,7 @@ public enum PhoneTool: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .looks, .crop: []
         case .light: [.exposure, .contrast, .highlights, .shadows, .whites, .blacks]
-        case .color: sections.flatMap(\.adjustments)
-        case .finish: [.grain, .clarity, .sharpness, .vignette]
+        case .color, .finish: sections.flatMap(\.adjustments)
         }
     }
 
@@ -57,7 +57,7 @@ public enum PhoneTool: String, CaseIterable, Identifiable, Sendable {
 
 /// One segment of an iPhone tool sheet, named for the Mac's card it comes from.
 public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
-    case basic, selectiveColor
+    case basic, selectiveColor, detail, effects
 
     public var id: Self { self }
 
@@ -65,6 +65,8 @@ public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .basic: "Basic"
         case .selectiveColor: "Selective Color"
+        case .detail: "Detail"
+        case .effects: "Effects"
         }
     }
 
@@ -74,12 +76,14 @@ public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
         case .basic: [.temperature, .tint, .saturation, .vibrance, .mixRed, .mixGreen, .mixBlue]
         case .selectiveColor:
             ColorRange.allCases.flatMap { [.selectiveHue($0), .selectiveSaturation($0), .selectiveBrightness($0)] }
+        case .detail, .effects: groups(in: EditRecipe(), range: .red).flatMap(\.sliders)
         }
     }
 
     /// The segment's controls in groups, top to bottom, each under its heading and set apart
     /// from the next by a line. With Black & White on, the red, green and blue mix takes the
-    /// place of Saturation and Vibrance. Selective Color shows the chosen range.
+    /// place of Saturation and Vibrance. Selective Color shows the chosen range. A fine-tuning
+    /// slider is in its amount's group, under the amount.
     public func groups(in recipe: EditRecipe, range: ColorRange) -> [PhoneSheetGroup] {
         switch self {
         case .basic:
@@ -92,6 +96,18 @@ public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
         case .selectiveColor:
             [PhoneSheetGroup(controls: [.colorRanges]),
              PhoneSheetGroup(range.title, sliders: [.selectiveHue(range), .selectiveSaturation(range), .selectiveBrightness(range)])]
+        case .detail:
+            [PhoneSheetGroup("Presence", sliders: [.texture, .clarity, .dehaze]),
+             PhoneSheetGroup("Sharpening", sliders: [.sharpness]),
+             PhoneSheetGroup("Noise Reduction", sliders: [.noiseReduction, .noiseReductionDetail, .colorNoiseReduction]),
+             // Two switches, as in Lightroom on iPhone. The manual distortion and lens vignetting
+             // sliders stay on the Mac; the vignette is in Effects.
+             PhoneSheetGroup("Lens Corrections", controls: [.lensSwitches])]
+        case .effects:
+            [PhoneSheetGroup("Grain", sliders: [.grain, .grainSize, .grainRoughness]),
+             PhoneSheetGroup("Halation", sliders: [.halation, .halationSize]),
+             PhoneSheetGroup("Bloom", sliders: [.bloom, .bloomSize]),
+             PhoneSheetGroup("Vignette", sliders: [.vignette, .vignetteMidpoint, .vignetteRoundness, .vignetteFeather])]
         }
     }
 
@@ -101,7 +117,8 @@ public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// Resets each of the segment's sliders, leaving the rest of the recipe as it was. The Black
-    /// & White switch and the profile stay, as no Mac card's Reset changes them.
+    /// & White switch, the profile and the lens switches stay, as no Mac card's Reset of a
+    /// slider changes them.
     public func reset(in recipe: inout EditRecipe) {
         for adjustment in adjustments { adjustment.reset(in: &recipe) }
     }
@@ -121,6 +138,8 @@ public enum PhoneSheetControl: Hashable, Sendable {
     case whiteBalance
     /// Selective Color's row of color ranges.
     case colorRanges
+    /// The lens profile and chromatic aberration switches.
+    case lensSwitches
 }
 
 /// A group of controls in a tool sheet's segment: a heading, then its other controls and its
@@ -146,13 +165,13 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
     /// The black-and-white mix's channels.
     case mixRed, mixGreen, mixBlue
     case selectiveHue(ColorRange), selectiveSaturation(ColorRange), selectiveBrightness(ColorRange)
-    case grain, clarity, sharpness, vignette
+    case texture, clarity, dehaze
+    case sharpness, noiseReduction, noiseReductionDetail, colorNoiseReduction
+    case grain, grainSize, grainRoughness, halation, halationSize, bloom, bloomSize
+    case vignette, vignetteMidpoint, vignetteRoundness, vignetteFeather
 
     public static let allCases: [PhoneAdjustment] =
-        [.exposure, .contrast, .highlights, .shadows, .whites, .blacks,
-         .temperature, .tint, .saturation, .vibrance, .mixRed, .mixGreen, .mixBlue]
-        + PhoneToolSection.selectiveColor.adjustments
-        + [.grain, .clarity, .sharpness, .vignette]
+        PhoneTool.light.adjustments + PhoneToolSection.allCases.flatMap(\.adjustments)
 
     public var id: Self { self }
 
@@ -174,10 +193,19 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .selectiveHue: "Hue"
         case .selectiveSaturation: "Saturation"
         case .selectiveBrightness: "Brightness"
-        case .grain: "Grain"
+        case .texture: "Texture"
         case .clarity: "Clarity"
-        case .sharpness: "Sharpness"
-        case .vignette: "Vignette"
+        case .dehaze: "Dehaze"
+        // Titles within their group's heading, as on the Mac: "Amount" under Grain.
+        case .sharpness, .grain, .halation, .bloom, .vignette: "Amount"
+        case .noiseReduction: "Luminance"
+        case .noiseReductionDetail: "Detail"
+        case .colorNoiseReduction: "Color"
+        case .vignetteMidpoint: "Midpoint"
+        case .grainSize, .halationSize, .bloomSize: "Size"
+        case .grainRoughness: "Roughness"
+        case .vignetteRoundness: "Roundness"
+        case .vignetteFeather: "Feather"
         }
     }
 
@@ -187,7 +215,35 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case let .selectiveHue(range), let .selectiveSaturation(range), let .selectiveBrightness(range):
             "\(range.title) \(title)"
         case .mixRed, .mixGreen, .mixBlue: "Black & White \(title)"
+        case .sharpness: "Sharpening Amount"
+        case .grain: "Grain Amount"
+        case .halation: "Halation Amount"
+        case .bloom: "Bloom Amount"
+        case .vignette: "Vignette Amount"
+        case .noiseReduction: "Luminance Noise Reduction"
+        case .noiseReductionDetail: "Noise Reduction Detail"
+        case .colorNoiseReduction: "Color Noise Reduction"
+        case .grainSize: "Grain Size"
+        case .grainRoughness: "Grain Roughness"
+        case .halationSize: "Halation Size"
+        case .bloomSize: "Bloom Size"
+        case .vignetteMidpoint: "Vignette Midpoint"
+        case .vignetteRoundness: "Vignette Roundness"
+        case .vignetteFeather: "Vignette Feather"
         default: title
+        }
+    }
+
+    /// The amount a fine-tuning slider refines, which it follows in its group: what it changes
+    /// is that amount's look. `nil` for an amount or a slider of its own.
+    public var refines: PhoneAdjustment? {
+        switch self {
+        case .noiseReductionDetail, .colorNoiseReduction: .noiseReduction
+        case .grainSize, .grainRoughness: .grain
+        case .halationSize: .halation
+        case .bloomSize: .bloom
+        case .vignetteMidpoint, .vignetteRoundness, .vignetteFeather: .vignette
+        default: nil
         }
     }
 
@@ -197,8 +253,9 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .temperature, .tint: .whiteBalance
         case .selectiveHue, .selectiveSaturation, .selectiveBrightness: .selectiveColor
-        case .sharpness: .detail
-        case .grain, .vignette: .effects
+        case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: .detail
+        case .grain, .grainSize, .grainRoughness, .halation, .halationSize, .bloom, .bloomSize,
+             .vignette, .vignetteMidpoint, .vignetteRoundness, .vignetteFeather: .effects
         default: .basic
         }
     }
@@ -210,24 +267,34 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case .tint: WhiteBalance.tintRange
         case .mixRed, .mixGreen, .mixBlue: BlackAndWhite.range
         case .selectiveHue, .selectiveSaturation, .selectiveBrightness: ColorRangeAdjustment.range
+        case .sharpness, .noiseReduction, .noiseReductionDetail, .colorNoiseReduction: DetailAdjustments.range
         case .grain: GrainAdjustments.amountRange
+        case .grainSize: GrainAdjustments.sizeRange
+        case .grainRoughness: GrainAdjustments.roughnessRange
+        case .halation, .bloom: GlowAdjustments.amountRange
+        case .halationSize, .bloomSize: GlowAdjustments.sizeRange
         case .vignette: VignetteAdjustments.amountRange
-        case .sharpness: DetailAdjustments.range
+        case .vignetteMidpoint: VignetteAdjustments.midpointRange
+        case .vignetteRoundness: VignetteAdjustments.roundnessRange
+        case .vignetteFeather: VignetteAdjustments.featherRange
         default: -100...100
         }
     }
 
     /// Whether the slider is dimmed because it changes nothing as the recipe stands: in black
-    /// and white only a range's Brightness changes the gray.
-    public func isInactive(in recipe: EditRecipe) -> Bool {
+    /// and white only a range's Brightness changes the gray, and a fine-tuning slider does
+    /// nothing without its amount, as on the Mac. Color noise reduction works on its own.
+    public func isInactive(in recipe: EditRecipe, camera: CameraDetail?) -> Bool {
         switch self {
         case .selectiveHue, .selectiveSaturation: recipe.blackAndWhite.isOn
-        default: false
+        case .colorNoiseReduction: false
+        default: refines.map { ($0.value(in: recipe, asShot: nil, camera: camera) ?? 0) == 0 } ?? false
         }
     }
 
     /// The value the slider shows. Temperature and tint show the camera's white balance until they
-    /// are changed, and sharpness the camera's amount; `nil` until those have been read.
+    /// are changed, and sharpening and noise reduction the camera's amounts; `nil` until those
+    /// have been read.
     public func value(in recipe: EditRecipe, asShot: WhiteBalance?, camera: CameraDetail?) -> Double? {
         switch self {
         case .exposure: recipe.basic.exposure
@@ -246,10 +313,24 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case let .selectiveHue(range): recipe.selectiveColor[range].hue
         case let .selectiveSaturation(range): recipe.selectiveColor[range].saturation
         case let .selectiveBrightness(range): recipe.selectiveColor[range].brightness
-        case .grain: recipe.grain.amount
+        case .texture: recipe.basic.texture
         case .clarity: recipe.basic.clarity
+        case .dehaze: recipe.basic.dehaze
         case .sharpness: camera.map { recipe.detail.shown(camera: $0).sharpening ?? 0 }
+        case .noiseReduction: camera.map { recipe.detail.shown(camera: $0).noiseReduction ?? 0 }
+        case .noiseReductionDetail: camera.map { recipe.detail.shown(camera: $0).noiseReductionDetail ?? 0 }
+        case .colorNoiseReduction: camera.map { recipe.detail.shown(camera: $0).colorNoiseReduction ?? 0 }
+        case .grain: recipe.grain.amount
+        case .grainSize: recipe.grain.size
+        case .grainRoughness: recipe.grain.roughness
+        case .halation: recipe.halation.amount
+        case .halationSize: recipe.halation.size
+        case .bloom: recipe.bloom.amount
+        case .bloomSize: recipe.bloom.size
         case .vignette: recipe.vignette.amount
+        case .vignetteMidpoint: recipe.vignette.midpoint
+        case .vignetteRoundness: recipe.vignette.roundness
+        case .vignetteFeather: recipe.vignette.feather
         }
     }
 
@@ -271,21 +352,39 @@ public enum PhoneAdjustment: Hashable, CaseIterable, Identifiable, Sendable {
         case let .selectiveHue(range): recipe.selectiveColor[range].hue = value
         case let .selectiveSaturation(range): recipe.selectiveColor[range].saturation = value
         case let .selectiveBrightness(range): recipe.selectiveColor[range].brightness = value
-        case .grain: recipe.grain.amount = value
+        case .texture: recipe.basic.texture = value
         case .clarity: recipe.basic.clarity = value
+        case .dehaze: recipe.basic.dehaze = value
         case .sharpness: recipe.detail.sharpening = value
+        case .noiseReduction: recipe.detail.noiseReduction = value
+        case .noiseReductionDetail: recipe.detail.noiseReductionDetail = value
+        case .colorNoiseReduction: recipe.detail.colorNoiseReduction = value
+        case .grain: recipe.grain.amount = value
+        case .grainSize: recipe.grain.size = value
+        case .grainRoughness: recipe.grain.roughness = value
+        case .halation: recipe.halation.amount = value
+        case .halationSize: recipe.halation.size = value
+        case .bloom: recipe.bloom.amount = value
+        case .bloomSize: recipe.bloom.size = value
         case .vignette: recipe.vignette.amount = value
+        case .vignetteMidpoint: recipe.vignette.midpoint = value
+        case .vignetteRoundness: recipe.vignette.roundness = value
+        case .vignetteFeather: recipe.vignette.feather = value
         }
     }
-    /// Back to the default: zero, the camera's white balance or the camera's sharpening.
+
+    /// Back to the default: the camera's white balance, sharpening and noise reduction, or a new
+    /// recipe's value.
     public func reset(in recipe: inout EditRecipe) {
         switch self {
         case .temperature: recipe.basic.resetTemperature()
         case .tint: recipe.basic.resetTint()
         case .sharpness: recipe.detail.sharpening = nil
-        case .grain: recipe.grain.amount = EditRecipe().grain.amount
-        case .vignette: recipe.vignette.amount = EditRecipe().vignette.amount
-        default: set(0, in: &recipe)
+        case .noiseReduction: recipe.detail.noiseReduction = nil
+        case .noiseReductionDetail: recipe.detail.noiseReductionDetail = nil
+        case .colorNoiseReduction: recipe.detail.colorNoiseReduction = nil
+        default:
+            if let value = value(in: EditRecipe(), asShot: nil, camera: nil) { set(value, in: &recipe) }
         }
     }
 
