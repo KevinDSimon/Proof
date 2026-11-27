@@ -1,5 +1,5 @@
 // The app's version, in one place. MARKETING_VERSION is what About Proof and
 // the release's name show; raise CURRENT_PROJECT_VERSION for every build that
-// is sent to Apple's notary service.
+// is sent to Apple's notary service or uploaded to App Store Connect.
 MARKETING_VERSION = 0.2
 CURRENT_PROJECT_VERSION = 2

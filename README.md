@@ -86,6 +86,7 @@ swift test
 | `Tests/ProofKitTests` | Tests for the engine |
 | `docs/` | Architecture, the edit file format, releasing, the roadmap and decision records |
 | `scripts/release.sh` | Builds a signed, notarized `.dmg` for a release |
+| `scripts/testflight.sh` | Builds the iPad and iPhone app and uploads it to App Store Connect for TestFlight |
 
 ## Contributing
 
