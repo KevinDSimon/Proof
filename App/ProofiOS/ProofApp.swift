@@ -45,14 +45,8 @@ struct ContentView: View {
         }
         .fileDialogMessage(Text(library.folderPickerMessage))
         .fileDialogConfirmationLabel(Text(library.folderPickerConfirmation))
-        .alert("Something Went Wrong", isPresented: Binding(
-            get: { library.errorMessage != nil },
-            set: { if !$0 { library.errorMessage = nil } }
-        )) {
-            Button("OK") { library.errorMessage = nil }
-        } message: {
-            Text(library.errorMessage ?? "")
-        }
+        // Edit presents it itself, as a tool's sheet may be up.
+        .errorAlert(library, presentedWhere: { !library.isEditing })
         // Browse presents these; Edit presents Copy Settings itself, as the inspector's sheet may be up.
         .sheet(isPresented: Binding(get: { library.isChoosingSettingsToCopy && !library.isEditing },
                                     set: { if !$0 { library.isChoosingSettingsToCopy = false } })) {
@@ -271,6 +265,22 @@ struct ContentView: View {
     }
 }
 
+extension View {
+    /// The alert that shows `Library.errorMessage`, where `presents` says it is presented from.
+    /// An alert presented from a view under an open sheet first closes the sheet (#267), so while
+    /// a sheet is up the alert is presented from the sheet instead, as History is.
+    func errorAlert(_ library: Library, presentedWhere presents: @escaping () -> Bool) -> some View {
+        alert("Something Went Wrong", isPresented: Binding(
+            get: { library.errorMessage != nil && presents() },
+            set: { if !$0 { library.errorMessage = nil } }
+        )) {
+            Button("OK") { library.errorMessage = nil }
+        } message: {
+            Text(library.errorMessage ?? "")
+        }
+    }
+}
+
 private extension View {
     /// A single photo reverts without asking, as Undo in Edit brings it back. Several may never be
     /// opened again, so they ask first, as on the Mac.
@@ -378,11 +388,13 @@ private struct PhotoView: View {
             }
             .onDisappear { sheetTop = nil }
             // Presented from the sheet, which is the top presentation while it is up.
+            .errorAlert(library, presentedWhere: { library.isEditing && sheetTop != nil })
             .sheet(isPresented: compactHistory(whileSheetIsUp: true)) { historySheet }
             .sheet(isPresented: copySettings(whileSheetIsUp: true)) { CopySettingsSheet(library: library) }
             .sheet(isPresented: export(whileSheetIsUp: true)) { ExportSheet(library: library) }
         }
         // While the inspector's sheet is down, History and Copy Settings present from here.
+        .errorAlert(library, presentedWhere: { library.isEditing && sheetTop == nil })
         .sheet(isPresented: compactHistory(whileSheetIsUp: false)) { historySheet }
         .sheet(isPresented: copySettings(whileSheetIsUp: false)) { CopySettingsSheet(library: library) }
         .sheet(isPresented: export(whileSheetIsUp: false)) { ExportSheet(library: library) }
