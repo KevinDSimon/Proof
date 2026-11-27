@@ -74,10 +74,12 @@ struct PhoneEditor: View {
                 .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { sheetTop = $0 }
                 .onDisappear { sheetTop = nil }
                 // Presented from the sheet, which is the top presentation while it is up.
+                .errorAlert(library, presentedWhere: { library.isEditing && sheetTop != nil })
                 .sheet(isPresented: history(whileSheetIsUp: true)) { historySheet }
                 .sheet(isPresented: copySettings(whileSheetIsUp: true)) { CopySettingsSheet(library: library) }
                 .sheet(isPresented: export(whileSheetIsUp: true)) { ExportSheet(library: library) }
         }
+        .errorAlert(library, presentedWhere: { library.isEditing && sheetTop == nil })
         .sheet(isPresented: history(whileSheetIsUp: false)) { historySheet }
         .sheet(isPresented: copySettings(whileSheetIsUp: false)) { CopySettingsSheet(library: library) }
         .sheet(isPresented: export(whileSheetIsUp: false)) { ExportSheet(library: library) }
