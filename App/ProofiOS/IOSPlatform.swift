@@ -28,6 +28,7 @@ extension LibraryPlatform {
             }
         },
         sidewaysDrag: { view, actions in AnyView(view.gesture(SidewaysDrag(actions: actions))) },
-        reducesMotion: { UIAccessibility.isReduceMotionEnabled }
+        reducesMotion: { UIAccessibility.isReduceMotionEnabled },
+        tapSelectsPhoto: { UIDevice.current.userInterfaceIdiom == .phone }
     )
 }

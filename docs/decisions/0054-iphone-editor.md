@@ -7,7 +7,7 @@ Status: Accepted. Replaces 0048's "Edit on iPhone" and the iPhone inspector shee
 Issue #285. Decision 0048 gave the iPhone the Mac's inspector, every card in the Mac's order, in a sheet below the photo (#228). Decision 0051 then made iPad and iPhone serve a mobile workflow: quick edits on the go, detailed editing back on the Mac. A phone showing curves, selective color, lens corrections and transform in a small sheet is a mobile Lightroom, which is the wrong tool for that workflow. Apple Photos, VSCO and Apple Maps show a better shape for the phone: a few focused tools, each in a sheet that leaves the photo in view.
 
 ## Decision
-- **iPhone only.** The iPhone (`UIDevice.userInterfaceIdiom == .phone`) gets `PhoneEditor` in the iOS app, reached from the photo viewer's Edit since #286 (decision 0055). iPad keeps `PhotoView`, its trailing inspector and its keyboard shortcuts, including in a narrow window.
+- **iPhone only.** The iPhone (`UIDevice.userInterfaceIdiom == .phone`) gets `PhoneEditor` in the iOS app, reached from the Edit button of the photo selected in the grid since #292. iPad keeps `PhotoView`, its trailing inspector and its keyboard shortcuts, including in a narrow window.
 - **Navigation bar.** The standard Back button, the filename as the title, Share, and a More menu. Compare shows "Original" as the bar's subtitle.
 - **More** is a native `Menu`: Undo, Redo and History; Copy Edits and Paste Edits; Compare and Histogram as toggles; and Reset, which reverts the photo as Revert to Original does, without asking, since Undo brings it back. Reset isn't drawn as destructive, so it stays white.
 - **Bottom toolbar.** Five `ToolbarItem`s with flexible `ToolbarSpacer`s between them, so each is its own Liquid Glass button: Looks, Light, Color, Finish and Crop. No segmented control or custom bar.
@@ -26,4 +26,12 @@ Issue #285. Decision 0048 gave the iPhone the Mac's inspector, every card in the
 - An edit made on the Mac with tools the iPhone lacks still renders on the iPhone and survives editing there.
 - The iPhone has fewer controls than before: white balance presets, Auto Tone, Texture, Dehaze, the curve and the rest are Mac and iPad only. Those edits render on iPhone but can only be changed elsewhere.
 - `PhoneToolSliders` in `ProofUI` is used only by the iPhone. It lives in `ProofUI` because the inspector's track colors are there.
-- Since #286 the editor is pushed from the iPhone photo viewer's Edit button, and the filmstrip is the viewer's, not the editor's (decision 0055).
+- Since #286 the editor has no filmstrip, so the photo has the room.
+
+## Reaching the editor (#292)
+Decision 0055 put a photo viewer with a filmstrip between the grid and the editor (#286). After trying it, the viewer added a screen without adding much: rating, Info and Share don't need the photo full screen, and moving between photos is quicker in the grid. #292 replaces it:
+- **A tap in the iPhone grid selects the photo** instead of opening it, marked with the rounded selection outline, and VoiceOver reads it as selected. Tapping it again, or an empty part of the grid, deselects it. A tap on another photo moves the selection to it. The rule is `BrowseState.tapToSelect` in `ProofKit`; the iOS app turns it on through `LibraryPlatform.tapSelectsPhoto`, set for `userInterfaceIdiom == .phone`, so `ProofUI` stays free of UIKit.
+- **Bottom toolbar.** While a photo is selected, the grid's bottom toolbar has Share, Rating, Info and Edit: four `ToolbarItem`s with flexible `ToolbarSpacer`s between them, each its own system Liquid Glass button, in the same order as the viewer had. Share opens the export sheet (#234). Rating is a native `Menu` with the inline rating picker, written to the photo's XMP sidecar; its star fills when the photo has a rating, and VoiceOver reads the stars as its value. Info opens `PhotoInfoSheet`. Edit pushes `PhoneEditor`, and Back returns to the grid with the photo still selected. Share and Edit are off for JPEG and HEIC photos until #239; they can still be rated and get Info.
+- **Select** is unchanged: it starts with nothing selected and has its own bottom toolbar of Share, Rating, Flag and Paste Settings. The top bar's More menu stays as it was.
+- **Removed.** `PhoneViewer` is gone. The shared `Filmstrip` stays, since the Mac and iPad use it.
+- **iPad** still opens the photo with a tap.

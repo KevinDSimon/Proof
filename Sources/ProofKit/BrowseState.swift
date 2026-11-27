@@ -122,6 +122,12 @@ public struct BrowseState: Equatable, Sendable {
         selectionAtAnchor = selection
     }
 
+    /// A tap on a thumbnail in the iPhone grid (#292): selects only that photo, or deselects it
+    /// when it is already the one photo selected, so a second tap hides its toolbar.
+    public mutating func tapToSelect(_ photo: PhotoReference) {
+        selectedPhoto = selectedPhoto == photo && selectedPhotos.count == 1 ? nil : photo
+    }
+
     /// Keeps only the photo Edit shows selected.
     public mutating func selectOnlyCurrent() {
         let current = selectedPhoto

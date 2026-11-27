@@ -6,7 +6,8 @@ import SwiftUI
 /// Color and Finish each open a sheet of a few sliders with a compact and a medium height, and the
 /// photo resizes to stay whole above it. Crop turns the canvas into a crop mode (`PhoneCropToolbar`).
 /// Undo, History, Copy and Paste, Compare, the histogram and Reset are in the More menu. It is
-/// pushed from `PhoneViewer`'s Edit, and Back returns there. iPad keeps `PhotoView`.
+/// pushed from the Edit button of the photo selected in the grid (#292), and Back returns there.
+/// iPad keeps `PhotoView`.
 struct PhoneEditor: View {
     @Bindable var library: Library
     let renderer: RAWRenderer?
@@ -40,7 +41,7 @@ struct PhoneEditor: View {
                             .transition(.opacity)
                     }
                 }
-            // The filmstrip is the viewer's (#286), so the photo has the room here.
+            // No filmstrip (#286), so the photo has the room.
             if library.isCropping {
                 PhoneStraightenSlider(library: library)
             }
@@ -231,7 +232,7 @@ struct PhoneEditor: View {
 
     private var photo: PhotoReference? { library.browse.selectedPhoto }
 
-    /// JPEG and HEIC photos, reached from the filmstrip, aren't edited until #239.
+    /// JPEG and HEIC photos aren't edited until #239.
     private var isEditable: Bool { photo?.isEditable != false }
 }
 

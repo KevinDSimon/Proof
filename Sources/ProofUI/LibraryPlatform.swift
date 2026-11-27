@@ -33,6 +33,9 @@ public struct LibraryPlatform: Sendable {
     /// Whether the system's Reduce Motion setting is on. Views read it from their environment;
     /// this is for the library's own animations, such as opening a stack from a menu.
     public var reducesMotion: @MainActor () -> Bool
+    /// iPhone: a tap in the grid selects a photo and shows its toolbar instead of opening it in
+    /// Edit (#292). iPad opens the photo, as the Mac's double-click does.
+    public var tapSelectsPhoto: @MainActor () -> Bool
 
     public init(clickModifiers: @escaping @MainActor () -> EventModifiers,
                 beep: @escaping @MainActor () -> Void,
@@ -41,7 +44,8 @@ public struct LibraryPlatform: Sendable {
                 copyString: @escaping @MainActor (String) -> Void,
                 observe: @escaping @MainActor (_ handler: @escaping @MainActor (Event) -> Void) -> Void,
                 sidewaysDrag: (@MainActor (AnyView, SidewaysDragActions) -> AnyView)? = nil,
-                reducesMotion: @escaping @MainActor () -> Bool = { false }) {
+                reducesMotion: @escaping @MainActor () -> Bool = { false },
+                tapSelectsPhoto: @escaping @MainActor () -> Bool = { false }) {
         self.clickModifiers = clickModifiers
         self.beep = beep
         self.revealFiles = revealFiles
@@ -50,6 +54,7 @@ public struct LibraryPlatform: Sendable {
         self.observe = observe
         self.sidewaysDrag = sidewaysDrag
         self.reducesMotion = reducesMotion
+        self.tapSelectsPhoto = tapSelectsPhoto
     }
 }
 
