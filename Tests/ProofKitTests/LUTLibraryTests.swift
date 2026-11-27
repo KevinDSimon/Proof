@@ -234,4 +234,88 @@ struct LUTLibraryTests {
         context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: 1))
         return stride(from: 0, to: pixels.count, by: 4).map { pixels[$0] }
     }
+
+    // MARK: Renaming and removing
+
+    /// Imports a folder "Portra" holding "400.cube" and "800.cube".
+    func importPortra() async throws {
+        let folder = root.appendingPathComponent("Portra")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try makeFile("Portra/400.cube")
+        try makeFile("Portra/800.cube", Self.cubeText(scale: 0.5))
+        _ = await library.importItem(at: folder)
+    }
+
+    @Test("Renaming a LUT keeps it in its folder and adds .cube when the name leaves it out")
+    func renameLUT() async throws {
+        try await importPortra()
+        let renamed = try await library.rename("Portra/400.cube", to: "400 Warm")
+        #expect(renamed == "Portra/400 Warm.cube")
+        #expect(library.names() == ["Portra/400 Warm.cube", "Portra/800.cube"])
+        #expect(await library.lut(named: "Portra/400 Warm.cube") != nil)
+    }
+
+    @Test("A renamed LUT is no longer found by its old path, even once it was prepared")
+    func renameForgetsOldPath() async throws {
+        try await importPortra()
+        #expect(await library.lut(named: "Portra/400.cube") != nil)
+        _ = try await library.rename("Portra/400.cube", to: "Gold")
+        #expect(await library.lut(named: "Portra/400.cube") == nil)
+        #expect(await !library.cachedNames.contains("Portra/400.cube"))
+    }
+
+    @Test("Renaming a folder moves the LUTs in it")
+    func renameFolder() async throws {
+        try await importPortra()
+        let renamed = try await library.rename("Portra", to: "Kodak")
+        #expect(renamed == "Kodak")
+        #expect(library.names() == ["Kodak/400.cube", "Kodak/800.cube"])
+    }
+
+    @Test("A name another LUT beside it has, or one that leads out of the folder, is refused")
+    func renameRefusesTakenAndInvalidNames() async throws {
+        try await importPortra()
+        await #expect(throws: LUTLibraryError.nameTaken("800")) { try await library.rename("Portra/400.cube", to: "800") }
+        for name in ["", "  ", ".hidden", "../Up", "a/b", ".cube"] {
+            await #expect(throws: LUTLibraryError.invalidName) { try await library.rename("Portra/400.cube", to: name) }
+        }
+        await #expect(throws: LUTLibraryError.notFound) { try await library.rename("Portra/200.cube", to: "Gold") }
+        #expect(library.names() == ["Portra/400.cube", "Portra/800.cube"])
+    }
+
+    @Test("Changing only the case of a name renames the file")
+    func renameCase() async throws {
+        try await importPortra()
+        let renamed = try await library.rename("Portra", to: "PORTRA")
+        #expect(renamed == "PORTRA")
+        #expect(library.names() == ["PORTRA/400.cube", "PORTRA/800.cube"])
+    }
+
+    @Test("Removing a LUT deletes the library's copy and leaves the imported original")
+    func removeLUT() async throws {
+        try await importPortra()
+        #expect(await library.lut(named: "Portra/400.cube") != nil)
+        try await library.remove("Portra/400.cube")
+        #expect(library.names() == ["Portra/800.cube"])
+        #expect(await library.lut(named: "Portra/400.cube") == nil)
+        #expect(library.version(of: "Portra/400.cube") == nil)
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("Portra/400.cube").path))
+    }
+
+    @Test("Removing a folder removes every LUT in it")
+    func removeFolder() async throws {
+        try await importPortra()
+        try await library.remove("Portra")
+        #expect(library.names().isEmpty)
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("Portra/800.cube").path))
+    }
+
+    @Test("A path that leads out of the library is never removed")
+    func removeRefusesPathsOutside() async throws {
+        try makeFile("Outside.cube")
+        await #expect(throws: LUTLibraryError.notFound) { try await library.remove("../Outside.cube") }
+        await #expect(throws: LUTLibraryError.notFound) { try await library.remove("") }
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("Outside.cube").path))
+    }
+
 }

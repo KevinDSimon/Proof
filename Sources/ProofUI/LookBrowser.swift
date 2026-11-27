@@ -78,6 +78,35 @@ public final class LookBrowser {
         return failures.isEmpty ? nil : failures.joined(separator: "\n\n")
     }
 
+    /// Renames the LUT or folder at `path` to `newName`, keeping the shown folder on it, and
+    /// returns a message when it wasn't renamed. Edits that use it lose it, as in the Finder.
+    public func rename(_ path: String, to newName: String) async -> String? {
+        do {
+            let renamed = try await LUTLibrary.shared.rename(path, to: newName)
+            if shownFolder == path || shownFolder.hasPrefix(path + "/") {
+                shownFolder = renamed + shownFolder.dropFirst(path.count)
+            }
+            reload()
+            return nil
+        } catch {
+            reload()
+            return error.localizedDescription
+        }
+    }
+
+    /// Deletes the LUT or folder at `path` from the library, and returns a message when it wasn't
+    /// removed. Photos that use it are shown without it.
+    public func remove(_ path: String) async -> String? {
+        do {
+            try await LUTLibrary.shared.remove(path)
+            reload()
+            return nil
+        } catch {
+            reload()
+            return error.localizedDescription
+        }
+    }
+
     /// Opens the library's folder in the Finder, creating it if nothing has been imported yet.
     public func revealInFinder() {
         let directory = LUTLibrary.shared.directory

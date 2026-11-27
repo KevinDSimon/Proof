@@ -579,7 +579,8 @@ struct EditCanvas: View {
     @State private var isWaiting = false
 
     var body: some View {
-        PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, backdrop: library.canvasColor,
+        PhotoCanvas(url: url, renderer: renderer, recipe: shownRecipe, lutGeneration: library.looks.generation,
+                    backdrop: library.canvasColor,
                     angle: library.isCropping ? library.selectedCrop.angle : 0,
                     viewport: library.zoom.viewport, zoom: library.zoom, previews: ThumbnailCache.shared) { error in
             library.errorMessage = "The photo couldn't be shown. (\(error))"

@@ -29,12 +29,14 @@ public final class PhotoCanvasCoordinator {
         var url: URL
         var size: CGSize
         var recipe: EditRecipe
+        var lutGeneration: Int
     }
 
     /// The part of the photo a zoomed view shows, at the view's scale up to full resolution.
     private struct DetailRequest: Equatable {
         var url: URL
         var recipe: EditRecipe
+        var lutGeneration: Int
         var scale: Double
         var region: CGRect
     }
@@ -46,6 +48,7 @@ public final class PhotoCanvasCoordinator {
     private var url: URL?
     private var size: CGSize = .zero
     private var recipe = EditRecipe()
+    private var lutGeneration = 0
     private var photo: RenderedPhoto?
     /// What `photo` was rendered from, or the request that failed, so it isn't retried.
     private var rendered: RenderRequest?
@@ -99,7 +102,9 @@ public final class PhotoCanvasCoordinator {
         renderLatest()
     }
 
-    public func show(_ url: URL, recipe: EditRecipe) {
+    /// Renders `url` with `recipe`, again when `lutGeneration` changes, since the LUT the look
+    /// names may have been renamed or removed.
+    public func show(_ url: URL, recipe: EditRecipe, lutGeneration: Int = 0) {
         if url != self.url {
             self.url = url
             budget = .current()
@@ -112,6 +117,7 @@ public final class PhotoCanvasCoordinator {
         }
         if size == .zero { size = view?.drawableSize ?? .zero }
         self.recipe = recipe
+        self.lutGeneration = lutGeneration
         renderLatest()
     }
 
@@ -185,7 +191,7 @@ public final class PhotoCanvasCoordinator {
 
     private var latest: RenderRequest? {
         guard let url, size.width > 0, size.height > 0 else { return nil }
-        return RenderRequest(url: url, size: size, recipe: recipe)
+        return RenderRequest(url: url, size: size, recipe: recipe, lutGeneration: lutGeneration)
     }
 
     /// The region to render sharp while zoomed past the screen-size photo's own resolution, or
@@ -207,7 +213,7 @@ public final class PhotoCanvasCoordinator {
         }
         let region = visible.insetBy(dx: -visible.width / 8, dy: -visible.height / 8)
             .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
-        return DetailRequest(url: url, recipe: recipe, scale: scale, region: region)
+        return DetailRequest(url: url, recipe: recipe, lutGeneration: lutGeneration, scale: scale, region: region)
     }
 
     /// Runs one render at a time. A render in flight is never discarded: while a slider is
