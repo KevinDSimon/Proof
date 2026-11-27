@@ -3,7 +3,7 @@ import ProofUI
 import SwiftUI
 
 /// The row above Temperature and Tint in the iPhone Color sheet (#298): one native menu with
-/// the white balance presets, which shows Custom once a slider has moved, and Pick from Photo,
+/// the white balance presets, which shows Custom once a slider has moved, and Eyedropper,
 /// which lowers the sheet for the eyedropper (`PhoneWhiteBalancePicker`).
 struct PhoneWhiteBalanceRow: View {
     let library: Library
@@ -18,11 +18,13 @@ struct PhoneWhiteBalanceRow: View {
             // and the eyedropper below them, so the row holds a single control.
             Menu {
                 Picker("White Balance", selection: Binding(get: { preset }, set: choose)) {
-                    ForEach(PhoneWhiteBalance.menu(showing: preset), id: \.self) { Text($0.title).tag($0) }
+                    ForEach(PhoneWhiteBalance.menu(showing: preset), id: \.self) {
+                        Label($0.title, systemImage: $0.systemImage).tag($0)
+                    }
                 }
                 .pickerStyle(.inline)
                 Section {
-                    Button("Pick from Photo", systemImage: "eyedropper", action: openEyedropper)
+                    Button("Eyedropper", systemImage: "eyedropper", action: openEyedropper)
                         .disabled(renderer == nil)
                 }
             } label: {
@@ -53,6 +55,23 @@ struct PhoneWhiteBalanceRow: View {
             Task { await library.autoWhiteBalance(with: renderer) }
         } else {
             library.changeEdit { $0.basic.choose(preset) }
+        }
+    }
+}
+
+private extension WhiteBalancePreset {
+    /// The symbol beside the preset in the iPhone menu: the light each preset is for.
+    var systemImage: String {
+        switch self {
+        case .asShot: "camera"
+        case .auto: "wand.and.sparkles"
+        case .daylight: "sun.max"
+        case .cloudy: "cloud"
+        case .shade: "beach.umbrella"
+        case .tungsten: "lightbulb"
+        case .fluorescent: "light.tube.rays"
+        case .flash: "bolt"
+        case .custom: "slider.horizontal.3"
         }
     }
 }
