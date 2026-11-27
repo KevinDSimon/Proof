@@ -77,14 +77,27 @@ public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// The sliders shown, in order. With Black & White on, the red, green and blue mix takes the
+    /// The segment's controls in groups, top to bottom, each under its heading and set apart
+    /// from the next by a line. With Black & White on, the red, green and blue mix takes the
     /// place of Saturation and Vibrance. Selective Color shows the chosen range.
-    public func sliders(in recipe: EditRecipe, range: ColorRange) -> [PhoneAdjustment] {
+    public func groups(in recipe: EditRecipe, range: ColorRange) -> [PhoneSheetGroup] {
         switch self {
         case .basic:
-            [.temperature, .tint] + (recipe.blackAndWhite.isOn ? [.mixRed, .mixGreen, .mixBlue] : [.saturation, .vibrance])
-        case .selectiveColor: [.selectiveHue(range), .selectiveSaturation(range), .selectiveBrightness(range)]
+            [PhoneSheetGroup(controls: [.blackAndWhite]),
+             PhoneSheetGroup("Profile", controls: [.profile]),
+             PhoneSheetGroup("White Balance", controls: [.whiteBalance], sliders: [.temperature, .tint]),
+             recipe.blackAndWhite.isOn
+                 ? PhoneSheetGroup("Black & White Mix", sliders: [.mixRed, .mixGreen, .mixBlue])
+                 : PhoneSheetGroup("Color", sliders: [.saturation, .vibrance])]
+        case .selectiveColor:
+            [PhoneSheetGroup(controls: [.colorRanges]),
+             PhoneSheetGroup(range.title, sliders: [.selectiveHue(range), .selectiveSaturation(range), .selectiveBrightness(range)])]
         }
+    }
+
+    /// The sliders shown, in order.
+    public func sliders(in recipe: EditRecipe, range: ColorRange) -> [PhoneAdjustment] {
+        groups(in: recipe, range: range).flatMap(\.sliders)
     }
 
     /// Resets each of the segment's sliders, leaving the rest of the recipe as it was. The Black
@@ -95,6 +108,33 @@ public enum PhoneToolSection: String, CaseIterable, Identifiable, Sendable {
 
     public func isChanged(in recipe: EditRecipe) -> Bool {
         adjustments.contains { $0.isChanged(in: recipe) }
+    }
+}
+
+/// A control in an iPhone tool sheet other than a slider.
+public enum PhoneSheetControl: Hashable, Sendable {
+    /// The Black & White switch.
+    case blackAndWhite
+    /// The camera profile menu.
+    case profile
+    /// The white balance preset menu, with the eyedropper.
+    case whiteBalance
+    /// Selective Color's row of color ranges.
+    case colorRanges
+}
+
+/// A group of controls in a tool sheet's segment: a heading, then its other controls and its
+/// sliders. Groups show what belongs together through the heading and a line between them,
+/// so every slider keeps the sheet's full width.
+public struct PhoneSheetGroup: Hashable, Sendable {
+    public var title: String?
+    public var controls: [PhoneSheetControl]
+    public var sliders: [PhoneAdjustment]
+
+    public init(_ title: String? = nil, controls: [PhoneSheetControl] = [], sliders: [PhoneAdjustment] = []) {
+        self.title = title
+        self.controls = controls
+        self.sliders = sliders
     }
 }
 

@@ -2,45 +2,36 @@ import ProofKit
 import ProofUI
 import SwiftUI
 
-/// The row above Temperature and Tint in the iPhone Color sheet (#298): one native menu with
-/// the white balance presets, which shows Custom once a slider has moved, and Eyedropper,
-/// which lowers the sheet for the eyedropper (`PhoneWhiteBalancePicker`).
+/// The white balance menu above Temperature and Tint in the iPhone Color sheet (#298), under its
+/// group's heading: one native menu, full width, with the presets, which shows Custom once a
+/// slider has moved, and Eyedropper, which lowers the sheet for the eyedropper
+/// (`PhoneWhiteBalancePicker`).
 struct PhoneWhiteBalanceRow: View {
     let library: Library
     let renderer: RAWRenderer?
     let openEyedropper: () -> Void
 
     var body: some View {
-        HStack {
-            Text("White Balance")
-            Spacer()
-            // One menu: the presets as a picker, so the chosen one has the system's checkmark,
-            // and the eyedropper below them, so the row holds a single control.
-            Menu {
-                Picker("White Balance", selection: Binding(get: { preset }, set: choose)) {
-                    ForEach(PhoneWhiteBalance.menu(showing: preset), id: \.self) {
-                        Label($0.title, systemImage: $0.systemImage).tag($0)
-                    }
-                }
-                .pickerStyle(.inline)
-                Section {
-                    Button("Eyedropper", systemImage: "eyedropper", action: openEyedropper)
-                        .disabled(renderer == nil)
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(preset.title)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .imageScale(.small)
+        // One menu: the presets as a picker, so the chosen one has the system's checkmark, and
+        // the eyedropper below them, so the group holds a single control.
+        Menu {
+            Picker("White Balance", selection: Binding(get: { preset }, set: choose)) {
+                ForEach(PhoneWhiteBalance.menu(showing: preset), id: \.self) {
+                    Label($0.title, systemImage: $0.systemImage).tag($0)
                 }
             }
-            .accessibilityLabel("White Balance Preset")
-            .accessibilityValue(preset.title)
-            .accessibilityHint("Choose a preset, or pick something neutral gray in the photo")
+            .pickerStyle(.inline)
+            Section {
+                Button("Eyedropper", systemImage: "eyedropper", action: openEyedropper)
+                    .disabled(renderer == nil)
+            }
+        } label: {
+            PhoneMenuLabel(title: preset.title)
         }
-        // A slider's track sets it apart from the next one; the row has none, so it gets the
-        // same room below it.
-        .padding(.bottom, 8)
+        .phoneMenuStyle()
+        .accessibilityLabel("White Balance Preset")
+        .accessibilityValue(preset.title)
+        .accessibilityHint("Choose a preset, or pick something neutral gray in the photo")
         // White balance starts from the camera's, read once the photo opens.
         .disabled(library.selectedEdit?.asShot == nil || library.isAutoAdjusting)
     }

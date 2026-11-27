@@ -21,46 +21,68 @@ struct PhoneBlackAndWhiteRow: View {
     }
 }
 
-/// The color profile the photo is decoded with, as a menu row like the white balance's: Embedded
-/// or Apple where the photo offers both, otherwise the name of the one it has.
+/// The color profile the photo is decoded with, as a full-width menu under its group's heading,
+/// like the white balance's: Embedded or Apple where the photo offers both, otherwise the name of
+/// the one it has.
 struct PhoneProfileRow: View {
     let library: Library
 
     var body: some View {
         let edit = library.selectedEdit
-        HStack {
-            Text("Camera Profile")
-            Spacer()
-            if let edit, let profiles = edit.profiles {
-                if profiles.offersChoice {
-                    Menu {
-                        Picker("Camera Profile", selection: Binding(
-                            get: { edit.recipe.profile },
-                            set: { profile in library.changeEdit { $0.profile = profile } })) {
-                            ForEach(CameraProfile.allCases, id: \.self) { Text(profiles.label(for: $0)).tag($0) }
-                        }
-                        .pickerStyle(.inline)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(profiles.label(for: edit.recipe.profile))
-                            Image(systemName: "chevron.up.chevron.down")
-                                .imageScale(.small)
-                        }
+        Group {
+            if let edit, let profiles = edit.profiles, profiles.offersChoice {
+                Menu {
+                    Picker("Camera Profile", selection: Binding(
+                        get: { edit.recipe.profile },
+                        set: { profile in library.changeEdit { $0.profile = profile } })) {
+                        ForEach(CameraProfile.allCases, id: \.self) { Text(profiles.label(for: $0)).tag($0) }
                     }
-                    .accessibilityLabel("Camera Profile")
-                    .accessibilityValue(profiles.label(for: edit.recipe.profile))
-                    .accessibilityHint("The color profile that sets the photo's starting colors")
-                } else {
-                    Text(profiles.label(for: edit.recipe.profile))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    .pickerStyle(.inline)
+                } label: {
+                    PhoneMenuLabel(title: profiles.label(for: edit.recipe.profile))
                 }
+                .phoneMenuStyle()
+                .accessibilityLabel("Camera Profile")
+                .accessibilityValue(profiles.label(for: edit.recipe.profile))
+                .accessibilityHint("The color profile that sets the photo's starting colors")
+            } else {
+                Text(edit.flatMap { edit in edit.profiles.map { $0.label(for: edit.recipe.profile) } } ?? " ")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .accessibilityLabel("Camera Profile")
             }
         }
-        // Keeps its height while the profiles are read, so the rows below don't move.
-        .frame(minHeight: 31)
-        .accessibilityElement(children: edit?.profiles?.offersChoice == true ? .contain : .combine)
+        // Keeps its height while the profiles are read, so the groups below don't move.
+        .frame(minHeight: 44)
+    }
+}
+
+/// A full-width menu's label: its value, centered, with the system's up-and-down chevron.
+struct PhoneMenuLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Image(systemName: "chevron.up.chevron.down")
+                .imageScale(.small)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+extension View {
+    /// A menu in a tool sheet: a full-width bordered capsule, so its value sits centered under the
+    /// group's heading rather than at the far end of a row from its name.
+    func phoneMenuStyle() -> some View {
+        buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
     }
 }
 

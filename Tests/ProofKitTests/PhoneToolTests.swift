@@ -129,6 +129,19 @@ struct PhoneToolTests {
         #expect(PhoneTool.light.sections.isEmpty)
     }
 
+    @Test("Color's segments are groups under headings: Black & White, Profile, White Balance, then Color or the mix")
+    func colorGroups() {
+        var recipe = EditRecipe()
+        let basic = PhoneToolSection.basic.groups(in: recipe, range: .red)
+        #expect(basic.map(\.title) == [nil, "Profile", "White Balance", "Color"])
+        #expect(basic.map(\.controls) == [[.blackAndWhite], [.profile], [.whiteBalance], []])
+        recipe.blackAndWhite.isOn = true
+        #expect(PhoneToolSection.basic.groups(in: recipe, range: .red).last?.title == "Black & White Mix")
+        let selective = PhoneToolSection.selectiveColor.groups(in: recipe, range: .purple)
+        #expect(selective.map(\.title) == [nil, "Purple"])
+        #expect(selective.first?.controls == [.colorRanges])
+    }
+
     @Test("With Black & White on, the mix takes the place of Saturation and Vibrance")
     func blackAndWhiteMix() {
         var recipe = EditRecipe()

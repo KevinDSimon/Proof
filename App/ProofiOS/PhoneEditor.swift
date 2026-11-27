@@ -319,19 +319,35 @@ private struct ToolSheet: View {
         .tint(.white)
     }
 
+    /// The segment's groups: a heading in the headline style over its controls and sliders, and a
+    /// line between groups, so what belongs together shows without indenting sliders.
     @ViewBuilder private func sectionContent(_ section: PhoneToolSection) -> some View {
         let recipe = library.selectedEdit?.recipe ?? EditRecipe()
-        switch section {
-        case .basic:
-            // Black & White first, since it changes which sliders follow.
-            PhoneBlackAndWhiteRow(library: library)
-            PhoneProfileRow(library: library)
-            // The presets and eyedropper above Temperature and Tint (#298).
-            PhoneWhiteBalanceRow(library: library, renderer: renderer, openEyedropper: openEyedropper)
-            PhoneToolSliders(library: library, adjustments: section.sliders(in: recipe, range: range))
-        case .selectiveColor:
-            PhoneColorRangePicker(library: library, selected: $range)
-            PhoneToolSliders(library: library, adjustments: section.sliders(in: recipe, range: range))
+        let groups = section.groups(in: recipe, range: range)
+        ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+            if index > 0 {
+                Divider()
+                    .padding(.vertical, 6)
+            }
+            if let title = group.title {
+                Text(title)
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            ForEach(group.controls, id: \.self) { control($0) }
+            if !group.sliders.isEmpty {
+                PhoneToolSliders(library: library, adjustments: group.sliders)
+            }
+        }
+    }
+
+    @ViewBuilder private func control(_ control: PhoneSheetControl) -> some View {
+        switch control {
+        case .blackAndWhite: PhoneBlackAndWhiteRow(library: library)
+        case .profile: PhoneProfileRow(library: library)
+        // The presets and eyedropper above Temperature and Tint (#298).
+        case .whiteBalance: PhoneWhiteBalanceRow(library: library, renderer: renderer, openEyedropper: openEyedropper)
+        case .colorRanges: PhoneColorRangePicker(library: library, selected: $range)
         }
     }
 
