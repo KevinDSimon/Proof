@@ -2,9 +2,9 @@ import ProofKit
 import ProofUI
 import SwiftUI
 
-/// The row above Temperature and Tint in the iPhone Color sheet (#298): the white balance
-/// presets in a native menu, which shows Custom once a slider has moved, and the eyedropper,
-/// which lowers the sheet for `PhoneWhiteBalancePicker`.
+/// The row above Temperature and Tint in the iPhone Color sheet (#298): one native menu with
+/// the white balance presets, which shows Custom once a slider has moved, and Pick from Photo,
+/// which lowers the sheet for the eyedropper (`PhoneWhiteBalancePicker`).
 struct PhoneWhiteBalanceRow: View {
     let library: Library
     let renderer: RAWRenderer?
@@ -14,19 +14,31 @@ struct PhoneWhiteBalanceRow: View {
         HStack {
             Text("White Balance")
             Spacer()
-            Picker("White Balance", selection: Binding(get: { preset }, set: choose)) {
-                ForEach(PhoneWhiteBalance.menu(showing: preset), id: \.self) { Text($0.title).tag($0) }
+            // One menu: the presets as a picker, so the chosen one has the system's checkmark,
+            // and the eyedropper below them, so the row holds a single control.
+            Menu {
+                Picker("White Balance", selection: Binding(get: { preset }, set: choose)) {
+                    ForEach(PhoneWhiteBalance.menu(showing: preset), id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+                Section {
+                    Button("Pick from Photo", systemImage: "eyedropper", action: openEyedropper)
+                        .disabled(renderer == nil)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(preset.title)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .imageScale(.small)
+                }
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
             .accessibilityLabel("White Balance Preset")
-            Button("White Balance Selector", systemImage: "eyedropper", action: openEyedropper)
-                .labelStyle(.iconOnly)
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
-                .accessibilityHint("Sets the white balance from something neutral gray in the photo")
-                .disabled(renderer == nil)
+            .accessibilityValue(preset.title)
+            .accessibilityHint("Choose a preset, or pick something neutral gray in the photo")
         }
+        // A slider's track sets it apart from the next one; the row has none, so it gets the
+        // same room below it.
+        .padding(.bottom, 8)
         // White balance starts from the camera's, read once the photo opens.
         .disabled(library.selectedEdit?.asShot == nil || library.isAutoAdjusting)
     }
