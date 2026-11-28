@@ -4,6 +4,7 @@ import SwiftUI
 
 @main
 struct ProofApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var library = Library(platform: .iOS)
 
     var body: some Scene {

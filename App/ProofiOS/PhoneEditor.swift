@@ -7,7 +7,8 @@ import SwiftUI
 /// photo resizes to stay whole above it. Crop turns the canvas into a crop mode (`PhoneCropToolbar`).
 /// Undo, History, Copy and Paste, Compare, the histogram and Reset are in the More menu. It is
 /// pushed from the Edit button of the photo selected in the grid (#292), and Back returns there.
-/// iPad keeps `PhotoView`.
+/// Turned to landscape, it shows only the photo, and turning back brings the tool and its sheet
+/// back as they were (#321). iPad keeps `PhotoView`.
 struct PhoneEditor: View {
     @Bindable var library: Library
     let renderer: RAWRenderer?
@@ -15,6 +16,15 @@ struct PhoneEditor: View {
     /// The tool whose sheet is open.
     @State private var tool: PhoneTool?
     @State private var sheetHeight = PresentationDetent.toolCompact
+    /// The open tool's segment and Selective Color range, kept here so they come back after
+    /// landscape, which closes the sheet.
+    @State private var section: PhoneToolSection?
+    @State private var range = ColorRange.red
+    /// The phone turned to landscape while a sheet was up, which holds it in portrait, so the
+    /// sheet lowers before the editor turns.
+    @State private var isTurning = false
+    /// The tool whose sheet landscape closed, to open again in portrait.
+    @State private var landscapeTool: PhoneTool?
     /// The top of the sheet, in global coordinates, while one is up.
     @State private var sheetTop: CGFloat?
     /// The bottom of the space the photo is laid out in, in global coordinates.
@@ -31,7 +41,7 @@ struct PhoneEditor: View {
                 // A small floating panel, shown only while it is turned on in More, so it may sit
                 // over the corner of the canvas as a temporary tool does.
                 .overlay(alignment: .topLeading) {
-                    if isHistogramShown && !library.isCropping {
+                    if isHistogramShown && !library.isCropping && !isFullScreen {
                         HistogramView(histogram: library.selectedHistogram, height: 48)
                             .equatable()
                             .frame(width: 120)
@@ -61,6 +71,9 @@ struct PhoneEditor: View {
         .navigationSubtitle(library.browse.isShowingOriginal && !isInCanvasMode ? "Original" : "")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isInTool || isInCanvasMode)
+        .toolbar(isFullScreen ? .hidden : .automatic, for: .navigationBar, .bottomBar)
+        .statusBarHidden(isFullScreen)
+        .persistentSystemOverlays(isFullScreen ? .hidden : .automatic)
         .sheet(isPresented: isSheetUp) {
             sheet
                 // Opaque rather than glass. The tool sheets are a step lighter than the canvas; the
@@ -83,9 +96,30 @@ struct PhoneEditor: View {
         .sheet(isPresented: history(whileSheetIsUp: false)) { historySheet }
         .sheet(isPresented: copySettings(whileSheetIsUp: false)) { CopySettingsSheet(library: library) }
         .sheet(isPresented: export(whileSheetIsUp: false)) { ExportSheet(library: library) }
-        // A phone in landscape has room for the photo only above a compact sheet.
-        .onChange(of: verticalSizeClass, initial: true) {
-            if verticalSizeClass == .compact { sheetHeight = .toolCompact }
+        // Crop, the eyedropper, the touch tools and the sheets from More need their controls,
+        // so they keep the phone in portrait.
+        .onChange(of: allowsLandscape, initial: true) { AppDelegate.allowLandscape(allowsLandscape) }
+        .onDisappear { AppDelegate.allowLandscape(false) }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            let orientation = UIDevice.current.orientation
+            if orientation.isLandscape && allowsLandscape && !isFullScreen && sheetTop != nil {
+                landscapeTool = tool
+                isTurning = true
+            } else if orientation.isPortrait && isTurning {
+                isTurning = false
+                reopenTool()
+            }
+        }
+        .onChange(of: sheetTop == nil) {
+            if isTurning && sheetTop == nil { AppDelegate.turnToLandscape(UIDevice.current.orientation) }
+        }
+        .onChange(of: isFullScreen) {
+            if isFullScreen {
+                if !isTurning { landscapeTool = tool }
+                isTurning = false
+            } else {
+                reopenTool()
+            }
         }
         .onChange(of: library.isCropping) {
             if library.isCropping { tool = nil }
@@ -106,12 +140,12 @@ struct PhoneEditor: View {
                 MasksInspector(library: library, renderer: renderer)
             }
         } else if let tool {
-            ToolSheet(library: library, renderer: renderer, tool: tool, close: { self.tool = nil }) {
+            ToolSheet(library: library, renderer: renderer, tool: tool, section: $section, range: $range,
+                      close: { self.tool = nil }) {
                 // The sheet lowers while the eyedropper is on the photo, and comes back after.
                 self.tool = nil
                 library.startSamplingWhiteBalance()
             }
-            // Each tool starts at its first segment.
             .id(tool)
         }
     }
@@ -122,15 +156,26 @@ struct PhoneEditor: View {
     /// Crop and the white balance eyedropper are modes of the canvas, with their own bars.
     private var isInCanvasMode: Bool { library.isCropping || library.isSamplingWhiteBalance }
 
+    /// A phone in landscape, which shows only the photo.
+    private var isFullScreen: Bool { verticalSizeClass == .compact }
+
+    private var allowsLandscape: Bool {
+        !isInTool && !isInCanvasMode && !library.isHistoryShown && !library.isChoosingSettingsToCopy
+            && library.photosToExport.isEmpty && !library.exports.isVisible
+    }
+
     private var isSheetUp: Binding<Bool> {
-        Binding(get: { (tool != nil && !isInCanvasMode) || isInTool },
+        Binding(get: { ((tool != nil && !isInCanvasMode) || isInTool) && !isFullScreen && !isTurning },
                 set: { if !$0 { tool = nil } })
     }
 
-    /// Compact and medium, or only compact in landscape.
-    private var sheetHeights: Set<PresentationDetent> {
-        verticalSizeClass == .compact ? [.toolCompact] : [.toolCompact, .medium]
+    /// Opens the tool landscape closed, at the height and segment it had.
+    private func reopenTool() {
+        if let landscapeTool { tool = landscapeTool }
+        landscapeTool = nil
     }
+
+    private let sheetHeights: Set<PresentationDetent> = [.toolCompact, .medium]
 
     private var sheetInset: CGFloat {
         guard let sheetTop else { return 0 }
@@ -248,8 +293,11 @@ struct PhoneEditor: View {
     private func open(_ tool: PhoneTool) {
         if tool.hasSheet {
             // Color and Finish open taller, since their segments and top rows leave no room for
-            // a slider at the compact height. Landscape has only the compact one.
-            sheetHeight = tool.opensAtMediumHeight && verticalSizeClass != .compact ? .medium : .toolCompact
+            // a slider at the compact height.
+            sheetHeight = tool.opensAtMediumHeight ? .medium : .toolCompact
+            // Each tool starts at its first segment.
+            section = tool.sections.first
+            range = .red
             self.tool = tool
         } else {
             library.startCropping()
@@ -269,21 +317,11 @@ private struct ToolSheet: View {
     let library: Library
     let renderer: RAWRenderer?
     let tool: PhoneTool
+    @Binding var section: PhoneToolSection?
+    /// The color range Selective Color shows.
+    @Binding var range: ColorRange
     let close: () -> Void
     let openEyedropper: () -> Void
-    @State private var section: PhoneToolSection?
-    /// The color range Selective Color shows.
-    @State private var range = ColorRange.red
-
-    init(library: Library, renderer: RAWRenderer?, tool: PhoneTool, close: @escaping () -> Void,
-         openEyedropper: @escaping () -> Void) {
-        self.library = library
-        self.renderer = renderer
-        self.tool = tool
-        self.close = close
-        self.openEyedropper = openEyedropper
-        _section = State(initialValue: tool.sections.first)
-    }
 
     var body: some View {
         NavigationStack {
