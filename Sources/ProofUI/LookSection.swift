@@ -20,6 +20,7 @@ public struct LookSection: View {
     @State private var removing: LibraryItem?
     @State private var changeError: String?
     @FocusState private var isGridFocused: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private static let cubeType = UTType(filenameExtension: LUTLibrary.fileExtension, conformingTo: .data) ?? .data
 
@@ -160,7 +161,7 @@ public struct LookSection: View {
     }
 
     /// The shown folder's LUTs as a grid of previews of the whole photo. The chosen one has the
-    /// filmstrip's outline, and its name is the pop-up's title; each tile's name is in its help tag.
+    /// filmstrip's outline, and its name is the pop-up's title; each tile's name is under its preview.
     /// With the grid focused, the arrow keys move between tiles and choose as they go.
     private var grid: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -187,14 +188,25 @@ public struct LookSection: View {
     private func tile(_ path: String) -> some View {
         let isSelected = look?.lut == path
         let item = LibraryItem(path: path, isFolder: false)
-        return preview(of: path)
+        return VStack(spacing: 4) {
+            preview(of: path)
+            Text(Self.title(of: path))
+                .font(.caption)
+                .foregroundStyle(isSelected ? .primary : .secondary)
+                // Styled as the photo grid's names. Space for every line is kept, so a short name
+                // doesn't make its tile shorter than its neighbors.
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1, reservesSpace: true)
+                .truncationMode(.middle)
+                .multilineTextAlignment(.center)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .frame(maxWidth: .infinity)
+        }
             .selectionOutline(isSelected, padding: 4)
             .contentShape(Rectangle())
             .onTapGesture {
                 isGridFocused = true
                 choose(path)
             }
-            .help(Self.title(of: path))
             .accessibilityElement()
             .accessibilityLabel(Self.title(of: path))
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
