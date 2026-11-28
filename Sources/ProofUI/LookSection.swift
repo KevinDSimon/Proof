@@ -68,10 +68,8 @@ public struct LookSection: View {
             } description: {
                 Text(Self.emptyDescription)
             } actions: {
-                // Explicit, since iOS draws the default as small plain text in the iPhone's Looks
-                // sheet. No Folders' Add Folder matches it (#320).
                 Button("Add Looks…") { isImporting = true }
-                    .buttonStyle(.bordered)
+                    .emptyStateAction()
             }
             .dropDestination(for: URL.self) { urls, _ in
                 importItems(urls)

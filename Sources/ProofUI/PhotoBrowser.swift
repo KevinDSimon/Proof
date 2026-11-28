@@ -18,10 +18,8 @@ public struct PhotoBrowser: View {
             } description: {
                 Text("Add a folder of photos to browse and edit them.")
             } actions: {
-                // Gray and white, as Add Looks is in the Looks card and sheet (#320).
                 Button("Add Folder…") { library.requestFolder(.add) }
-                    .buttonStyle(.bordered)
-                    .tint(.white)
+                    .emptyStateAction()
             }
         } else if library.selection?.isAcrossFolders == true {
             allPhotos
@@ -34,8 +32,7 @@ public struct PhotoBrowser: View {
                     Text("“\(location.name)” was moved or deleted. Locate it to see its photos again.")
                 } actions: {
                     Button("Locate…") { library.requestFolder(.locate(location)) }
-                        .buttonStyle(.bordered)
-                        .tint(.white)
+                        .emptyStateAction()
                 }
             case .offline:
                 ContentUnavailableView("Drive Not Connected", systemImage: "externaldrive.badge.xmark",
@@ -181,4 +178,16 @@ public extension Library {
         browse.hasMultipleSelection && !isSelectingPhotos ? "\(browse.selectedPhotos.count) selected" : nil
     }
 
+}
+
+extension View {
+    /// The action under an empty state, as plain text in the accent gold at body size. Set
+    /// explicitly, since iOS draws the default smaller in the Looks sheet, and the sheet and the
+    /// Looks card tint their controls white (#320).
+    func emptyStateAction() -> some View {
+        buttonStyle(.borderless)
+            .tint(.accentGold)
+            .font(.body)
+            .controlSize(.regular)
+    }
 }
