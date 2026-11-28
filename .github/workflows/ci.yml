@@ -21,7 +21,21 @@ jobs:
       - name: Build
         run: swift build
       - name: Test
+        # The test process sometimes crashes here with signal 11 and no trace (#332). The
+        # backtracer prints the crashing thread's stack to the log, and the crash report is kept
+        # below, so the next crash says where it happened.
+        env:
+          SWIFT_BACKTRACE: enable=yes,interactive=no,threads=all
         run: swift test
+      - name: Keep crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-reports
+          path: |
+            ~/Library/Logs/DiagnosticReports/*ProofKitTests*
+            ~/Library/Logs/DiagnosticReports/*swiftpm-testing-helper*
+          if-no-files-found: ignore
       - name: Build Mac app
         run: xcodebuild -project App/Proof.xcodeproj -scheme Proof -configuration Debug build
 
