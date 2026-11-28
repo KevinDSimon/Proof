@@ -34,9 +34,29 @@ public struct PhotoBrowser: View {
                     Button("Locate…") { library.requestFolder(.locate(location)) }
                         .emptyStateAction()
                 }
+            case .offline where library.offersLocate(location.id):
+                // On iPad and iPhone, whether a Files provider is connected often isn't visible, so
+                // choosing the folder again is offered beside connecting it (#324).
+                ContentUnavailableView {
+                    Label("Drive Not Connected", systemImage: "externaldrive.badge.xmark")
+                } description: {
+                    Text("Connect the drive or server that holds “\(location.name)”, or locate the folder again.")
+                } actions: {
+                    Button("Locate…") { library.requestFolder(.locate(location)) }
+                        .emptyStateAction()
+                }
             case .offline:
                 ContentUnavailableView("Drive Not Connected", systemImage: "externaldrive.badge.xmark",
                                        description: Text("Connect the drive or network volume that holds “\(location.name)”."))
+            case .available where library.offersLocate(location.id):
+                ContentUnavailableView {
+                    Label("Can’t Open Folder", systemImage: "folder.badge.questionmark")
+                } description: {
+                    Text("Proof no longer has access to “\(location.name)”. Locate it to see its photos again.")
+                } actions: {
+                    Button("Locate…") { library.requestFolder(.locate(location)) }
+                        .emptyStateAction()
+                }
             case .available:
                 if library.contents[selection] != nil {
                     // Subfolders come first, as tiles, so a folder of only subfolders shows them.
