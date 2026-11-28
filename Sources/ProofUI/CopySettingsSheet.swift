@@ -137,6 +137,7 @@ public struct CopySettingsSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .softTopScrollEdge()
             .background(Color.sheetBackground)
             .navigationTitle("Copy Settings")
             .navigationBarTitleDisplayMode(.inline)

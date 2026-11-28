@@ -31,6 +31,7 @@ public struct FolderSidebar: View {
         // The same plain color as the grid and the photo's canvas, instead of the sidebar material,
         // so the window reads as one surface.
         .scrollContentBackground(.hidden)
+        .softTopScrollEdge()
         .background(Color.interfaceBackground.ignoresSafeArea())
         #if os(iOS)
         // iOS has no FSEvents, so each saved folder and the folders already read in it are read

@@ -221,7 +221,8 @@ public struct InspectorPanel<Content: View>: View {
         #if !os(macOS)
         // On iPad the panel is one column of several under the toolbar, and only it scrolls, so
         // the soft edge's blur of the cards showed over this column alone. The cards stop at the
-        // bar instead, as the photo beside them does; the gray behind them still runs under it.
+        // bar instead, as the photo beside them does; the gray behind them still runs under it
+        // (decision 0060).
         .scrollEdgeEffectHidden(true, for: .top)
         .clipped()
         #endif
