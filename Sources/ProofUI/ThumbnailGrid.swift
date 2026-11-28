@@ -105,6 +105,8 @@ public struct ThumbnailGrid: View {
             // scroll, such as an empty folder, so the bar looks the same with or without photos.
             #if os(macOS)
             .scrollEdgeEffectStyle(.hard, for: .top)
+            #else
+            .softTopScrollEdge()
             #endif
             // Pinching changes the thumbnail size, on a trackpad or a touch screen, also below the
             // last row. Scrolling still works.

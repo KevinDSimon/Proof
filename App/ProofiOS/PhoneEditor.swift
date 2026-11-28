@@ -348,9 +348,7 @@ private struct ToolSheet: View {
                 .padding(.bottom, 16)
                 .disabled(library.selectedEdit == nil)
             }
-            // The system's soft edge under the title bar, so sliders fade out beneath it as
-            // they scroll rather than meeting it at a hard line.
-            .scrollEdgeEffectStyle(.soft, for: .top)
+            .softTopScrollEdge()
             .background(Color.toolPanel.ignoresSafeArea())
             .navigationTitle(tool.title)
             .navigationBarTitleDisplayMode(.inline)

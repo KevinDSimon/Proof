@@ -29,6 +29,7 @@ public struct HistorySidebar: View {
         .scrollContentBackground(.hidden)
         .background(Color.interfaceBackground.ignoresSafeArea())
         #endif
+        .softTopScrollEdge()
         .disabled(library.isCropping)
     }
 

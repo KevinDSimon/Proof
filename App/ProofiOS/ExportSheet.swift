@@ -50,6 +50,7 @@ private struct ExportSettingsSheet: View {
                 .foregroundStyle(.primary)
                 ExportSettingsForm(settings: $settings)
             }
+            .softTopScrollEdge()
             .navigationTitle(photos.count == 1 ? "Export Photo" : "Export \(photos.count) Photos")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
