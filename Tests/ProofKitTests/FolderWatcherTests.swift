@@ -13,9 +13,10 @@ struct FolderWatcherTests {
     }
 
     /// The first changes the watcher reports after `change` runs, or none after five seconds.
-    func changes(watching folder: URL, after change: () throws -> Void) async throws -> [FolderWatcher.Change] {
+    func changes(watching folder: URL, usesPresenters: Bool = false,
+                 after change: () throws -> Void) async throws -> [FolderWatcher.Change] {
         let (stream, continuation) = AsyncStream.makeStream(of: [FolderWatcher.Change].self)
-        let watcher = FolderWatcher(folders: [folder], latency: 0.1) { continuation.yield($0) }
+        let watcher = FolderWatcher(folders: [folder], latency: 0.1, usesPresenters: usesPresenters) { continuation.yield($0) }
         try change()
         let timeout = Task { try await Task.sleep(for: .seconds(5)); continuation.finish() }
         defer { timeout.cancel() }
@@ -45,6 +46,33 @@ struct FolderWatcherTests {
         let watcher = FolderWatcher(folders: []) { _ in called = true }
         watcher.refresh()
         #expect(!called)
+    }
+
+    /// Writes `data` to `url` through a file coordinator, as a Files provider does.
+    func coordinatedWrite(_ data: Data, to url: URL) throws {
+        var coordinationError: NSError?
+        var writeError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { url in
+            do { try data.write(to: url) } catch { writeError = error }
+        }
+        if let error = coordinationError ?? writeError { throw error }
+    }
+
+    @Test("A file presenter reports a photo a provider adds to a watched folder, as on iOS (#325)")
+    func presenterReportsNewFile() async throws {
+        let changes = try await changes(watching: root, usesPresenters: true) {
+            try coordinatedWrite(Data("raw".utf8), to: root.appendingPathComponent("IMG_0004.DNG"))
+        }
+        #expect(changes.map { path($0.folder) }.contains(path(root)))
+    }
+
+    @Test("A file presenter reports a photo added to a subfolder as a change to that subfolder")
+    func presenterReportsSubfolder() async throws {
+        let subfolder = root.appendingPathComponent("2025")
+        let changes = try await changes(watching: root, usesPresenters: true) {
+            try coordinatedWrite(Data("raw".utf8), to: subfolder.appendingPathComponent("IMG_0005.DNG"))
+        }
+        #expect(changes.map { path($0.folder) }.contains(path(subfolder)))
     }
 
     #if os(macOS)
