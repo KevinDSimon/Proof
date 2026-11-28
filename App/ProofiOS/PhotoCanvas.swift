@@ -141,6 +141,10 @@ final class CanvasView: MTKView, MTKViewDelegate, CanvasSurface, UIGestureRecogn
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         coordinator?.drawableSizeWillChange(size)
+        // The layer would otherwise stretch the last frame to the new size until the render at that
+        // size is ready, which squeezes the photo while a tool sheet is dragged (#315). The render
+        // already shown is fitted to the new size at once instead.
+        setNeedsDisplay()
     }
 
     func draw(in view: MTKView) { coordinator?.draw(currentDrawable) }
