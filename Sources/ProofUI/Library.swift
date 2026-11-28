@@ -82,6 +82,9 @@ public final class Library {
     public private(set) var statuses: [UUID: LocationStatus] = [:]
     /// Folders read so far. A folder that couldn't be read is stored empty.
     public private(set) var contents: [FileReference: FolderContents] = [:]
+    /// Folders whose last read failed, such as a saved folder on iPad or iPhone whose Files
+    /// provider no longer grants access though its bookmark still resolves (#324).
+    public private(set) var unreadable: Set<FileReference> = []
     public var selection: SidebarItem? {
         didSet {
             UserDefaults.standard.set(try? JSONEncoder().encode(selection), forKey: Self.selectionKey)
@@ -325,6 +328,22 @@ public final class Library {
         statuses[id] ?? .missing
     }
 
+    /// Whether Locate… is offered for a saved folder: one whose bookmark leads nowhere, and on iPad
+    /// and iPhone also one that's offline or can't be read, since there a Files provider being
+    /// connected often isn't something the person can see or fix, and choosing the folder again
+    /// in the picker gives Proof a fresh grant (#324).
+    public func offersLocate(_ id: UUID) -> Bool {
+        switch status(of: id) {
+        case .missing: true
+        #if os(iOS)
+        case .offline: true
+        case .available: unreadable.contains(FileReference(locationID: id, relativePath: []))
+        #else
+        case .offline, .available: false
+        #endif
+        }
+    }
+
     /// The selected folder's photos, or for All Photos every photo read so far under the available
     /// locations, in sidebar order.
     public var listedPhotos: [ListedPhoto] {
@@ -442,6 +461,7 @@ public final class Library {
             return try? FolderContents.read(at: url)
         }.value
         contents[folder] = (read ?? FolderContents(subfolders: [], photos: [])).keepingMetadata(from: contents[folder])
+        if read == nil { unreadable.insert(folder) } else { unreadable.remove(folder) }
         if .folder(folder) == selection {
             browse.keep(only: visiblePhotos)
             readEmbeddedMetadata()
@@ -2050,6 +2070,7 @@ public final class Library {
             case .locate(let location):
                 try fileAccess.relink(location.id, to: url)
                 contents = contents.filter { $0.key.locationID != location.id }
+                unreadable = unreadable.filter { $0.locationID != location.id }
                 refreshLocations()
                 if selection?.isAcrossFolders == true { readAllPhotos() }
             case .grantWrite(let location):
