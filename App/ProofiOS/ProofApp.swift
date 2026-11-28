@@ -23,7 +23,8 @@ struct ContentView: View {
     @Bindable var library: Library
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
-    /// In compact width, whether a row's grid is pushed onto the library.
+    /// In compact width, the grids pushed onto the library: the row's, then each subfolder opened
+    /// from it (#313). The last is the selection.
     @State private var compactPath: [BrowseScreen] = []
     @State private var renderer = try? RAWRenderer()
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
@@ -98,8 +99,9 @@ struct ContentView: View {
 
     /// A split view collapsed to a stack would keep the grid in a stack of its own inside it,
     /// where its large title doesn't follow its scrolling and its thumbnails don't load; one
-    /// stack has neither problem. Picking a row pushes its grid, and going back clears the row,
-    /// so picking it again opens it again.
+    /// stack has neither problem. Picking a row pushes its grid, and a subfolder's tile in it
+    /// pushes the subfolder's, as in Files (#313). Going back selects the grid below, and from the
+    /// first clears the row, so picking it again opens it again.
     private var compactStack: some View {
         NavigationStack(path: $compactPath) {
             Group {
@@ -113,13 +115,36 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Library")
-            .navigationDestination(for: BrowseScreen.self) { _ in grid }
+            .navigationDestination(for: BrowseScreen.self) { screen in
+                if case .grid(let item) = screen { compactGrid(item) }
+            }
         }
+        .environment(\.openSubfolder) { compactPath.append(.grid(.folder($0))) }
+        .environment(\.foldersFollowFiles, true)
+        // A row picked, or the selection changed by Proof itself, such as a removed folder's.
         .onChange(of: library.selection, initial: true) { _, selection in
-            if selection != nil, compactPath.isEmpty { compactPath = [.grid] }
+            guard let selection else { compactPath = []; return }
+            if compactPath.last != .grid(selection) { compactPath = [.grid(selection)] }
         }
         .onChange(of: compactPath) { _, path in
-            if path.isEmpty { library.selection = nil }
+            guard case .grid(let item) = path.last else { library.selection = nil; return }
+            if library.selection != item { library.selection = item }
+        }
+    }
+
+    /// One grid of the compact stack. Only the top one is the selection; one under it, seen while
+    /// going back, shows its own folder's photos, so the swipe doesn't reveal the subfolder's.
+    @ViewBuilder private func compactGrid(_ item: SidebarItem) -> some View {
+        if item == library.selection {
+            grid
+        } else {
+            let photos = item.folder.map { ListedPhoto.photos(of: $0, in: library.contents) } ?? []
+            ThumbnailGrid(library: library, photos: library.activeFilter.filter(photos), allPhotos: photos,
+                          folders: item.folder.map(library.subfolders) ?? [])
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.interfaceBackground.ignoresSafeArea())
+                .navigationTitle(library.title(of: item))
+                .navigationBarTitleDisplayMode(.large)
         }
     }
 
@@ -321,7 +346,7 @@ private extension FilterCriteria {
 
 /// What compact width pushes onto the library.
 private enum BrowseScreen: Hashable {
-    case grid
+    case grid(SidebarItem)
 }
 
 /// The photo in Edit on iPad, centered on the canvas with a margin, with the filmstrip under it.

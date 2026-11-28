@@ -67,6 +67,7 @@ private struct LocationRow: View {
     let library: Library
     let location: SavedLocation
     let remove: (SavedLocation) -> Void
+    @Environment(\.foldersFollowFiles) private var foldersFollowFiles
 
     var body: some View {
         row
@@ -83,14 +84,14 @@ private struct LocationRow: View {
         case .available:
             FolderRow(library: library, folder: root, name: location.name, remove: remove)
         case .offline:
-            SidebarLabel(name: location.name)
+            folderLabel(location.name)
                 .foregroundStyle(.secondary)
                 .help("The drive or network volume this folder is on isn't connected.")
                 .tag(SidebarItem.folder(root))
                 .contextMenu { FolderContextMenu(library: library, folder: root, remove: remove) }
         case .missing:
             HStack {
-                SidebarLabel(name: location.name)
+                folderLabel(location.name)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button { library.requestFolder(.locate(location)) } label: {
@@ -109,6 +110,17 @@ private struct LocationRow: View {
     }
 }
 
+extension LocationRow {
+    /// A saved folder that can't be reached, lined up with the others on iPhone.
+    @ViewBuilder func folderLabel(_ name: String) -> some View {
+        if foldersFollowFiles {
+            PhoneFolderLabel(name: name, isDimmed: true) { DisclosureArrow.placeholder }
+        } else {
+            SidebarLabel(name: name, isDimmed: true)
+        }
+    }
+}
+
 /// A folder with its photo count. Its subfolders are read when it first appears,
 /// so the disclosure triangle shows only for folders that have subfolders.
 private struct FolderRow: View {
@@ -117,10 +129,18 @@ private struct FolderRow: View {
     let name: String
     let remove: (SavedLocation) -> Void
     @State private var isExpanded = false
+    @State private var hasExpandedFirst = false
+    /// How far each level of subfolders is indented on iPhone: about one icon column.
+    @ScaledMetric private var indent: CGFloat = 40
+    /// Set on iPhone (#313). There the tree starts expanded, so subfolders are seen without
+    /// finding the disclosure arrow.
+    @Environment(\.foldersFollowFiles) private var foldersFollowFiles
 
     var body: some View {
         Group {
-            if let contents = library.contents[folder], !contents.subfolders.isEmpty {
+            if foldersFollowFiles {
+                phoneRows
+            } else if let contents = library.contents[folder], !contents.subfolders.isEmpty {
                 DisclosureGroup(isExpanded: $isExpanded) {
                     ForEach(contents.subfolders, id: \.self) { subfolder in
                         FolderRow(library: library,
@@ -140,12 +160,102 @@ private struct FolderRow: View {
             }
         }
         .task { await library.load(folder) }
+        .onAppear {
+            if foldersFollowFiles, !hasExpandedFirst {
+                hasExpandedFirst = true
+                isExpanded = true
+            }
+            revealSelection()
+        }
+        // A subfolder opened from the grid's tiles is selected; its folder expands so its row shows.
+        .onChange(of: library.selection) { revealSelection() }
+    }
+
+    private func revealSelection() {
+        if let selected = library.selection?.folder, selected != folder, folder.contains(selected) {
+            isExpanded = true
+        }
     }
 
     private var label: some View {
         SidebarLabel(name: name, count: library.contents[folder]?.photos.count ?? 0)
             .tag(SidebarItem.folder(folder))
             .contextMenu { FolderContextMenu(library: library, folder: folder, remove: remove) }
+    }
+
+    /// iPhone's rows, as in Files: the disclosure arrow leads the row, in the icon column the rows
+    /// above use, and the folder's symbol sits where their names start. A folder without
+    /// subfolders leaves the arrow's place empty, so every row lines up, and each level is
+    /// indented by one column. `DisclosureGroup` puts the arrow at the trailing end on iPhone,
+    /// where it reads as the arrow that opens the row.
+    @ViewBuilder private var phoneRows: some View {
+        let subfolders = library.subfolders(of: folder)
+        PhoneFolderLabel(name: name, count: library.contents[folder]?.photos.count ?? 0) {
+            if subfolders.isEmpty {
+                DisclosureArrow.placeholder
+            } else {
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
+                } label: {
+                    DisclosureArrow(isExpanded: isExpanded)
+                        // A 44-point target around the arrow.
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .padding(-12)
+                }
+                // Takes its own tap instead of selecting the row.
+                .buttonStyle(.borderless)
+                .accessibilityLabel(isExpanded ? "Collapse \(name)" : "Expand \(name)")
+            }
+        }
+        .padding(.leading, CGFloat(folder.relativePath.count) * indent)
+        .tag(SidebarItem.folder(folder))
+        .contextMenu { FolderContextMenu(library: library, folder: folder, remove: remove) }
+        if isExpanded {
+            ForEach(subfolders, id: \.self) { subfolder in
+                FolderRow(library: library, folder: subfolder, name: library.name(of: subfolder), remove: remove)
+            }
+        }
+    }
+}
+
+/// The disclosure arrow that leads a folder row on iPhone (#313), gray rather than the button's
+/// tint, since the highlight is for marks of state only.
+private struct DisclosureArrow: View {
+    let isExpanded: Bool
+
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(Color.secondary)
+            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+    }
+
+    /// The arrow's place in a row that can't expand, kept so the row lines up with the others.
+    static var placeholder: some View {
+        DisclosureArrow(isExpanded: false).hidden().accessibilityHidden(true)
+    }
+}
+
+/// A folder row's label on iPhone: `disclosure` in the label's icon column, so it lines up with
+/// the icons of All Photos and the filter rows, then the folder symbol and name in the title,
+/// so the symbol lines up with their names.
+private struct PhoneFolderLabel<Disclosure: View>: View {
+    let name: String
+    var count = 0
+    var isDimmed = false
+    @ViewBuilder let disclosure: Disclosure
+
+    var body: some View {
+        Label {
+            HStack(spacing: 10) {
+                FolderIcon(isDimmed: isDimmed)
+                Text(name)
+            }
+        } icon: {
+            disclosure
+        }
+        .badge(count == 0 ? nil : Text(count, format: .number))
     }
 }
 
@@ -226,18 +336,24 @@ private struct FilterLabel: View {
 
 private struct SidebarLabel: View {
     let name: String
-    var systemImage = "folder"
+    /// A symbol, or none for a folder, which shows the manila folder.
+    var systemImage: String?
     /// The number of photos, shown as the row's badge. Zero shows none.
     var count = 0
+    var isDimmed = false
     @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         Label {
             Text(name)
         } icon: {
-            // In a selected row the symbol takes the row's text color.
-            Image(systemName: systemImage)
-                .foregroundStyle(prominence == .increased ? AnyShapeStyle(.foreground) : AnyShapeStyle(.secondary))
+            if let systemImage {
+                // In a selected row the symbol takes the row's text color.
+                Image(systemName: systemImage)
+                    .foregroundStyle(prominence == .increased ? AnyShapeStyle(.foreground) : AnyShapeStyle(.secondary))
+            } else {
+                FolderIcon(isDimmed: isDimmed)
+            }
         }
         .badge(count == 0 ? nil : Text(count, format: .number))
     }
