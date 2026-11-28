@@ -18,7 +18,10 @@ public struct PhotoBrowser: View {
             } description: {
                 Text("Add a folder of photos to browse and edit them.")
             } actions: {
+                // Gray and white, as Add Looks is in the Looks card and sheet (#320).
                 Button("Add Folder…") { library.requestFolder(.add) }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
             }
         } else if library.selection?.isAcrossFolders == true {
             allPhotos
@@ -31,6 +34,8 @@ public struct PhotoBrowser: View {
                     Text("“\(location.name)” was moved or deleted. Locate it to see its photos again.")
                 } actions: {
                     Button("Locate…") { library.requestFolder(.locate(location)) }
+                        .buttonStyle(.bordered)
+                        .tint(.white)
                 }
             case .offline:
                 ContentUnavailableView("Drive Not Connected", systemImage: "externaldrive.badge.xmark",
