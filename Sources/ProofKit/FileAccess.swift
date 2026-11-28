@@ -68,6 +68,11 @@ public struct FileReference: Codable, Hashable, Sendable {
     }
 
     /// Whether `other` is this file or folder, or inside it.
+    /// The subfolder of this folder named `name`.
+    public func subfolder(_ name: String) -> FileReference {
+        FileReference(locationID: locationID, relativePath: relativePath + [name])
+    }
+
     public func contains(_ other: FileReference) -> Bool {
         other.locationID == locationID && other.relativePath.starts(with: relativePath)
     }

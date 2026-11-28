@@ -37,12 +37,15 @@ public struct PhotoBrowser: View {
                                        description: Text("Connect the drive or network volume that holds “\(location.name)”."))
             case .available:
                 if library.contents[selection] != nil {
-                    if library.visiblePhotos.isEmpty {
+                    // Subfolders come first, as tiles, so a folder of only subfolders shows them.
+                    let subfolders = library.subfolders(of: selection)
+                    if library.visiblePhotos.isEmpty && subfolders.isEmpty {
                         ContentUnavailableView(emptyTitle, systemImage: "photo",
                                                description: Text(library.filter.isEmpty ? "There are no photos to show in this folder."
                                                                                         : "No photos in this folder match the filter."))
                     } else {
-                        ThumbnailGrid(library: library, photos: library.shownPhotos, allPhotos: library.listedPhotos)
+                        ThumbnailGrid(library: library, photos: library.shownPhotos, allPhotos: library.listedPhotos,
+                                      folders: subfolders)
                     }
                 } else {
                     // Rows read their folders as they appear, so a remembered subfolder inside a
@@ -125,11 +128,15 @@ public extension Library {
 
     /// The selected sidebar row's name, in Browse and in Edit.
     var rowTitle: String {
-        switch selection {
+        selection.map(title(of:)) ?? ""
+    }
+
+    /// A sidebar row's name.
+    func title(of item: SidebarItem) -> String {
+        switch item {
         case .allPhotos: return "All Photos"
         case .filtered(let filter): return filter.title
         case .folder(let folder): return name(of: folder)
-        case nil: return ""
         }
     }
 

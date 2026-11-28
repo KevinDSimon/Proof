@@ -28,6 +28,16 @@ struct ListedPhotoTests {
         #expect(Set(photos.map(\.id)).count == 4)
     }
 
+    @Test("A folder's subfolders are references under it, in its order, and none before it is read")
+    func subfolderReferences() {
+        let read: [FileReference: FolderContents] = [
+            folder("Albums"): contents(subfolders: ["Coast", "Desert"], photos: ["IMG_1.DNG"]),
+        ]
+        #expect(FolderContents.subfolders(of: folder("Albums"), in: read) == [folder("Albums", "Coast"), folder("Albums", "Desert")])
+        #expect(FolderContents.subfolders(of: folder("Albums", "Coast"), in: read).isEmpty)
+        #expect(folder("Albums").subfolder("Coast").locationID == location)
+    }
+
     @Test("A tree whose top folder hasn't been read has no photos yet")
     func unreadRoot() {
         #expect(ListedPhoto.photos(under: folder(), in: [:]).isEmpty)

@@ -14,11 +14,15 @@ public struct ThumbnailGrid: View {
     /// Every listed photo. Thumbnails are loaded for all of them so changing the filter
     /// doesn't read the folder again.
     let allPhotos: [ListedPhoto]
+    /// Subfolders shown as tiles before the photos (#313).
+    let folders: [FileReference]
+    @Environment(\.openSubfolder) private var openSubfolder
 
-    public init(library: Library, photos: [ListedPhoto], allPhotos: [ListedPhoto]) {
+    public init(library: Library, photos: [ListedPhoto], allPhotos: [ListedPhoto], folders: [FileReference] = []) {
         self.library = library
         self.photos = photos
         self.allPhotos = allPhotos
+        self.folders = folders
     }
 
     /// A photo that was read but couldn't be made into a thumbnail has no entry in `images`.
@@ -77,6 +81,10 @@ public struct ThumbnailGrid: View {
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellWidth), spacing: Self.spacing), count: columnCount),
                           spacing: Self.spacing) {
+                    ForEach(folders, id: \.self) { folder in
+                        FolderTile(library: library, folder: folder,
+                                   open: openSubfolder ?? { library.selection = .folder($0) })
+                    }
                     let stacks = library.stackMarks
                     ForEach(photos) { photo in
                         cell(for: photo, stack: stacks[photo.id])

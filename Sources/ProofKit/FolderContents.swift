@@ -28,6 +28,11 @@ public struct FolderContents: Equatable, Sendable {
         }
     }
 
+    /// The subfolders of `folder` in `contents`, in Finder's order, or none until it has been read.
+    public static func subfolders(of folder: FileReference, in contents: [FileReference: FolderContents]) -> [FileReference] {
+        (contents[folder]?.subfolders ?? []).map(folder.subfolder)
+    }
+
     public init(subfolders: [String], photos: [Photo]) {
         self.subfolders = subfolders
         self.photos = photos

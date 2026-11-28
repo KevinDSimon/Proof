@@ -418,6 +418,11 @@ public final class Library {
         folder.relativePath.last ?? locations.first { $0.id == folder.locationID }?.name ?? ""
     }
 
+    /// The subfolders of `folder`, in Finder's order, once `folder` has been read.
+    public func subfolders(of folder: FileReference) -> [FileReference] {
+        FolderContents.subfolders(of: folder, in: contents)
+    }
+
     /// Where a folder sits under its saved location, as in "NAS › Albums › Coast".
     public func path(of folder: FileReference) -> String {
         let location = locations.first { $0.id == folder.locationID }?.name
