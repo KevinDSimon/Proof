@@ -84,13 +84,13 @@ private struct LocationRow: View {
         switch library.status(of: location.id) {
         case .available:
             FolderRow(library: library, folder: root, name: location.name, remove: remove)
-        case .offline:
+        case .offline where !library.offersLocate(location.id):
             folderLabel(location.name)
                 .foregroundStyle(.secondary)
                 .help("The drive or network volume this folder is on isn't connected.")
                 .tag(SidebarItem.folder(root))
                 .contextMenu { FolderContextMenu(library: library, folder: root, remove: remove) }
-        case .missing:
+        case .offline, .missing:
             HStack {
                 folderLabel(location.name)
                     .foregroundStyle(.secondary)
@@ -279,7 +279,7 @@ private struct FolderContextMenu: View {
             .disabled(url == nil)
         if folder.relativePath.isEmpty, let location = library.locations.first(where: { $0.id == folder.locationID }) {
             Divider()
-            if library.status(of: location.id) == .missing {
+            if library.offersLocate(location.id) {
                 Button("Locate…") { library.requestFolder(.locate(location)) }
             }
             Button("Remove Folder…") { remove(location) }
