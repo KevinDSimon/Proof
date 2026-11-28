@@ -25,10 +25,13 @@ private struct OutlinedPartsKey: PreferenceKey {
 }
 
 public extension View {
-    /// Marks this view as one the enclosing `selectionOutline` wraps. Without any marked part,
-    /// the outline wraps the whole cell.
-    func outlined() -> some View {
-        anchorPreference(key: OutlinedPartsKey.self, value: .bounds) { [$0] }
+    /// Marks this view as one the enclosing `selectionOutline` wraps, unless `isOutlined` is
+    /// false. Without any marked part, the outline wraps the whole cell.
+    func outlined(_ isOutlined: Bool = true) -> some View {
+        // Added to the parts inside it, which a plain preference would replace.
+        transformAnchorPreference(key: OutlinedPartsKey.self, value: .bounds) { parts, bounds in
+            if isOutlined { parts.append(bounds) }
+        }
     }
 
     /// Outlines this view when it is selected. The padding is kept whether or not it is, so

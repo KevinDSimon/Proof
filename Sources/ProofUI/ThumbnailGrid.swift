@@ -266,6 +266,7 @@ public struct ThumbnailGrid: View {
             // Photos sit on the bottom of their square so the name is right under each one.
             ZStack(alignment: .bottom) {
                 if let image = library.editedThumbnails[photo.id] ?? images[photo.id] {
+                    let layers = library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] }
                     Image(decorative: image, scale: 1)
                         .resizable()
                         .scaledToFit()
@@ -274,8 +275,11 @@ public struct ThumbnailGrid: View {
                                   isDownloading: library.downloadingPhotos.contains(photo.id), stack: stack,
                                   isStackOpen: library.isStackOpen(photo.id),
                                   toggleStack: { library.toggleStackAnimated(of: photo.id) }, size: 10)
-                        .stackLayers(library.hiddenStackPhotos(of: photo.id).map { library.editedThumbnails[$0] ?? images[$0] },
-                                     inStack: stack != nil, step: 5)
+                        // An open stack's photos keep the layers' room above them, but the outline
+                        // leaves it out, so it is as close above each photo as beside it (#293).
+                        .outlined(layers.isEmpty)
+                        .stackLayers(layers, inStack: stack != nil, step: 5)
+                        .outlined(!layers.isEmpty)
                 } else if photo.photo.isInCloud {
                     // Not downloaded and iCloud has no thumbnail for it (decision 0050).
                     RoundedRectangle(cornerRadius: SelectionOutline.photoCornerRadius)
@@ -290,16 +294,18 @@ public struct ThumbnailGrid: View {
                             }
                         }
                         .help("In iCloud. Open it to download it.")
+                        .outlined()
                 } else if finished.contains(photo.id) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
                         .help("This photo couldn't be read.")
+                        .outlined()
                 } else {
                     RoundedRectangle(cornerRadius: SelectionOutline.photoCornerRadius)
                         .fill(.quaternary)
+                        .outlined()
                 }
             }
-            .outlined()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .aspectRatio(1, contentMode: .fit)
             Text(photo.name)
@@ -310,12 +316,10 @@ public struct ThumbnailGrid: View {
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 .truncationMode(.middle)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-                // Full width, so every card in a row is as wide as the cell.
-                .frame(maxWidth: .infinity)
                 .outlined()
         }
         // The outline wraps the photo and its name, as on a card, but not the empty part of the
-        // square above a landscape photo.
+        // square around it, so it keeps the same spacing whatever the photo's crop (#293).
         .selectionOutline(isSelected)
         .contentShape(Rectangle())
         #if os(macOS)
