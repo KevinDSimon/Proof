@@ -69,6 +69,7 @@ public struct LookSection: View {
                 Text(Self.emptyDescription)
             } actions: {
                 Button("Add Looks…") { isImporting = true }
+                    .emptyStateAction()
             }
             .dropDestination(for: URL.self) { urls, _ in
                 importItems(urls)

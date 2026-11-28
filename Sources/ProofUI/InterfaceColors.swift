@@ -17,6 +17,10 @@ public extension Color {
     /// beside the photo stay gray, so it doesn't bias how the photo's colors are judged.
     static let highlight = Color(.sRGB, red: 1, green: 0xD5 / 255, blue: 0x2E / 255)
 
+    /// The darker highlight of the apps' `AccentColor` asset, #9A843A, named for the views that
+    /// need it where their surroundings tint controls white, such as the empty states' actions.
+    static let accentGold = Color(.sRGB, red: 0x9A / 255, green: 0x84 / 255, blue: 0x3A / 255)
+
     /// The filled part of a slider without its own track. The app's accent color is the
     /// highlight, so a slider left untinted would fill in yellow.
     static let sliderFill = Color(white: 0.4)
